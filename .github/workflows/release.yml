@@ -18,6 +18,7 @@ jobs:
         with:
           distribution: temurin
           java-version: '21'
+      - run: swift build
       - run: swift run leafjuice-check
       - run: scripts/build-app.sh --dmg
       - name: Publish

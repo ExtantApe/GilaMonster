@@ -101,6 +101,11 @@ import Security
     let mode = ((try? FileManager.default.attributesOfItem(atPath: socketPath))?[.posixPermissions] as? NSNumber)?.intValue ?? 0o777
     equal(mode & 0o077, 0, "the socket is private to this account (\(String(mode, radix: 8)))")
     let client = URL(fileURLWithPath: CommandLine.arguments[0]).deletingLastPathComponent().appendingPathComponent("leafjuice-session").path
+    guard FileManager.default.isExecutableFile(atPath: client) else {
+        check(false, "the leafjuice-session client isn't built beside this check. Run `swift build` first, so every product is built.")
+        service.apply(SessionAccessSettings()); try? SessionAccess.saveSettings(SessionAccessSettings())
+        return
+    }
     let current = SessionAccess.token(create: false, keychain: kc) ?? ""
     func ask(_ args: [String], token t: String? = nil) async -> (code: Int32, json: [String: Any]) {
         let env = "LEAFJUICE_SESSION_TOKEN=\(t ?? current)"
