@@ -2,6 +2,8 @@
 
 ## Unreleased
 
+- **Shutting down the Mac** no longer gets stuck on "Stop running servers and quit?". At a shutdown, restart or log out,
+  LeafJuice stops every server with a save without asking, then quits so the Mac can carry on.
 - **Publish packs to your web server** (D189): each build under a new random path in the folder Caddy serves, named by
   its SHA-1, checked after copying, with the old build removed once nobody who might need it is online. With Packmule
   0.2.1, LeafJuice tells it the new link (`pack set`); otherwise you mark it updated by hand. The old build is never

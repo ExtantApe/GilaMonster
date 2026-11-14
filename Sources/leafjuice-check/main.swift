@@ -101,6 +101,16 @@ PrivacyKey.defaultVault = { CheckVault.shared }
 // Real-server runs leave hundreds of MB here, so every exit deletes it, and says so if it can't.
 atexit { cleanUpScratch() }
 
+// ... --shutdown-sandbox <folder> --i-accept-the-minecraft-eula  A throwaway server for the K650 shutdown test.
+if let flag = CommandLine.arguments.firstIndex(of: "--shutdown-sandbox"), flag + 1 < CommandLine.arguments.count {
+    guard CommandLine.arguments.contains("--i-accept-the-minecraft-eula") else { print("--shutdown-sandbox needs --i-accept-the-minecraft-eula"); exit(2) }
+    let dir = URL(fileURLWithPath: CommandLine.arguments[flag + 1])
+    setenv("LEAFJUICE_HOME", dir.appendingPathComponent("home").path, 1)
+    setenv("LEAFJUICE_SERVERS", dir.appendingPathComponent("servers").path, 1)
+    await makeShutdownSandbox(dir)
+    exit(0)
+}
+
 // ... --demo-pack <folder> --i-accept-the-minecraft-eula  A throwaway online-mode server with a pack only joining players get.
 if let flag = CommandLine.arguments.firstIndex(of: "--demo-pack"), flag + 1 < CommandLine.arguments.count {
     guard CommandLine.arguments.contains("--i-accept-the-minecraft-eula") else {
@@ -140,6 +150,7 @@ if CommandLine.arguments.contains("--connections") {
     await connectionChecks()
     paletteChecks()
     sidebarChecks()
+    quitReasonChecks()
     await sessionAccessChecks()
     await smartBackupChecks()
     inviteTicketChecks()
@@ -4743,6 +4754,7 @@ func makePack(_ name: String, _ files: [String: String], inside: String? = nil) 
     await connectionChecks()
     paletteChecks()
     sidebarChecks()
+    quitReasonChecks()
     await sessionAccessChecks()
     await smartBackupChecks()
     inviteTicketChecks()
@@ -6073,3 +6085,23 @@ cleanUpScratch()
 print("\n\(passed) passed, \(failures.count) failed")
 for failure in failures { print("  - \(failure)") }
 exit(failures.isEmpty ? 0 : 1)
+
+/// Sets up a throwaway server for the K650 shutdown test: Paper installed, EULA accepted, started with the app, and
+/// registered in a sandbox home. The test then runs the real app against it and quits it as macOS does at shutdown.
+@MainActor func makeShutdownSandbox(_ dir: URL) async {
+    do {
+        let servers = dir.appendingPathComponent("servers", isDirectory: true)
+        let root = servers.appendingPathComponent("shutdown-test", isDirectory: true)
+        try FileOps.ensureDir(root)
+        write("server-port=25589\nserver-ip=127.0.0.1\nonline-mode=false\nview-distance=4\nsimulation-distance=4\nmotd=made up\nlevel-type=minecraft\\:flat\n", root.appendingPathComponent("server.properties"))
+        let c = try await ServerController.adopt(root: root, name: "Shutdown test")
+        try EULA.accept(c.paths)
+        try await c.installSoftware(try await SoftwareCatalog.latestBuild(.paper, mc: realMC)!)
+        c.profile.lastPluginCheck = Date(); c.profile.software.lastCheck = Date()
+        c.profile.launch.startWithApp = true
+        c.profile.backup.enabled = false
+        c.profile.backup.autoDrill = false
+        try JSONStore.save([root.path], to: AppPaths.registry)
+        print("sandbox ready: \(root.path)")
+    } catch { print("sandbox failed: \(error)"); exit(1) }
+}

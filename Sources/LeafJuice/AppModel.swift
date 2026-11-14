@@ -1,4 +1,5 @@
 import AppKit
+import OSLog
 import LeafJuiceCore
 import Observation
 import SwiftUI
@@ -237,7 +238,15 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
     #if DEBUG
     /// Debug builds only: draws every page of every listed server to images, off screen, then quits.
     /// `LEAFJUICE_SNAPSHOT=<folder>`, for checking screens nobody has clicked yet. Starts nothing.
+    func applicationWillFinishLaunching(_ notification: Notification) {
+        NSAppleEventManager.shared().setEventHandler(self, andSelector: #selector(handleQuit(_:withReplyEvent:)),
+                                                     forEventClass: AEEventClass(kCoreEventClass), andEventID: AEEventID(kAEQuitApplication))
+    }
+
     @MainActor func applicationDidFinishLaunching(_ notification: Notification) {
+        NSWorkspace.shared.notificationCenter.addObserver(forName: NSWorkspace.willPowerOffNotification, object: nil, queue: .main) { _ in
+            AppDelegate.poweringOff = true
+        }
         guard let folder = ProcessInfo.processInfo.environment["LEAFJUICE_SNAPSHOT"], let model = Self.model else { return }
         NSApp.setActivationPolicy(.accessory)
         NSApp.windows.forEach { $0.close() }
@@ -311,10 +320,67 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
     }
     #endif
 
+    /// Set when macOS says it's about to power off, so the quit that follows doesn't wait for a click (K650).
+    static var poweringOff = false
+
+    /// Quitting is logged to the system log under the app's own bundle id, to look back on after a shutdown.
+    static let quitLog = Logger(subsystem: Bundle.main.bundleIdentifier ?? "LeafJuice", category: "quit")
+
+    /// The reason on the last quit request macOS sent, read when it arrives (see `handleQuit`).
+    static var pendingQuitReason: QuitReason = .user
+
+    static func reason(of event: NSAppleEventDescriptor?) -> QuitReason {
+        let why = AEKeyword(QuitReason.code("why?"))
+        let found = event?.attributeDescriptor(forKeyword: why) ?? event?.paramDescriptor(forKeyword: why)
+        return QuitReason(code: found?.enumCodeValue)
+    }
+
+    /// The reason on the quit request macOS sends at a shutdown, restart or log out, or `.user` for an ordinary quit.
+    @MainActor static func quitReason() -> QuitReason {
+        let now = reason(of: NSAppleEventManager.shared().currentAppleEvent)
+        return now.unattended ? now : pendingQuitReason
+    }
+
+    /// LeafJuice's own handler for macOS's quit request (K650). At a shutdown, restart or log out it doesn't go through
+    /// the usual question: it holds macOS's request, stops every server with a save, answers, and quits. AppKit's own
+    /// terminate is asked first; if the app is still here two seconds later, it exits, since the servers are saved.
+    @MainActor @objc func handleQuit(_ event: NSAppleEventDescriptor, withReplyEvent reply: NSAppleEventDescriptor) {
+        let reason = Self.reason(of: event)
+        Self.pendingQuitReason = reason
+        guard reason.unattended, let model = Self.model, model.anyLive else { NSApp.terminate(nil); return }
+        Self.quitLog.notice("\(reason.words, privacy: .public): stopping servers with a save, without asking")
+        for server in model.servers where server.state.isLive {
+            server.appendWrapper("\(reason.words), so LeafJuice is stopping this server with a save.", level: .info)
+        }
+        let held = NSAppleEventManager.shared().suspendCurrentAppleEvent()
+        Task { @MainActor in
+            await model.stopAll()
+            if let held { NSAppleEventManager.shared().resume(withSuspensionID: held) }
+            NSApp.terminate(nil)
+            try? await Task.sleep(for: .seconds(2))
+            exit(0)
+        }
+    }
+
     /// A running server must get the chance to save before the app goes away.
     @MainActor
     func applicationShouldTerminate(_ sender: NSApplication) -> NSApplication.TerminateReply {
         guard let model = Self.model, model.anyLive else { return .terminateNow }
+        // At a shutdown, restart or log out nobody is there to click, and a waiting box would make macOS cancel the
+        // shutdown or force-quit without the save. So every server is stopped with a save, and the Mac carries on.
+        var reason = Self.quitReason()
+        if Self.poweringOff, !reason.unattended { reason = .shutdown }
+        Self.quitLog.notice("Asked to quit with servers running: \(reason.words, privacy: .public)")
+        if reason.unattended {
+            for server in model.servers where server.state.isLive {
+                server.appendWrapper("\(reason.words), so LeafJuice is stopping this server with a save.", level: .info)
+            }
+            Task { @MainActor in
+                await model.stopAll()
+                sender.reply(toApplicationShouldTerminate: true)
+            }
+            return .terminateLater
+        }
         let alert = NSAlert()
         alert.messageText = "Stop running servers and quit?"
         alert.informativeText = "Players will be disconnected and worlds saved first. This can take a moment."

@@ -2,6 +2,22 @@
 
 Each audit lists what LeafJuice promises, which checks prove each promise, and the gaps. Run the checks with `swift run leafjuice-check` (offline, made-up data, about 80 seconds). The `--real-*`, `--lab` and `--sandbox` runs boot real Paper and are listed apart.
 
+## 2026-11-14: quitting at a Mac shutdown (K650)
+
+- **The reason codes:** 'shut', 'rest', 'rlgo' and 'logo' are a shutdown, a restart and a log out, none of which waits
+  for an answer. No reason, or any other, is a person quitting, who is still asked.
+- **A simulated shutdown, end to end:** the real app (a sandboxed copy with its own bundle id) ran a throwaway Paper 26.3
+  server on 127.0.0.1. It was sent macOS's own quit request carrying the shutdown reason. No question appeared, the
+  server logged "Stopping server", "Saving players" and "Saving worlds", the app answered the request and exited, all
+  within 4 seconds. A second run with the restart reason did the same. The sandbox was deleted afterwards.
+- **An ordinary quit** stopped nothing. That test can't see the question itself, which needs a screen; its code is
+  unchanged and is what the owner saw on screen.
+- **What the test found:** in the test copy, AppKit's terminate never reached LeafJuice's check, so the shutdown path
+  doesn't rely on it. It holds macOS's request, saves, answers, asks AppKit to terminate, and exits two seconds later if
+  still running.
+- **Not covered:** a real shutdown of this Mac. The quit request is the same one macOS sends, but loginwindow's own
+  time limits weren't exercised.
+
 ## 2026-11-14: the plugin renames (D196, D197)
 
 Real release jars, checked against their published SHA-256, on throwaway Paper 26.3 with made-up offline accounts:

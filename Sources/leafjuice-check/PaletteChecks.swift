@@ -60,3 +60,17 @@ import LeafJuiceCore
     equal(SidebarGroups.decodeCollapsed(SidebarGroups.encodeCollapsed(["people", "server"])), ["people", "server"], "collapsed groups are remembered")
     equal(SidebarGroups.decodeCollapsed("people,made-up,,server"), ["people", "server"], "and a name that isn't a group is dropped")
 }
+
+/// Why the app is quitting (K650): macOS's reason codes, and which ones nobody is there to answer.
+@MainActor func quitReasonChecks() {
+    section("Quitting at a shutdown, restart or log out")
+    equal(QuitReason(code: QuitReason.code("shut")), .shutdown, "'shut' is a shutdown")
+    equal(QuitReason(code: QuitReason.code("rest")), .restart, "'rest' is a restart")
+    equal(QuitReason(code: QuitReason.code("rlgo")), .logout, "'rlgo' is a log out")
+    equal(QuitReason(code: QuitReason.code("logo")), .logout, "'logo' is a log out too")
+    equal(QuitReason(code: nil), .user, "no reason is a person quitting")
+    equal(QuitReason(code: QuitReason.code("abcd")), .user, "and so is any other")
+    check([QuitReason.shutdown, .restart, .logout].allSatisfy(\.unattended), "shutdown, restart and log out don't wait for an answer")
+    check(!QuitReason.user.unattended, "a person quitting is still asked")
+    equal(QuitReason.code("shut"), 0x73687574, "the four letters make the code macOS uses")
+}
