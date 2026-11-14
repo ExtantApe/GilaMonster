@@ -10,8 +10,8 @@ Real release jars, checked against their published SHA-256, on throwaway Paper 2
 - **Sheriff 0.5.0 with WelcomeWagon 0.6.0** (`--real-invites`): an invite made here with a profile, redeemed on
   WelcomeWagon's own page in its new two steps (the code first, then "Yes, that's me"), the profile applied by Sheriff,
   the invite shown as used, a bot signed in with `/login`, LeafJuice's links page signing them in by WelcomeWagon's
-  cookie, and Sign Out Everywhere ending every session. WelcomeWagon counts only live sessions but ends every one,
-  including the one redeeming made, so the check now asks for at least as many as were shown.
+  cookie, and Sign Out Everywhere ending every session. 0.6.0 counted only live sessions but ended every one; 0.6.1
+  counts the same way for both, so the check asks for exactly the number shown, and passes against the real 0.6.1.
 - **WelcomeWagon 0.6.0 sign-in** (`--real-signin`): no permission gives no link, off the whitelist gives no link, then a
   link that signs the page in, and nobody gets a link made for someone else.
 - **Packmule 0.3.0** (`--real-packmule`): `pack set` refused a link nothing serves and kept the old one, as with 0.2.1.

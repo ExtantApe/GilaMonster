@@ -1043,9 +1043,9 @@ private final class PageClient {
             var seen = 0
             if case .signedIn(let n) = shown { seen = n }
             check((1...2).contains(seen), "the player sheet sees the signed-in browsers (\(shown))")
-            // At least the one shown: WelcomeWagon counts live sessions but ends every session file for the player,
-            // such as the one redeeming an invite made (0.5+), so it can end more than the count showed.
-            if case .success(let ended) = await c.signOutEverywhere(name: name) { check(ended >= max(1, seen), "Sign Out Everywhere ends every one shown, and any older ones (\(ended))") } else { check(false, "signed out everywhere") }
+            // Exactly the ones shown: since WelcomeWagon 0.6.1, revoke counts live sessions as list does (expired files
+            // still go, uncounted).
+            if case .success(let ended) = await c.signOutEverywhere(name: name) { equal(ended, seen, "Sign Out Everywhere ends every browser shown, and says how many") } else { check(false, "signed out everywhere") }
             await checkUntil(5, "which deletes the session file") { WelcomeWagonSessions.read(plugins: c.paths.plugins, cookieValue: cookie) == nil }
             check(!page().contains("Signed in as"), "and LeafJuice's page no longer signs them in")
             equal(await c.welcomewagonSignIns(name: name), .signedIn(browsers: 0), "and the count is back to none")
