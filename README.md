@@ -291,7 +291,7 @@ These need **Plugin commands**, which is off by default, and the server running 
   such as a link to another site or one that isn't https, there's no ticket and the code is shown as usual.
 - **Web sign-ins:** where WelcomeWagon offers it (0.3 and later), each player's sheet shows how many browsers they're signed in on, with **Sign Out Everywhere**. Their allowlist place and profiles stay.
 
-**Tested:** throwaway Paper 26.3 with the allowlist plugin's 0.4.0 and 0.4.1 releases, before it was renamed Sheriff (not yet with Sheriff 0.5.0), the sign-in plugin's 0.2.0 release and an unreleased 0.3.0 build, before it was renamed WelcomeWagon (not yet with WelcomeWagon itself), LuckPerms and made-up offline accounts: an invite made here, redeemed on WelcomeWagon's page, profiles applied by Sheriff, a bot signed in, signed out again. **Not tested:** a real server, a real game client, or the screens with a keyboard and VoiceOver.
+**Tested:** throwaway Paper 26.3 with Sheriff 0.5.0 and WelcomeWagon 0.6.0 (and before their renames, their 0.4 and 0.2 to 0.3 releases), LuckPerms and made-up offline accounts: an invite made here, redeemed on WelcomeWagon's page, profiles applied by Sheriff, a bot signed in, signed out again. **Not tested:** a real server, a real game client, or the screens with a keyboard and VoiceOver.
 
 ## Plugin links
 
@@ -303,7 +303,7 @@ A link is filled in only when the plugin's source is already known: its jar matc
 
 Off by default. Turn it on and the same list is served as a web page that only people provisioned on your server can read. Each plugin is left off it until you tick it, and server and plugin versions each have a switch, because versions help anyone looking for a server with a known weakness.
 
-**Who gets in:** a player types `/signin` in game and clicks the one-time link they're sent, so there's no password. That takes the WelcomeWagon plugin, the `welcomewagon.signin` permission (ops have it by default), a place on the allowlist, and `online-mode=true`. A server behind a proxy has `online-mode` off, so it isn't supported yet.
+**Who gets in:** a player types `/login` in game and clicks the one-time link they're sent, so there's no password. That takes the WelcomeWagon plugin, the `welcomewagon.signin` permission (ops have it by default), a place on the allowlist, and `online-mode=true`. A server behind a proxy has `online-mode` off, so it isn't supported yet.
 
 - LeafJuice also accepts WelcomeWagon's own browser sessions, reading WelcomeWagon's session file on every request, so they last as long as WelcomeWagon says and survive LeafJuice quitting. LeafJuice's older sign-in still works alongside it for now: a session lasts 12 hours and lives in memory, so quitting LeafJuice ends it. Losing the permission takes effect at the next sign-in. Leaving the allowlist or being banned ends access at once.
 - Nothing has an age or account type of its own: children's accounts follow the same permission.
@@ -318,7 +318,7 @@ links.example.com {
 }
 ```
 
-**Tested:** a bot typed `/signin` on a throwaway Paper 1.21.11 server, and a real browser signed in and out on localhost with made-up data. **Not tested:** a real tunnel, Caddy, a real game client clicking the link, a permission granted through LuckPerms rather than op, and Bedrock players, who may not be able to click a chat link.
+**Tested:** a bot used the in-game sign-in command (then `/signin`, now `/login`) on a throwaway Paper 1.21.11 server, and a real browser signed in and out on localhost with made-up data. **Not tested:** a real tunnel, Caddy, a real game client clicking the link, a permission granted through LuckPerms rather than op, and Bedrock players, who may not be able to click a chat link.
 
 **The map:** the same sign-in can also cover BlueMap's web map, at `/map/` on the same address. Off until you tick it. A player sees a world's map only if Multiverse lets them enter that world:
 

@@ -2,6 +2,22 @@
 
 Each audit lists what LeafJuice promises, which checks prove each promise, and the gaps. Run the checks with `swift run leafjuice-check` (offline, made-up data, about 80 seconds). The `--real-*`, `--lab` and `--sandbox` runs boot real Paper and are listed apart.
 
+## 2026-11-14: the plugin renames (D196, D197)
+
+Real release jars, checked against their published SHA-256, on throwaway Paper 26.3 with made-up offline accounts:
+
+- **Sheriff 0.5.0** (`--real-sheriff`): describe, profiles and apply through the console under the new name.
+- **Sheriff 0.5.0 with WelcomeWagon 0.6.0** (`--real-invites`): an invite made here with a profile, redeemed on
+  WelcomeWagon's own page in its new two steps (the code first, then "Yes, that's me"), the profile applied by Sheriff,
+  the invite shown as used, a bot signed in with `/login`, LeafJuice's links page signing them in by WelcomeWagon's
+  cookie, and Sign Out Everywhere ending every session. WelcomeWagon counts only live sessions but ends every one,
+  including the one redeeming made, so the check now asks for at least as many as were shown.
+- **WelcomeWagon 0.6.0 sign-in** (`--real-signin`): no permission gives no link, off the whitelist gives no link, then a
+  link that signs the page in, and nobody gets a link made for someone else.
+- **Packmule 0.3.0** (`--real-packmule`): `pack set` refused a link nothing serves and kept the old one, as with 0.2.1.
+- **What the runs found:** the in-game command is `/login` (two of LeafJuice's hints still said `/signin`), redeeming
+  takes two steps, and WelcomeWagon's features are off until switched on. The checks now use its shipped config.
+
 ## 2026-11-14: publishing packs
 
 - **Settings:** no folder and four bad web addresses refused.

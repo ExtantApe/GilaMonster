@@ -46,7 +46,7 @@ struct InvitesCard: View {
                     Callout(tone: .warning, title: "WelcomeWagon \(version) isn't taking invites", detail: "Until its settings pass its checks, it won't make any. The problems above say what to change.")
                 } else {
                     if let publicURL, !publicURL.isEmpty { Fact(label: "Sign-up page", value: publicURL) }
-                    Hint("Signing in to the web pages with /signin needs the welcomewagon.signin permission, which only operators have until you give it to a group in LuckPerms.")
+                    Hint("Signing in to the web pages with /login needs the welcomewagon.signin permission, which only operators have until you give it to a group in LuckPerms.")
                     if let made { codeView(made, welcomewagonURL: publicURL) } else { form }
                 }
                 listView
@@ -252,7 +252,7 @@ struct WebSignInSection: View {
         .confirmationDialog("Sign \(name) out of the web pages everywhere?", isPresented: $confirming) {
             Button("Sign Out Everywhere", role: .destructive, action: signOut)
         } message: {
-            Text("They stay on the allowlist with the same profiles, and can sign in again with /signin in the game.")
+            Text("They stay on the allowlist with the same profiles, and can sign in again with /login in the game.")
         }
     }
 

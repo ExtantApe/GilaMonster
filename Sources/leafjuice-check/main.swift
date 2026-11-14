@@ -3410,7 +3410,14 @@ func localAddresses() -> [String] {
         try await c.installSoftware(build)
         try FileOps.ensureDir(c.paths.plugins)
         try FileManager.default.copyItem(at: URL(fileURLWithPath: jar), to: c.paths.plugins.appendingPathComponent("WelcomeWagon.jar"))
-        write("sign-in-page: \"https://links.example.test\"\n", c.paths.plugins.appendingPathComponent("WelcomeWagon/config.yml"))
+        // WelcomeWagon's own shipped config with its features switched on, as the invites run does (0.5+ keeps them off).
+        var shipped = try await Tool.run("/usr/bin/unzip", ["-p", jar, "config.yml"]).out
+        for (from, to) in [("enabled: false", "enabled: true"), ("port: 25680", "port: 25596"), ("public-url: \"\"", "public-url: \"https://links.example.test\"")] {
+            guard shipped.contains(from) else { throw LeafError("WelcomeWagon's shipped config no longer has \(from)") }
+            shipped = shipped.replacingOccurrences(of: from, with: to)
+        }
+        try FileOps.ensureDir(c.paths.plugins.appendingPathComponent("WelcomeWagon"))
+        write(shipped, c.paths.plugins.appendingPathComponent("WelcomeWagon/config.yml"))
         c.profile.lastPluginCheck = Date(); c.profile.software.lastCheck = Date()
         c.profile.launch.extraJVMArgs = "-Dwelcomewagon.allowOfflineForTesting=true"
         await c.start()
@@ -3448,19 +3455,19 @@ func localAddresses() -> [String] {
         }
         let pending = c.paths.plugins.appendingPathComponent("WelcomeWagon/pending")
 
-        bot.command("signin")
+        bot.command("login")
         try? await Task.sleep(for: .seconds(2))
         check(link() == nil, "no permission, no link")
         check(FileOps.children(pending).isEmpty, "and nothing saved")
         c.send("op MadeUpBot")
         c.send("whitelist remove MadeUpBot")
         try? await Task.sleep(for: .seconds(2))
-        bot.command("signin")
-        await checkUntil(10, "told it isn't on the allowlist") { sent("allowlist") }
+        bot.command("login")
+        await checkUntil(10, "told it isn't on the allowlist") { sent("allowlist") || sent("whitelist") }
         check(link() == nil, "with permission but off the allowlist, no link")
         c.send("whitelist add MadeUpBot")
         try? await Task.sleep(for: .seconds(2))
-        bot.command("signin")
+        bot.command("login")
         await checkUntil(10, "a link arrives in game") { link() != nil }
         guard let token = link() else {
             for line in c.console where line.text.contains("WelcomeWagon") || line.text.contains("MadeUpBot") || line.text.lowercased().contains("signin") { print("    console: \(line.text.prefix(200))") }
@@ -3486,11 +3493,12 @@ func localAddresses() -> [String] {
         equal(c.linksWeb?.signedIn.first?.uuid, (try JSONSerialization.jsonObject(with: Data(contentsOf: c.paths.root.appendingPathComponent("whitelist.json"))) as? [[String: Any]])?.first?["uuid"] as? String, "by the same account the server knows")
 
         // /execute as changes who runs a command, never who asked: nobody gets a link made for someone else.
+        // On the whitelist first: the whitelist is on, so nobody else can join.
+        c.send("whitelist add OtherBot")
+        try? await Task.sleep(for: .seconds(2))
         let other = try Bot(name: "OtherBot", port: 25593, table: table)
         defer { other.leave() }
         await checkUntil(60, "second bot in game: \(other.disconnectReason ?? "")") { other.inGame }
-        c.send("whitelist add OtherBot")
-        try? await Task.sleep(for: .seconds(2))
         func linkFor(_ name: String) -> Bool {
             FileOps.children(pending).contains { ((try? String(contentsOf: $0, encoding: .utf8)) ?? "").contains("\"\(name)\"") }
         }
@@ -3501,7 +3509,7 @@ func localAddresses() -> [String] {
         try? await Task.sleep(for: .seconds(3))
         check(!linkFor("OtherBot"), "an op can't make one for a player without the permission")
         check(!other.privateMessages.contains { $0.contains("/signin#") }, "and that player is never sent a link")
-        other.command("signin")
+        other.command("login")
         try? await Task.sleep(for: .seconds(2))
         check(!linkFor("OtherBot") && !other.privateMessages.contains { $0.contains("/signin#") }, "nor can they ask themselves")
         other.leave()

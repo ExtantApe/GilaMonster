@@ -1000,7 +1000,11 @@ private final class PageClient {
 
         // Redeemed on WelcomeWagon's own page, as the player would.
         let browser = PageClient(port: web)
-        let redeemed = try await browser.request("/invite", form: ["csrf": try await browser.csrf("/"), "code": invite.code.lowercased(), "name": name])
+        // WelcomeWagon 0.5+ asks first: the code shows who it's for, and nothing is used until "Yes, that's me".
+        let csrf = try await browser.csrf("/")
+        let checked = try await browser.request("/invite", form: ["csrf": csrf, "code": invite.code.lowercased()])
+        print("  check code: HTTP \(checked.status)")
+        let redeemed = try await browser.request("/invite/confirm", form: ["csrf": csrf, "code": invite.code.lowercased()])
         print("  redeem: HTTP \(redeemed.status)")
         await checkUntil(10, "redeeming whitelists them") { c.allowlist.contains { $0.uuid == uuid } }
         if case .success(let p) = await c.sheriffShow(uuid: uuid) { equal(p.profiles, ["young"], "Sheriff applied the invite's profile") } else { check(false, "show after redeeming") }
@@ -1010,7 +1014,7 @@ private final class PageClient {
         // Sign-in is op-only by default; an admin gives it to the players who should have it.
         await expectLine(c, "lp user \(name) permission set welcomewagon.signin true", "welcomewagon.signin", "sign-in allowed for \(name)")
         let bot = try await join(name, c, table, port: port)
-        bot.command("signin")
+        bot.command("login")
         await checkUntil(10, "/signin sends a link (got \(bot.privateMessages.map { String($0.filter { $0.isASCII && !$0.isNewline }.prefix(120)) }))") { bot.privateMessages.contains { $0.contains("/signin#") } }
         // The bot's messages are raw packet bytes, so the link is picked out by its exact shape, nothing more.
         let linkPattern = regex(#"https://play\.example\.test/signin#[A-Za-z0-9_-]{43}"#)
@@ -1034,8 +1038,14 @@ private final class PageClient {
         } else {
             // The 0.3.0 release offers session commands: the player sheet's count and Sign Out Everywhere. With this, the
             // whitelist-remove step below no longer has a session left to end; 0.2.0 runs still prove that path.
-            equal(await c.welcomewagonSignIns(name: name), .signedIn(browsers: 1), "the player sheet sees one browser signed in")
-            if case .success(let ended) = await c.signOutEverywhere(name: name) { equal(ended, 1, "Sign Out Everywhere ends it") } else { check(false, "signed out everywhere") }
+            // One browser signed in here; since 0.5, redeeming the invite signed in another, so one or two can show.
+            let shown = await c.welcomewagonSignIns(name: name)
+            var seen = 0
+            if case .signedIn(let n) = shown { seen = n }
+            check((1...2).contains(seen), "the player sheet sees the signed-in browsers (\(shown))")
+            // At least the one shown: WelcomeWagon counts live sessions but ends every session file for the player,
+            // such as the one redeeming an invite made (0.5+), so it can end more than the count showed.
+            if case .success(let ended) = await c.signOutEverywhere(name: name) { check(ended >= max(1, seen), "Sign Out Everywhere ends every one shown, and any older ones (\(ended))") } else { check(false, "signed out everywhere") }
             await checkUntil(5, "which deletes the session file") { WelcomeWagonSessions.read(plugins: c.paths.plugins, cookieValue: cookie) == nil }
             check(!page().contains("Signed in as"), "and LeafJuice's page no longer signs them in")
             equal(await c.welcomewagonSignIns(name: name), .signedIn(browsers: 0), "and the count is back to none")
