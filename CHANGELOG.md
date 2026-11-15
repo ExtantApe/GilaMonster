@@ -2,6 +2,7 @@
 
 ## Unreleased
 
+- **The shutdown save now works in release builds.** The quit handler and the power-off watcher from the shutdown change had landed inside a debug-only block, so the app built by `scripts/build-app.sh` didn't have them. Tested: a release build on a throwaway server stopped it with a world save and exited about 4 seconds after a simulated shutdown, without asking.
 - **Shutting down the Mac** no longer gets stuck on "Stop running servers and quit?". At a shutdown, restart or log out,
   LeafJuice stops every server with a save without asking, then quits so the Mac can carry on.
 - **Publish packs to your web server** (D189): each build under a new random path in the folder Caddy serves, named by
