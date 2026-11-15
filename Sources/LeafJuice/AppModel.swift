@@ -235,9 +235,7 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
 
     func applicationShouldTerminateAfterLastWindowClosed(_ sender: NSApplication) -> Bool { false }
 
-    #if DEBUG
-    /// Debug builds only: draws every page of every listed server to images, off screen, then quits.
-    /// `LEAFJUICE_SNAPSHOT=<folder>`, for checking screens nobody has clicked yet. Starts nothing.
+    /// Every build, release included: the quit handler reads why macOS is quitting the app (K650).
     func applicationWillFinishLaunching(_ notification: Notification) {
         NSAppleEventManager.shared().setEventHandler(self, andSelector: #selector(handleQuit(_:withReplyEvent:)),
                                                      forEventClass: AEEventClass(kCoreEventClass), andEventID: AEEventID(kAEQuitApplication))
@@ -247,6 +245,15 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
         NSWorkspace.shared.notificationCenter.addObserver(forName: NSWorkspace.willPowerOffNotification, object: nil, queue: .main) { _ in
             AppDelegate.poweringOff = true
         }
+        #if DEBUG
+        snapshotIfAsked()
+        #endif
+    }
+
+    #if DEBUG
+    /// Debug builds only: draws every page of every listed server to images, off screen, then quits.
+    /// `LEAFJUICE_SNAPSHOT=<folder>`, for checking screens nobody has clicked yet. Starts nothing.
+    @MainActor private func snapshotIfAsked() {
         guard let folder = ProcessInfo.processInfo.environment["LEAFJUICE_SNAPSHOT"], let model = Self.model else { return }
         NSApp.setActivationPolicy(.accessory)
         NSApp.windows.forEach { $0.close() }
