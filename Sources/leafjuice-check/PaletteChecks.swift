@@ -43,6 +43,7 @@ import LeafJuiceCore
     check(PluginSource.github(repo: "made-up/plugin", assetPattern: "", prereleases: false).badge! == ("GitHub", "made-up/plugin"), "GitHub releases show the repository")
     check(PluginSource.jenkins(jobURL: "https://ci.example.com/job/Folder/job/Plugin/", artifactPattern: "").badge! == ("Jenkins", "ci.example.com/Plugin"), "a Jenkins job shows its host and job name")
     check(PluginSource.spigot(resourceID: 1234).badge! == ("SpigotMC", "#1234") && PluginSource.none.badge == nil, "SpigotMC shows its number, and no source shows no badges")
+    check(PluginSource.modrinth(project: "", allowBeta: false).badge == nil && PluginSource.modrinth(project: "", allowBeta: false).spoken == "No source", "a half-filled source shows as no source, with no empty ID badge")
     // The real test.
     check(Palette.pairs.count >= 45, "every pair the app uses is listed (\(Palette.pairs.count))")
     let failing = Palette.failures()
