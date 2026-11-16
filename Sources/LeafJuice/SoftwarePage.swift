@@ -163,7 +163,7 @@ struct ChangeVersionCard: View {
             if !server.isLab, Modules.shared.isOn(.lab), !AdvisorTrial.isOn, let line = labLine {
                 HStack {
                     Hint(line)
-                    Button("Open Lab") { model.openLabBoard() }.buttonStyle(.link)
+                    Button("Open Lab") { openLab() }.buttonStyle(.link)
                 }
             }
         }
@@ -236,7 +236,12 @@ struct ChangeVersionCard: View {
         loadError = nil
         do {
             versions = try await SoftwareCatalog.versions(flavor)
-            target = shown.first ?? ""
+            // The Lab's chosen version wins, so this picker and the Lab page never disagree.
+            if let labTarget = model.lab.target, model.lab.model(from: model.servers)?.id == server.id, labTarget.flavor == flavor, shown.contains(labTarget.mcVersion) {
+                target = labTarget.mcVersion
+            } else {
+                target = shown.first ?? ""
+            }
         } catch { loadError = error.localizedDescription }
     }
 
@@ -275,6 +280,11 @@ struct ChangeVersionCard: View {
         let passed = results.filter { $0.outcome == .passed }.count
         let version = lab.target.map { " for \($0.mcVersion)" } ?? ""
         return "Last Lab run\(version): \(passed) of \(results.count) passed, \(latest.formatted(.relative(presentation: .named)))."
+    }
+
+    /// Opens the Lab page with this picker's version, unless it already has it.
+    private func openLab() {
+        if !target.isEmpty, target != model.lab.target?.mcVersion, move != .downgrade, !model.lab.isBusy { rehearse() } else { model.openLabBoard() }
     }
 
     private func rehearse() {

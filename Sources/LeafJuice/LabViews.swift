@@ -78,7 +78,7 @@ struct LabPage: View {
                 Button("Keep This Lab") { lab.keepCopy(note: note) }.buttonStyle(.juice)
                     .help("Saves a copy of this run's lab just before it's deleted.")
             } else {
-                Toggle(lab.isBusy ? "Keep a copy of this lab when the run ends" : "Keep a copy of the lab after the next run", isOn: Binding(
+                Toggle(lab.isBusy ? "Keep a copy of this Lab when the run ends" : "Keep a copy of the Lab after the next run", isOn: Binding(
                     get: { lab.keepRequest != nil },
                     set: { on in if on { lab.keepCopy(note: note) } else { lab.dontKeepCopy() } }
                 ))
@@ -197,6 +197,8 @@ struct LabStationRow: View {
             HStack(alignment: .top, spacing: 12) {
                 Toggle(station.title, isOn: $included)
                     .toggleStyle(.switch).labelsHidden().disabled(lab.isBusy)
+                    // An off switch is a white knob on a pale track; the control outline gives it a 3:1 edge.
+                    .overlay { if !included { Capsule().strokeBorder(Juice.controlBorder, lineWidth: 1).allowsHitTesting(false).accessibilityHidden(true) } }
                     .accessibilityLabel("Include \(station.title) in the next run")
                 VStack(alignment: .leading, spacing: 2) {
                     HStack(spacing: 8) {
