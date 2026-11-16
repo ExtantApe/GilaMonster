@@ -63,8 +63,17 @@ public enum SessionAccess {
         public var server: String?
         public var command: String?
         public var lines: Int?
-        public init(token: String?, caller: String?, call: String?, server: String? = nil, command: String? = nil, lines: Int? = nil) {
+        /// For pack and hosting actions (D220).
+        public var recipe: String?
+        public var packs: [String]?
+        public var path: String?
+        public var url: String?
+        public var player: String?
+        public var byHand: Bool?
+        public init(token: String?, caller: String?, call: String?, server: String? = nil, command: String? = nil, lines: Int? = nil,
+                    recipe: String? = nil, packs: [String]? = nil, path: String? = nil, url: String? = nil, player: String? = nil, byHand: Bool? = nil) {
             self.token = token; self.caller = caller; self.call = call; self.server = server; self.command = command; self.lines = lines
+            self.recipe = recipe; self.packs = packs; self.path = path; self.url = url; self.player = player; self.byHand = byHand
         }
     }
 
@@ -72,6 +81,7 @@ public enum SessionAccess {
         case status
         case log(lines: Int)
         case run(command: String)
+        case act(SessionAction)
     }
 
     public enum Refusal: Error, Equatable, Sendable {
@@ -83,7 +93,7 @@ public enum SessionAccess {
             case .noToken: "No token was sent."
             case .badToken: "The token is wrong. A new one may have been made."
             case .noCaller: "Say who's asking, in caller."
-            case let .unknownCall(c): "\(c.isEmpty ? "No call" : "\"\(c)\"") isn't a call. Use status, log or run."
+            case let .unknownCall(c): "\(c.isEmpty ? "No call" : "\"\(c)\"") isn't a call. Use status, log, run, or one of: \(SessionAction.allCases.map(\.rawValue).joined(separator: ", "))."
             case let .notOnList(c): "\"\(c)\" isn't on the owner's list of commands, so it wasn't sent."
             case .lineBreak: "A command can't contain a line break or control characters."
             case .tooLong: "The request is too long."
@@ -111,7 +121,9 @@ public enum SessionAccess {
             let allowed = Set(settings.commands.map(normalize))
             guard !command.isEmpty, allowed.contains(command) else { return (request, .failure(.notOnList(String(command.prefix(100))))) }
             return (request, .success(.run(command: command)))
-        case let other: return (request, .failure(.unknownCall(String(other.prefix(40)))))
+        case let other:
+            if let action = SessionAction(rawValue: other) { return (request, .success(.act(action))) }
+            return (request, .failure(.unknownCall(String(other.prefix(40)))))
         }
     }
 
@@ -179,6 +191,7 @@ public enum SessionAccess {
             case .status: name = "status"; command = nil
             case .log: name = "log"; command = nil
             case let .run(c): name = "run"; command = c
+            case let .act(a): name = a.rawValue; command = request?.recipe.map { String($0.prefix(60)) }
             }
             entry = LogEntry(at: at, caller: cut(request?.caller, 64) ?? "?", call: name, server: cut(server, 80), command: command, allowed: true, note: cut(note, 200) ?? "")
         case let .failure(refusal):
@@ -348,6 +361,17 @@ public final class SessionAccessService {
     @ObservationIgnored public var keychain: SecKeychain?
     @ObservationIgnored public var logFile: URL?
 
+    /// Requests waiting for the owner's Allow, oldest first (D217).
+    public internal(set) var waiting: [SessionApproval] = []
+    @ObservationIgnored var answers: [UUID: CheckedContinuation<Bool, Never>] = [:]
+    @ObservationIgnored var lastAnswer: [UUID: Answer] = [:]
+    /// How long a request waits for Allow before it counts as no.
+    public var approvalWait: TimeInterval = 120
+    /// Set by the app: shows the Allow notification. Nil means nobody can be asked, so every ask is refused.
+    @ObservationIgnored public var onAsk: (@MainActor (SessionApproval) -> Void)?
+    /// Set by the app: takes a notification away once its request is answered or lapses.
+    @ObservationIgnored public var onAnswered: (@MainActor (UUID) -> Void)?
+
     public init() {}
 
     public var isListening: Bool { socket?.isListening == true }
@@ -422,6 +446,14 @@ public final class SessionAccessService {
             try? await Task.sleep(nanoseconds: UInt64(commandWait * 1_000_000_000))
             let after = server.console.filter { $0.id > before && $0.origin == .server }
             return Self.reply(["ok": true, "server": server.profile.name, "sent": command, "output": SessionAccess.shareable(after, players: Self.names(server))])
+        case let .act(action):
+            var server: ServerController?
+            if action.needsServer {
+                let (found, why) = pick()
+                guard let found else { return refuse(request?.server, why ?? "") }
+                server = found
+            }
+            return await act(action, request: request ?? SessionAccess.Request(token: nil, caller: nil, call: nil), server: server, log: log)
         }
     }
 
