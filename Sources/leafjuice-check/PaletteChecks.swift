@@ -35,6 +35,14 @@ import LeafJuiceCore
     check(!PluginSource.github(repo: "made-up", assetPattern: "", prereleases: false).isSet && PluginSource.github(repo: "made-up/plugin", assetPattern: "", prereleases: false).isSet, "GitHub needs owner/name")
     check(!PluginSource.jenkins(jobURL: "ci.example.com", artifactPattern: "").isSet && PluginSource.jenkins(jobURL: "https://ci.example.com/job/Plugin/", artifactPattern: "").isSet, "Jenkins needs a web address")
     check(!PluginSource.web(url: "", linkPattern: "").isSet && !PluginSource.web(url: "file:///etc/x.jar", linkPattern: "").isSet && PluginSource.web(url: "https://example.com/x.jar", linkPattern: "").isSet, "a web source needs an http or https address")
+    // Plugin source badges (owner, 2026-11-15): each source tinted, with its words and icon held to WCAG on the tint.
+    check(Palette.sources.count == SourceKind.allCases.count - 1, "every source but None has badge colours")
+    let tints = Palette.sources.map { $0.wash.light }
+    check(Set(tints).count == tints.count, "each source has its own tint")
+    equal(PluginSource.modrinth(project: "luckperms", allowBeta: false).spoken, "Source Modrinth, ID luckperms", "VoiceOver reads a source as one phrase")
+    check(PluginSource.github(repo: "made-up/plugin", assetPattern: "", prereleases: false).badge! == ("GitHub", "made-up/plugin"), "GitHub releases show the repository")
+    check(PluginSource.jenkins(jobURL: "https://ci.example.com/job/Folder/job/Plugin/", artifactPattern: "").badge! == ("Jenkins", "ci.example.com/Plugin"), "a Jenkins job shows its host and job name")
+    check(PluginSource.spigot(resourceID: 1234).badge! == ("SpigotMC", "#1234") && PluginSource.none.badge == nil, "SpigotMC shows its number, and no source shows no badges")
     // The real test.
     check(Palette.pairs.count >= 45, "every pair the app uses is listed (\(Palette.pairs.count))")
     let failing = Palette.failures()
