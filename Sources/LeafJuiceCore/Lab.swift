@@ -112,7 +112,7 @@ public struct RehearsalReport: Codable, Equatable, Sendable {
     /// So a pass isn't read as a promise.
     public static let notChecked = [
         "What each plugin does in play, beyond loading without errors.",
-        "Your real worlds, players and plugin settings. The Lab uses its own.",
+        "Your real worlds, players and plugin settings. The lab uses its own.",
         "Real players' clients, mods and resource packs.",
         "How it runs under a real load.",
     ]
@@ -308,7 +308,7 @@ public final class LabController {
 
     /// Clears the Lab and builds it again from the recipe. Returns notes about anything it couldn't include.
     private func rebuild(_ spec: LabSpec) async throws -> (controller: ServerController, notes: [LabCheck]) {
-        guard eulaAccepted else { throw LeafError("The Minecraft EULA has to be accepted before the Lab can run a server.") }
+        guard eulaAccepted else { throw LeafError("The Minecraft EULA has to be accepted before the lab can run a server.") }
         // Jars first: the Lab's own may be among them, about to be cleared.
         try? FileManager.default.removeItem(at: LabFiles.scratch)
         try FileOps.ensureDir(LabFiles.scratch)
@@ -372,7 +372,7 @@ public final class LabController {
     private func clearFolder() async throws {
         let root = LabFiles.root
         if let server {
-            guard !server.state.isLive else { throw LeafError("Stop the Lab first.") }
+            guard !server.state.isLive else { throw LeafError("Stop the lab first.") }
             await server.detectExternalServer()
             if case .external = server.state { throw LeafError("The Lab is running outside LeafJuice. Stop it first.") }
         }
@@ -384,7 +384,7 @@ public final class LabController {
             f.dateFormat = "yyyy-MM-dd-HHmmss"
             let aside = root.deletingLastPathComponent().appendingPathComponent("lab-previous-\(f.string(from: Date()))", isDirectory: true)
             try FileManager.default.moveItem(at: root, to: aside)
-            log.append("A folder called lab already existed and isn't a Lab. It's now \(aside.lastPathComponent).")
+            log.append("A folder called lab already existed and LeafJuice didn't make it. It's now \(aside.lastPathComponent).")
             return
         }
         server?.stopTicker()
@@ -486,7 +486,7 @@ public final class LabController {
 
     /// Worlds and players, so the checks have something real to look at.
     private func seed(_ c: ServerController) async throws {
-        say("Starting the Lab for the first time…")
+        say("Starting the lab for the first time…")
         try await boot(c)
         if hasPlugin(c, "multiverse-core") {
             for recipe in LabRecipe.worlds {
@@ -781,7 +781,7 @@ public final class LabController {
             var batch = MirrorBatch(title: group.title, plugins: group.plugins.map(\.name))
             let jars = group.plugins.map { model.paths.plugins.appendingPathComponent($0.fileName) }
             if lab == nil {
-                say("Building the Lab with \(group.title.lowercased())…")
+                say("Building the lab with \(group.title.lowercased())…")
                 lab = try await rebuild(LabSpec(build: spec.build, sources: [], jars: jars)).controller
             } else if let lab {
                 try FileOps.ensureDir(lab.paths.plugins)
@@ -843,7 +843,7 @@ public final class LabController {
             try await backToBaseline()
             out.append(batch)
         }
-        record(.settings, model: model, groups: out, note: "World lists and player data stay the Lab's own.")
+        record(.settings, model: model, groups: out, note: "World lists and player data stay the lab's own.")
     }
 
     /// A lab seeded on the server's current version, then moved to the new one with updated plugins.
@@ -871,7 +871,7 @@ public final class LabController {
     /// Wiped, new on the target version, seeded, with the same checks.
     private func stationFresh(_ model: ServerController) async throws {
         guard let build = state.target else { throw LeafError("Choose a version first.") }
-        say("Wiping the Lab for a fresh install…")
+        say("Building a fresh lab…")
         var spec = try await Self.spec(copying: model)
         spec.build = build
         var checks = spec.leftOut.map { LabCheck($0, .skipped) }
@@ -883,7 +883,7 @@ public final class LabController {
             checks.append(LabCheck("Installs", .failed, error.localizedDescription))
         }
         if let server, server.state.isLive { await shutDown(server) }
-        record(.fresh, model: model, checks: checks, note: "Wiped the Lab, installed \(build.label), then seeded it")
+        record(.fresh, model: model, checks: checks, note: "A new lab, installed \(build.label), then seeded it")
         updateReport(model)
     }
 
@@ -1071,11 +1071,11 @@ public enum LabStation: String, Codable, CaseIterable, Identifiable, Sendable {
     }
     public var summary: String {
         switch self {
-        case .plugins: "Rebuilds the Lab on your current version and adds your plugins a few at a time, with fresh settings. Anything unsaved in the Lab is lost."
-        case .settings: "The same plugins with your real settings. A failure here is a settings problem, because fresh ones passed."
-        case .upgrade: "Moves the Lab's data to the new version, with updated plugins."
-        case .fresh: "Wipes the Lab and installs the new version from nothing, with the same checks."
-        case .freshSettings: "The fresh install, given your real plugin settings."
+        case .plugins: "Builds a lab on your current version and adds your plugins a few at a time, with fresh settings."
+        case .settings: "A lab with the same plugins and your real settings. A failure here is a settings problem, because fresh ones passed."
+        case .upgrade: "Builds a lab on your current version, then moves its data to the new version, with updated plugins."
+        case .fresh: "Builds a lab on the new version from nothing, with the same checks."
+        case .freshSettings: "A lab on the new version, given your real plugin settings."
         }
     }
     public var isOptional: Bool { self == .settings || self == .freshSettings }
@@ -1140,7 +1140,7 @@ extension LabController {
         for name in plugins {
             guard let folder = FileOps.children(model.plugins).first(where: { FileOps.isDirectory($0) && $0.lastPathComponent.lowercased() == name.lowercased() }) else { continue }
             if shared.contains(name.lowercased()) {
-                notes.append("\(name) kept fresh settings, because they mention an outside database that the Lab could write to.")
+                notes.append("\(name) kept fresh settings, because they mention an outside database that the lab could write to.")
                 continue
             }
             for rel in settingsToCopy(in: folder) {
