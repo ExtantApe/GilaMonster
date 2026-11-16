@@ -28,6 +28,13 @@ import LeafJuiceCore
     }
     let blue = Palette.simulate(0x2255CC, .tritanopia)
     check(blue != 0x2255CC, "tritanopia changes blue")
+    // A source counts only once it's filled in (UX audit finding 5): the Add Plugin dialog opens on an empty Modrinth.
+    check(!PluginSource.modrinth(project: "", allowBeta: false).isSet && !PluginSource.modrinth(project: "  ", allowBeta: false).isSet, "an empty Modrinth project isn't a source, so Add stays off")
+    check(PluginSource.modrinth(project: "luckperms", allowBeta: false).isSet && PluginSource.hangar(project: "MadeUp/Plugin", channel: "Release").isSet, "a filled-in project is a source")
+    check(!PluginSource.spigot(resourceID: 0).isSet && PluginSource.spigot(resourceID: 1234).isSet, "SpigotMC needs a resource number")
+    check(!PluginSource.github(repo: "made-up", assetPattern: "", prereleases: false).isSet && PluginSource.github(repo: "made-up/plugin", assetPattern: "", prereleases: false).isSet, "GitHub needs owner/name")
+    check(!PluginSource.jenkins(jobURL: "ci.example.com", artifactPattern: "").isSet && PluginSource.jenkins(jobURL: "https://ci.example.com/job/Plugin/", artifactPattern: "").isSet, "Jenkins needs a web address")
+    check(!PluginSource.web(url: "", linkPattern: "").isSet && !PluginSource.web(url: "file:///etc/x.jar", linkPattern: "").isSet && PluginSource.web(url: "https://example.com/x.jar", linkPattern: "").isSet, "a web source needs an http or https address")
     // The real test.
     check(Palette.pairs.count >= 45, "every pair the app uses is listed (\(Palette.pairs.count))")
     let failing = Palette.failures()
