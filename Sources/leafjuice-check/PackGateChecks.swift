@@ -125,9 +125,14 @@ import LeafJuiceCore
         func tokenStatus(_ method: String = "GET", _ value: String? = nil, _ extra: String = "", at p: String? = nil) async -> Int? {
             await rawStatus(port: port, "\(method) \(p ?? path) HTTP/1.1\r\nHost: x\r\n\(value.map { "X-Pack-Check-Token: \($0)\r\n" } ?? "")\(extra)\r\n")
         }
-        equal(await tokenStatus("GET", secret), 200, "the right token gets the pack, without any player headers")
+        // A download that should work is checked with a real HTTP client, as Packmule's is, comparing the SHA-1. The raw
+        // socket helper reads only the start of a reply, and on CI runners it missed whole 200 answers (2026-11-16).
+        func tokenGets(_ value: String, at u: String? = nil) async -> Bool {
+            await PackHosting.check(url: u ?? url, expected: build.sha1, headers: ["X-Pack-Check-Token": value]).ok
+        }
+        let got1 = await tokenGets(secret); check(got1, "the right token gets the pack, without any player headers")
         equal(await tokenStatus("HEAD", secret), 200, "and a HEAD, as a link check sends")
-        equal(await rawStatus(port: port, "GET \(path) HTTP/1.1\r\nHost: x\r\nx-pack-check-TOKEN: \(secret)\r\n\r\n"), 200, "the header's name is read in any case")
+        equal(await rawStatus(port: port, "HEAD \(path) HTTP/1.1\r\nHost: x\r\nx-pack-check-TOKEN: \(secret)\r\n\r\n"), 200, "the header's name is read in any case")
         equal(await tokenStatus("POST", secret, "Content-Length: 0\r\n"), 405, "other methods are refused before the token is looked at")
         equal(await tokenStatus("GET", String(repeating: "0", count: 64)), 404, "a wrong token gets 404")
         equal(await tokenStatus("GET", ""), 404, "so does an empty one")
@@ -147,7 +152,7 @@ import LeafJuiceCore
         try? FileManager.default.removeItem(at: tokenFile)
         equal(await tokenStatus("GET", secret), 404, "with no token file, the token works for nobody")
         try? FileManager.default.moveItem(at: moved, to: tokenFile)
-        equal(await tokenStatus("GET", secret), 200, "put back, it works again, read fresh for every request")
+        let got2 = await tokenGets(secret); check(got2, "put back, it works again, read fresh for every request")
         check(!c.console.contains { $0.text.contains(secret) }, "the token is never written to the console")
         check(c.console.contains { $0.text.contains("let in with the pack-check token") }, "but the server's log says the link check got in")
         try? FileManager.default.removeItem(at: tokenFile)
@@ -157,7 +162,7 @@ import LeafJuiceCore
         let renewed = PackGate.readToken(tokenFile) ?? ""
         check(!renewed.isEmpty && renewed != secret, "starting again makes a new token")
         equal(await tokenStatus("GET", secret), 404, "and the old one stops working")
-        equal(await tokenStatus("GET", renewed), 200, "while the new one works")
+        let got3 = await tokenGets(renewed); check(got3, "while the new one works")
 
         // A folder in the address (D220): https://join.example.net/zz forwarded here.
         try c.setPackHost(address: "http://127.0.0.1:\(port)/zz/", port: port)
@@ -168,8 +173,8 @@ import LeafJuiceCore
         check(folderURL.hasPrefix("http://127.0.0.1:\(port)/zz/"), "links include the folder: \(folderURL)")
         let withFolder = await PackHosting.check(url: folderURL, expected: build.sha1, headers: game)
         check(withFolder.ok, "a player gets the pack at the address with the folder: \(withFolder.summary)")
-        equal(await tokenStatus("GET", renewed, at: URL(string: folderURL)!.path), 200, "the token works with the folder")
-        equal(await tokenStatus("GET", renewed, at: path), 200, "and without it, as when Caddy strips it or Packmule calls directly")
+        let got4 = await tokenGets(renewed, at: folderURL); check(got4, "the token works with the folder")
+        let got5 = await tokenGets(renewed, at: "http://127.0.0.1:\(port)" + path); check(got5, "and without it, as when Caddy strips it or Packmule calls directly")
         equal(await tokenStatus("GET", renewed, at: "/other" + path), 404, "a different folder is no match")
         try c.setPackHost(address: "http://127.0.0.1:\(port)", port: port)
         try c.startPackHost()
