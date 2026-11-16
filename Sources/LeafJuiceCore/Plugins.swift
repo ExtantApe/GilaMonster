@@ -152,7 +152,23 @@ public enum PluginSource: Codable, Equatable, Sendable {
         }
     }
 
-    public var isSet: Bool { self != .none }
+    /// Set, and filled in enough to check: a picked kind with an empty project counts as no source, so Add, Test and
+    /// automatic checks stay off until it's complete (UX audit 2026-11-15, finding 5).
+    public var isSet: Bool {
+        func trimmed(_ s: String) -> String { s.trimmingCharacters(in: .whitespaces) }
+        func web(_ s: String) -> Bool { URL(string: trimmed(s)).map { ["http", "https"].contains($0.scheme?.lowercased() ?? "") && $0.host != nil } ?? false }
+        switch self {
+        case .none: return false
+        case let .modrinth(project, _): return !trimmed(project).isEmpty
+        case let .hangar(project, _): return !trimmed(project).isEmpty
+        case let .spigot(id): return id > 0
+        case let .github(repo, _, _):
+            let parts = trimmed(repo).split(separator: "/")
+            return parts.count == 2 && !parts[0].isEmpty && !parts[1].isEmpty
+        case let .jenkins(url, _): return web(url)
+        case let .web(url, _): return web(url)
+        }
+    }
 
     public var summary: String {
         switch self {
