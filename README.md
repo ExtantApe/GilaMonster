@@ -88,17 +88,22 @@ Before upgrading, **Check Plugins** on the Software page shows which plugins hav
 
 ## The Lab: rehearse before you upgrade
 
-The Lab is a practice server in `~/Minecraft/lab`, with its own worlds and bot players that really join and hold items. It
-only listens on your Mac, and it can't be removed or renamed in the app. **Save This Lab** keeps it under a readable name like
-`2026-11-03_20-15_paper-1.21.11-build132_before-26-upgrade.tar.gz`, you can restore any save, and **Wipe and Start Fresh** rebuilds it.
+The Lab's status board tests your plugins and rehearses upgrades on a practice server called `lab`, in `~/Minecraft/lab`,
+with its own worlds and bot players that really join and hold items. It only listens on your Mac. Each run builds the lab
+from scratch and deletes it when the run ends, whether it passed, failed or was stopped (decided 2026-11-16). The results and
+the report stay. A lab left behind by a quit or crash is deleted the next time LeafJuice opens, but only if it's LeafJuice's
+own lab folder and it isn't running. A folder called `lab` that LeafJuice didn't make is never touched.
 
-The Lab's **status board** runs its tests one switch at a time. Flick a switch, wait for its light, and a green light unlocks the
+**Save This Lab** keeps a copy of the lab from the run that's going, or the next one, just before it's deleted, under a readable
+name like `2026-11-03_20-15_paper-1.21.11-build132_before-26-upgrade.tar.gz`. Nothing is kept unless you click it.
+
+The **status board** sits on each server's Software page and runs its tests one switch at a time. Flick a switch, wait for its light, and a green light unlocks the
 switch below. Optional rows can stay off, and a red light offers **Continue Anyway**. If you have several servers, you pick which one the Lab models.
 
 1. **Plugins load:** your version and exact jars, added a few at a time in groups by theme, with fresh settings, so a failure names its group.
 2. **Your plugin settings** (optional): the same plugins with your real settings, so a plugin problem and a settings problem are different answers.
-3. **Upgrade:** the Lab's data moved to the new version, with updated plugins.
-4. **Fresh install:** wiped and installed new on that version, with the same checks.
+3. **Upgrade:** a lab seeded on your current version, then moved to the new one with updated plugins.
+4. **Fresh install:** a lab installed new on that version, with the same checks.
 5. **New version with your settings** (optional).
 
 Plugins that reach outside your Mac, such as map web servers and cloud backups, don't run in the Lab, and one using an outside database

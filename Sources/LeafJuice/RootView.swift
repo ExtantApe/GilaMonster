@@ -291,17 +291,17 @@ struct Sidebar: View {
             ForEach(model.listed) { other in
                 Toggle(isOn: Binding(get: { other.id == server.id }, set: { if $0 { model.selectedID = other.id } })) {
                     Label {
-                        Text("\(other.profile.name)\(other.isLab ? " (Lab)" : "") · \(other.state.title)")
+                        Text("\(other.profile.name)\(other.isLab ? " (for this run)" : "") · \(other.state.title)")
                     } icon: {
                         Image(nsImage: Self.menuIcon(other.state))
                     }
                 }
-                .accessibilityLabel("\(other.profile.name)\(other.isLab ? ", the Lab" : ""), \(other.state.title)")
+                .accessibilityLabel("\(other.profile.name)\(other.isLab ? ", the status board's lab for this run" : ""), \(other.state.title)")
             }
             Divider()
             Button("Add Server…") { model.showAddServer = true }
-            if model.lab.server == nil, Modules.shared.isOn(.lab) {
-                Button("Set Up the Lab…") { model.setUpLab() }.disabled(model.lab.isBusy)
+            if Modules.shared.isOn(.lab), model.lab.model(from: model.servers) != nil {
+                Button("Open the Lab's Status Board") { model.openLabBoard() }
             }
             if !server.isLab { Button("Rename \(server.profile.name)…") { renaming = true } }
         } label: {

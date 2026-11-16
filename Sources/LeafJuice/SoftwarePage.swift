@@ -16,7 +16,10 @@ struct SoftwarePage: View {
             if FileOps.exists(server.paths.switchedOffFile) { SwitchedOffCard(server: server) }
             IdentifyCard(server: server)
             if !server.archivedJars.isEmpty { rollbackCard }
+            // The status board, modeled on this server (D229: the lab itself exists only during a run).
+            if !server.isLab, Modules.shared.isOn(.lab), !AdvisorTrial.isOn { LabPanel(model: model) }
         }
+        .onAppear { if !server.isLab, !model.lab.isBusy { model.lab.chooseModel(server) } }
         .task {
             guard server.profile.software.flavor.canDownload else { return }
             await server.checkSoftwareUpdate()
