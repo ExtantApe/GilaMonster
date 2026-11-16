@@ -497,8 +497,7 @@ struct LeafJuiceApp: App {
         MenuBarExtra(isInserted: .constant(!AdvisorTrial.isOn)) {
             StatusMenu(model: model)
         } label: {
-            Image(systemName: model.anyLive ? "leaf.fill" : "leaf")
-                .accessibilityLabel(model.anyLive ? "LeafJuice, server running" : "LeafJuice")
+            MenuBarLabel(model: model)
         }
     }
 }
@@ -535,11 +534,36 @@ struct ServerCommands: Commands {
     }
 }
 
+/// The menu bar leaf. While a session's ask waits for the owner, it shows how many (K679).
+struct MenuBarLabel: View {
+    let model: AppModel
+    private let service = SessionAccessService.shared
+
+    var body: some View {
+        let waiting = service.waiting.count
+        if waiting > 0 {
+            HStack(spacing: 2) {
+                Image(systemName: "leaf.circle.fill")
+                Text("\(waiting)").monospacedDigit()
+            }
+            .accessibilityElement(children: .ignore)
+            .accessibilityLabel("LeafJuice, \(waiting) \(waiting == 1 ? "request" : "requests") waiting for you")
+        } else {
+            Image(systemName: model.anyLive ? "leaf.fill" : "leaf")
+                .accessibilityLabel(model.anyLive ? "LeafJuice, server running" : "LeafJuice")
+        }
+    }
+}
+
 struct StatusMenu: View {
     let model: AppModel
     @Environment(\.openWindow) private var openWindow
 
     var body: some View {
+        if !SessionAccessService.shared.waiting.isEmpty {
+            Button("Requests Waiting for You (\(SessionAccessService.shared.waiting.count))…") { SessionAskWindow.shared.show() }
+            Divider()
+        }
         ForEach(model.listed) { server in
             Text("\(server.profile.name): \(server.state.title)")
             if server.state.canStart {

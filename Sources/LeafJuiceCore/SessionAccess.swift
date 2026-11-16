@@ -50,7 +50,17 @@ public enum SessionAccess {
         if n.isEmpty { return "Type a command." }
         if n.count > 100 { return "That's longer than any console command needs." }
         if n.lowercased() == "stop" || n.lowercased().hasPrefix("stop ") { return "Stopping the server stays in the app, so it can stop cleanly and keep its records." }
+        if CommandPattern.isPattern(n) { return CommandPattern.problem(n) }
         return nil
+    }
+
+    /// Whether the list allows this normalized command: an exact entry, or a pattern it fills (K679). Without
+    /// `worlds`, a {world} only has to look like a world's folder name; the server's real worlds are checked later.
+    public static func allows(_ command: String, entries: [String], worlds: [String]?) -> Bool {
+        guard !command.isEmpty else { return false }
+        let normalized = entries.map(normalize)
+        if normalized.contains(where: { !CommandPattern.isPattern($0) && $0 == command }) { return true }
+        return normalized.contains { CommandPattern.isPattern($0) && CommandPattern.matches(command, pattern: $0, worlds: worlds) }
     }
 
     // MARK: Requests
@@ -118,8 +128,7 @@ public enum SessionAccess {
             let raw = request.command ?? ""
             if raw.contains(where: { $0.isNewline || $0.asciiValue.map { $0 < 0x20 } == true }) { return (request, .failure(.lineBreak)) }
             let command = normalize(raw)
-            let allowed = Set(settings.commands.map(normalize))
-            guard !command.isEmpty, allowed.contains(command) else { return (request, .failure(.notOnList(String(command.prefix(100))))) }
+            guard allows(command, entries: settings.commands, worlds: nil) else { return (request, .failure(.notOnList(String(command.prefix(100))))) }
             return (request, .success(.run(command: command)))
         case let other:
             if let action = SessionAction(rawValue: other) { return (request, .success(.act(action))) }
@@ -438,6 +447,9 @@ public final class SessionAccessService {
             guard let server = found else { return refuse(request?.server, why ?? "") }
             guard server.state == ServerState.running else {
                 return refuse(server.profile.name, "\(server.profile.name) isn't running under LeafJuice (it's \(server.state.title.lowercased())), so nothing was sent.")
+            }
+            guard SessionAccess.allows(command, entries: settings.commands, worlds: Backups.worldFolders(server.paths.root)) else {
+                return refuse(server.profile.name, "\(server.profile.name) has no world by that name, so nothing was sent.")
             }
             let before = server.console.last?.id ?? -1
             server.appendWrapper("A session (\(request?.caller ?? "?")) ran: \(command)", level: LogLevel.info)
