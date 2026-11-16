@@ -30,7 +30,7 @@ struct OverviewPage: View {
                 }
             }
 
-            if server.isLab, Modules.shared.isOn(.lab) { LabPanel(model: model, server: server) }
+            if server.isLab { LabRunCard(model: model) }
             UpgradeBanner(server: server)
             if server.allowlistSurprise {
                 Callout(tone: .info, title: "The allowlist is on", detail: "New servers on Minecraft 26 start with it on, so only players you add can join. Turn it off in Configs under Players, or add people to the allowlist there.")

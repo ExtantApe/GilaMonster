@@ -1,11 +1,14 @@
 import Foundation
 import Observation
 
-// A protected practice server. Everything in it is made by LeafJuice, so wiping it costs nothing,
-// and it can rehearse an upgrade without the real server's worlds or players ever being involved.
+// A throwaway practice server for the status board. Each run builds it from scratch and deletes it when the run ends,
+// pass or fail (D229, owner, 2026-11-16). Results and the report stay; a copy is kept only when asked for. It can rehearse
+// an upgrade without the real server's worlds or players ever being involved.
 
 public enum LabFiles {
     public static let folderName = "lab"
+    /// The generated server's name, lowercase like its folder (owner, 2026-11-16).
+    public static let serverName = "lab"
     public static var root: URL { AppPaths.servers.appendingPathComponent(folderName, isDirectory: true) }
     static var own: URL { AppPaths.servers.appendingPathComponent(AppPaths.ownFolderName, isDirectory: true) }
     public static var saves: URL { own.appendingPathComponent("rehearsals", isDirectory: true) }
@@ -180,10 +183,17 @@ public final class LabController {
     public func chooseModel(_ server: ServerController) { state.modelServer = server.paths.root.path }
     public var isBusy: Bool { step != nil }
     public var eulaAccepted: Bool { state.eulaAcceptedAt != nil }
-    /// Tells the app which server to list when a wipe or restore replaces it.
+    /// Tells the app which server to list while a run's lab exists, and to drop it when the lab is deleted.
     public var onServerChanged: ((_ old: ServerController?, _ new: ServerController?) -> Void)?
     /// Only for tests that run a stand-in jar.
     var bootLimit = 600
+    /// Only for tests: stands in for a station's work, returning the lab it built, so the end of a run can be checked
+    /// without downloading software.
+    var stationStandIn: ((LabStation) async throws -> ServerController?)?
+    /// "Save This Lab": a copy of this run's lab is kept when the run ends, with this note. Nil keeps nothing. One run only.
+    public private(set) var keepRequest: String?
+    public func keepCopy(note: String) { keepRequest = note }
+    public func dontKeepCopy() { keepRequest = nil }
 
     private var state: LabState { didSet { try? JSONStore.save(state, to: LabFiles.state) } }
 
@@ -202,7 +212,7 @@ public final class LabController {
         log.append(text)
     }
 
-    private func perform(_ work: () async throws -> Void) async {
+    private func perform(endsRun: Bool = false, _ work: () async throws -> Void) async {
         guard !isBusy else { return }
         failure = nil
         log = []
@@ -213,44 +223,65 @@ public final class LabController {
             log.append(error.localizedDescription)
             if let server, server.state.isLive { await shutDown(server) }
         }
+        if endsRun { await finishRun() }
     }
 
-    // MARK: Set up, wipe
+    // MARK: The end of a run
 
-    /// Creates the Lab. A folder already called lab that isn't one is moved aside, never touched otherwise.
-    public func setUp(_ spec: LabSpec) async {
-        await perform { _ = try await rebuild(spec) }
-    }
-
-    public func setUpWithDefaults() async {
-        await perform {
-            say("Looking up the newest stable Paper…")
-            _ = try await rebuild(try await Self.newestSpec())
+    /// Every run ends here, pass or fail: the lab stops, is saved if "Save This Lab" was clicked, then is deleted.
+    private func finishRun() async {
+        // A run that failed before the app was told about its lab still leaves the folder: check the disk too.
+        if server == nil, let onDisk = ServerController.readProfile(root: LabFiles.root), LabFiles.isLab(root: LabFiles.root, profile: onDisk) {
+            server = ServerController.open(root: LabFiles.root)
+        }
+        guard let lab = server else { keepRequest = nil; return }
+        if lab.state.isLive { await shutDown(lab) }
+        if let note = keepRequest {
+            keepRequest = nil
+            say("Saving a copy of the lab…")
+            do { try await pack(lab, note: note) } catch {
+                log.append("Couldn't save a copy of the lab: \(error.localizedDescription)")
+                if failure == nil { failure = "Couldn't save a copy of the lab. \(error.localizedDescription)" }
+            }
+        }
+        say("Deleting the lab…")
+        do { try await discard() } catch {
+            log.append("Couldn't delete the lab: \(error.localizedDescription)")
+            if failure == nil { failure = "Couldn't delete the lab. \(error.localizedDescription) It's removed the next time LeafJuice opens." }
         }
     }
 
-    /// Back to a clean seed on the same version and plugins.
-    /// Builds the Lab with a real server's version and plugins, all at once.
-    public func setUp(modeledOn model: ServerController) async {
-        await perform {
-            say("Reading \(model.profile.name)'s plugin list…")
-            _ = try await rebuild(try await Self.spec(copying: model))
+    /// Deletes the lab's folder, if it's LeafJuice's own lab and stopped. Results, the report and saved copies stay.
+    func discard() async throws {
+        let old = server
+        guard let onDisk = ServerController.readProfile(root: LabFiles.root), LabFiles.isLab(root: LabFiles.root, profile: onDisk) else {
+            // Nothing there, or someone's own folder called lab: never touched.
+            old?.stopTicker()
+            server = nil
+            if old != nil { onServerChanged?(old, nil) }
+            return
         }
+        try await clearFolder()
+        old?.stopTicker()
+        server = nil
+        if old != nil { onServerChanged?(old, nil) }
     }
 
-    public func wipeAndStartFresh() async {
-        await perform {
-            guard let server else { throw LeafError("There's no Lab yet.") }
-            say("Reading what the Lab has now…")
-            _ = try await rebuild(try await Self.spec(copying: server))
+    /// A lab left behind by a quit or crash in the middle of a run. Removed at launch, only when it's LeafJuice's own lab
+    /// folder and it isn't running, in LeafJuice or outside it.
+    public func removeLeftover() async {
+        guard !isBusy, let onDisk = ServerController.readProfile(root: LabFiles.root), LabFiles.isLab(root: LabFiles.root, profile: onDisk) else { return }
+        let found = server ?? ServerController.open(root: LabFiles.root)
+        guard let found else { return }
+        if found.state.isLive { return }
+        await found.detectExternalServer()
+        if case .external = found.state {
+            log.append("A lab left from an earlier run is running outside LeafJuice, so it was left alone.")
+            if server == nil { found.stopTicker() }
+            return
         }
-    }
-
-    static func newestSpec() async throws -> LabSpec {
-        for mc in try await SoftwareCatalog.versions(.paper) where GameVersion(mc) != nil && !mc.contains("-") {
-            if let build = try await SoftwareCatalog.latestBuild(.paper, mc: mc) { return LabSpec(build: build) }
-        }
-        throw LeafError("Couldn't find a stable Paper build.")
+        if server == nil { server = found }
+        do { try await discard() } catch { log.append("Couldn't delete a lab left from an earlier run: \(error.localizedDescription)") }
     }
 
     /// The same software and plugins as another server. Reads its plugin list and jars, and nothing else.
@@ -299,7 +330,7 @@ public final class LabController {
         var profile = ServerProfile()
         profile.id = identity ?? UUID()
         profile.isLab = true
-        profile.name = "Lab"
+        profile.name = LabFiles.serverName
         profile.backup.enabled = false
         profile.backup.autoDrill = false
         profile.backup.destination = ServerPaths(root: root).meta.appendingPathComponent("backups").path
@@ -636,7 +667,7 @@ public final class LabController {
     /// The whole rehearsal in one go: upgrade, then fresh, then optionally settings. The board runs these one at a time.
     public func rehearse(for target: ServerController, to build: SoftwareBuild, withSettings: Bool = false) async {
         chooseTarget(build)
-        await perform {
+        await perform(endsRun: true) {
             try await stationUpgrade(target)
             try await stationFresh(target)
             if withSettings, state.board[.fresh]?.outcome == .passed { try await stationFreshSettings(target) }
@@ -712,7 +743,11 @@ public final class LabController {
         for other in LabStation.allCases where other == station || other.follows(station) { state.board[other] = nil }
         running = station
         defer { running = nil }
-        await perform {
+        await perform(endsRun: true) {
+            if let stationStandIn {
+                if let built = try await stationStandIn(station) { server = built; onServerChanged?(nil, built) }
+                return
+            }
             switch station {
             case .plugins: try await stationPlugins(model)
             case .settings: try await stationSettings(model)
@@ -770,10 +805,18 @@ public final class LabController {
         record(.plugins, model: model, groups: out, note: model.profile.software.label, leftOut: spec.leftOut)
     }
 
-    /// The same groups, now with the real settings. Back to fresh afterwards, so later stations aren't affected.
+    /// The same groups, now with the real settings, on a lab built for this run with the server's version and jars,
+    /// leaving out any plugin that didn't load at the plugins station. Back to fresh between groups.
     private func stationSettings(_ model: ServerController) async throws {
-        guard let lab = server else { throw LeafError("There's no Lab yet.") }
-        guard lab.state.canStart else { throw LeafError("Stop the Lab first.") }
+        say("Reading \(model.profile.name)'s plugin list…")
+        let spec = try await Self.spec(copying: model)
+        let didntLoad = Set((state.board[.plugins]?.groups ?? []).flatMap { batch in
+            batch.plugins.filter { name in batch.fresh.contains { $0.outcome == .failed && $0.title.hasPrefix("\(name) ") } }
+        })
+        let jars = model.plugins.filter { $0.enabled && !Self.reachesOutside($0) && !didntLoad.contains($0.name) }
+            .map { model.paths.plugins.appendingPathComponent($0.fileName) }
+        say("Building the lab with \(model.profile.name)'s plugins…")
+        let lab = try await rebuild(LabSpec(build: spec.build, sources: [], jars: jars)).controller
         await lab.refreshPlugins()
         // Observed: settings change world and player data as well as files in plugins/, so each group gets a clean copy.
         let baseline = LabFiles.scratch.appendingPathComponent("baseline", isDirectory: true)
@@ -803,21 +846,16 @@ public final class LabController {
         record(.settings, model: model, groups: out, note: "World lists and player data stay the Lab's own.")
     }
 
-    /// The Lab's existing data moved to the new version, with updated plugins.
+    /// A lab seeded on the server's current version, then moved to the new one with updated plugins.
     private func stationUpgrade(_ model: ServerController) async throws {
-        guard let build = state.target, let to = GameVersion(build.mcVersion) else { throw LeafError("Choose a version first.") }
+        guard let build = state.target else { throw LeafError("Choose a version first.") }
         say("Reading \(model.profile.name)'s plugin list…")
         let current = try await Self.spec(copying: model)
         var checks = current.leftOut.map { LabCheck($0, .skipped) }
-        var route: String
-        if let lab = server, lab.profile.labSeededAt != nil, let version = lab.profile.software.gameVersion, version < to || version == to && lab.profile.software.build != build.build {
-            route = "Kept the Lab's data from \(lab.profile.software.label), then moved it to \(build.label)"
-        } else {
-            say("Building a Lab on \(current.build.label), the version you're on now…")
-            checks += try await rebuild(current).notes
-            route = "New seed on \(current.build.label), then moved it to \(build.label)"
-        }
-        guard let lab = server else { throw LeafError("There's no Lab.") }
+        say("Building a lab on \(current.build.label), the version you're on now…")
+        checks += try await rebuild(current).notes
+        var route = "New seed on \(current.build.label), then moved it to \(build.label)"
+        guard let lab = server else { throw LeafError("There's no lab.") }
         do {
             say("Moving to \(build.label) with updated plugins…")
             try await upgrade(lab, to: build, adding: current, model: model, notes: &checks)
@@ -851,7 +889,11 @@ public final class LabController {
 
     /// Run only after fresh passes, so a failure can only be the settings.
     private func stationFreshSettings(_ model: ServerController) async throws {
-        guard let lab = server else { throw LeafError("There's no Lab.") }
+        guard let build = state.target else { throw LeafError("Choose a version first.") }
+        var spec = try await Self.spec(copying: model)
+        spec.build = build
+        say("Building a fresh lab on \(build.label)…")
+        let lab = try await rebuild(spec).controller
         say("Trying \(model.profile.name)'s plugin settings…")
         var checks = try Self.copySettings(from: model.paths, to: lab.paths, plugins: lab.plugins.filter(\.enabled).map(\.name)).map { LabCheck($0, .skipped) }
         checks += await runChecks(lab, known: state.knownProblems ?? [], underSettings: true)
@@ -909,57 +951,29 @@ public final class LabController {
         LabFiles.saves.appendingPathComponent(fileName.replacingOccurrences(of: ".tar.gz", with: ".json"))
     }
 
-    /// Keeps this Lab, named so it can be recognized later. Only while stopped, so nothing changes mid-copy.
-    public func save(note: String) async {
-        await perform {
-            guard let server else { throw LeafError("There's no Lab yet.") }
-            guard server.state.canStart else { throw LeafError("Stop the Lab before saving it.") }
-            say("Saving the Lab…")
-            try FileOps.ensureDir(LabFiles.saves)
-            let now = Date()
-            var name = LabFiles.saveName(date: now, software: server.profile.software, note: note)
-            var n = 2
-            while FileOps.exists(LabFiles.saves.appendingPathComponent(name)) {
-                name = LabFiles.saveName(date: now, software: server.profile.software, note: note).replacingOccurrences(of: ".tar.gz", with: "-\(n).tar.gz")
-                n += 1
-            }
-            let file = LabFiles.saves.appendingPathComponent(name)
-            let part = file.appendingPathExtension("part")
-            defer { try? FileManager.default.removeItem(at: part) }
-            let packed = try await Tool.run("/usr/bin/tar", ["-czf", part.path, "--exclude", "./.leafjuice/backups", "--exclude", "./.leafjuice/staged", "--exclude", "./logs", "-C", server.paths.root.path, "."])
-            guard packed.ok else { throw LeafError("Couldn't save the Lab. \(packed.err.prefix(200))") }
-            let listed = try await Tool.run("/usr/bin/tar", ["-tzf", part.path])
-            guard listed.ok, listed.out.contains("server.properties"), listed.out.contains(".leafjuice/server.json") else { throw LeafError("The saved file didn't read back correctly.") }
-            try FileOps.move(part, to: file)
-            await server.refreshPlugins()
-            let record = LabSave(fileName: name, date: now, note: note, software: server.profile.software.label, plugins: server.plugins.filter(\.enabled).map(\.name), size: FileOps.size(file))
-            try JSONStore.save(record, to: Self.sidecar(name))
-            refreshSaves()
+    /// Keeps a copy of this run's lab, named so it can be recognized later. Only while stopped, so nothing changes mid-copy.
+    private func pack(_ lab: ServerController, note: String) async throws {
+        guard lab.state.canStart else { throw LeafError("The lab was still running.") }
+        try FileOps.ensureDir(LabFiles.saves)
+        let now = Date()
+        var name = LabFiles.saveName(date: now, software: lab.profile.software, note: note)
+        var n = 2
+        while FileOps.exists(LabFiles.saves.appendingPathComponent(name)) {
+            name = LabFiles.saveName(date: now, software: lab.profile.software, note: note).replacingOccurrences(of: ".tar.gz", with: "-\(n).tar.gz")
+            n += 1
         }
-    }
-
-    /// Replaces the Lab with a saved one.
-    public func restore(_ saved: LabSave) async {
-        await perform {
-            let archive = LabFiles.saves.appendingPathComponent(saved.fileName)
-            guard FileOps.exists(archive) else { throw LeafError("That save is missing.") }
-            say("Checking the save…")
-            let listed = try await Tool.run("/usr/bin/tar", ["-tzf", archive.path])
-            guard listed.ok else { throw LeafError("That save can't be read. The Lab hasn't been touched.") }
-            say("Restoring \(saved.note.isEmpty ? saved.software : saved.note)…")
-            let old = server
-            try await clearFolder()
-            try FileOps.ensureDir(LabFiles.root)
-            let result = try await Tool.run("/usr/bin/tar", ["-xzf", archive.path, "-C", LabFiles.root.path])
-            guard result.ok else { throw LeafError("Couldn't unpack the save. \(result.err.prefix(200))") }
-            guard let restored = ServerController.open(root: LabFiles.root), LabFiles.isLab(root: restored.paths.root, profile: restored.profile) else {
-                throw LeafError("That save isn't a Lab.")
-            }
-            restored.requiresEULA = old?.requiresEULA ?? restored.requiresEULA
-            server = restored
-            onServerChanged?(old, restored)
-            await restored.refreshPlugins()
-        }
+        let file = LabFiles.saves.appendingPathComponent(name)
+        let part = file.appendingPathExtension("part")
+        defer { try? FileManager.default.removeItem(at: part) }
+        let packed = try await Tool.run("/usr/bin/tar", ["-czf", part.path, "--exclude", "./.leafjuice/backups", "--exclude", "./.leafjuice/staged", "--exclude", "./logs", "-C", lab.paths.root.path, "."])
+        guard packed.ok else { throw LeafError("Couldn't save the lab. \(packed.err.prefix(200))") }
+        let listed = try await Tool.run("/usr/bin/tar", ["-tzf", part.path])
+        guard listed.ok, listed.out.contains("server.properties"), listed.out.contains(".leafjuice/server.json") else { throw LeafError("The saved file didn't read back correctly.") }
+        try FileOps.move(part, to: file)
+        await lab.refreshPlugins()
+        let record = LabSave(fileName: name, date: now, note: note, software: lab.profile.software.label, plugins: lab.plugins.filter(\.enabled).map(\.name), size: FileOps.size(file))
+        try JSONStore.save(record, to: Self.sidecar(name))
+        refreshSaves()
     }
 
     public func deleteSave(_ saved: LabSave) throws {

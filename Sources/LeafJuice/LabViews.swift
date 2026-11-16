@@ -2,60 +2,59 @@ import AppKit
 import LeafJuiceCore
 import SwiftUI
 
-/// Sits on the Lab's Overview: save, restore, wipe, and the last rehearsal.
+/// The Lab on a server's Software page: what the lab is, saving a copy, saved copies, and the status board. The lab
+/// itself is built for each run and deleted when the run ends (D229, owner, 2026-11-16).
 struct LabPanel: View {
     let model: AppModel
-    let server: ServerController
     @State private var note = ""
-    @State private var confirmWipe = false
-    @State private var confirmRestore: LabSave?
     @State private var confirmDelete: LabSave?
 
     private var lab: LabController { model.lab }
-    private var idle: Bool { !lab.isBusy && server.state.canStart }
 
     var body: some View {
         Card(title: "Lab", systemImage: "flask") {
-            Text("A practice server with its own worlds and bot players. It only listens on this Mac, and it can't be removed or renamed.")
+            Text("Each run on the status board builds a practice server called lab, with its own worlds and bot players, listening only on this Mac. It's deleted when the run ends, pass or fail. The results and the report stay.")
                 .foregroundStyle(Juice.ink).fixedSize(horizontal: false, vertical: true)
             LabProgress(lab: lab)
-            if !lab.isBusy, !server.state.canStart {
-                Hint("Stop the Lab to save, restore or wipe it.")
-            }
-            HStack {
-                TextField("Note for this save", text: $note, prompt: Text("before the 26 upgrade"))
-                    .frame(maxWidth: 300).accessibilityLabel("Note for this save")
-                Button("Save This Lab") {
-                    let text = note
-                    note = ""
-                    Task { await lab.save(note: text) }
+            if let keep = lab.keepRequest {
+                HStack {
+                    Text(keepLine(keep)).foregroundStyle(Juice.ink).fixedSize(horizontal: false, vertical: true)
+                    Spacer()
+                    Button("Don't Save It") { lab.dontKeepCopy() }.buttonStyle(.juice)
                 }
-                .buttonStyle(.juice).disabled(!idle)
-                Spacer()
-                Button("Wipe and Start Fresh…") { confirmWipe = true }.buttonStyle(.juiceDanger).disabled(!idle)
+            } else {
+                VStack(alignment: .leading, spacing: 4) {
+                    Text("Note for a saved copy").font(.callout).foregroundStyle(Juice.muted)
+                    HStack {
+                        TextField("Note for a saved copy", text: $note, prompt: Text(""))
+                            .labelsHidden().frame(maxWidth: 300).accessibilityLabel("Note for a saved copy")
+                        Button("Save This Lab") {
+                            lab.keepCopy(note: note)
+                            note = ""
+                        }
+                        .buttonStyle(.juice)
+                        .help("Keeps a copy of the lab from this run, or the next one, just before it's deleted.")
+                    }
+                    Hint("Such as before the 26 upgrade. Nothing is kept unless you click Save This Lab.")
+                }
             }
             if !lab.saves.isEmpty {
-                Text("Saved Labs").font(.callout.weight(.semibold)).foregroundStyle(Juice.ink)
+                Text("Saved copies").font(.callout.weight(.semibold)).foregroundStyle(Juice.ink)
                 ForEach(lab.saves) { save in row(save) }
-                Button("Show Saves in Finder") { NSWorkspace.shared.open(LabFiles.saves) }.buttonStyle(.juice)
+                Button("Show Saved Copies in Finder") { NSWorkspace.shared.open(LabFiles.saves) }.buttonStyle(.juice)
             }
         }
-        .confirmationDialog("Wipe the Lab and start fresh?", isPresented: $confirmWipe) {
-            Button("Wipe and Start Fresh", role: .destructive) { Task { await lab.wipeAndStartFresh() } }
-        } message: {
-            Text("Everything in the Lab goes, unless it's saved first. It's then rebuilt with the same version and plugins, new worlds and new bot players.")
-        }
-        .confirmationDialog("Restore this Lab?", isPresented: Binding(get: { confirmRestore != nil }, set: { if !$0 { confirmRestore = nil } })) {
-            Button("Restore", role: .destructive) { if let save = confirmRestore { Task { await lab.restore(save) } } }
-        } message: {
-            Text("It replaces the Lab as it is now. Save the current one first if you'd like to keep it.")
-        }
-        .confirmationDialog("Delete this saved Lab?", isPresented: Binding(get: { confirmDelete != nil }, set: { if !$0 { confirmDelete = nil } })) {
+        .confirmationDialog("Delete this saved copy?", isPresented: Binding(get: { confirmDelete != nil }, set: { if !$0 { confirmDelete = nil } })) {
             Button("Delete", role: .destructive) { if let save = confirmDelete { try? lab.deleteSave(save) } }
         } message: {
             Text(confirmDelete?.fileName ?? "")
         }
         LabBoard(model: model, lab: lab)
+    }
+
+    private func keepLine(_ note: String) -> String {
+        let which = lab.isBusy ? "this run's lab" : "the next run's lab"
+        return note.isEmpty ? "A copy of \(which) will be saved before it's deleted." : "A copy of \(which) will be saved as \u{201C}\(note)\u{201D} before it's deleted."
     }
 
     private func row(_ save: LabSave) -> some View {
@@ -65,10 +64,25 @@ struct LabPanel: View {
                 Hint("\(save.date.formatted(date: .abbreviated, time: .shortened)), \(save.software), \(Format.bytes(save.size))")
             }
             Spacer()
-            Button("Restore…") { confirmRestore = save }.buttonStyle(.juice).disabled(!idle)
-                .accessibilityLabel("Restore \(save.note.isEmpty ? save.software : save.note)")
             Button("Delete…") { confirmDelete = save }.buttonStyle(.juice).disabled(lab.isBusy)
                 .accessibilityLabel("Delete \(save.note.isEmpty ? save.software : save.note)")
+        }
+    }
+}
+
+/// On the lab's own Overview while a run has it: what it is, and how the run is going.
+struct LabRunCard: View {
+    let model: AppModel
+
+    var body: some View {
+        Card(title: "This lab is for one run", systemImage: "flask") {
+            Text("The status board built it for the run that's going now, and deletes it when the run ends. Its results stay on the Software page of the server it's modeled on.")
+                .foregroundStyle(Juice.ink).fixedSize(horizontal: false, vertical: true)
+            LabProgress(lab: model.lab)
+            if let real = model.lab.model(from: model.servers) {
+                Button("Open the Status Board") { model.openLabBoard() }.buttonStyle(.juice)
+                    .accessibilityHint("On \(real.profile.name)'s Software page")
+            }
         }
     }
 }
@@ -84,7 +98,7 @@ struct LabProgress: View {
             }
         }
         if let failure = lab.failure {
-            Callout(tone: .danger, title: "The Lab couldn't finish that", detail: failure)
+            Callout(tone: .danger, title: "The lab couldn't finish that", detail: failure)
         }
     }
 }
@@ -104,7 +118,7 @@ struct LabBoard: View {
                 modelRow(current)
                 ForEach(LabStation.allCases) { station in
                     if station == .upgrade { versionRow(current) }
-                    LabStationRow(station: station, lab: lab, server: current)
+                    LabStationRow(model: model, station: station, lab: lab, server: current)
                     if station != LabStation.allCases.last { Divider() }
                 }
                 ready(current)
@@ -174,6 +188,7 @@ struct LabBoard: View {
 }
 
 struct LabStationRow: View {
+    let model: AppModel
     let station: LabStation
     let lab: LabController
     let server: ServerController
@@ -236,7 +251,8 @@ struct LabStationRow: View {
 
     private func flick(_ on: Bool) {
         if on {
-            Task { await lab.run(station, model: server) }
+            // The EULA is asked once, before the first run builds a lab.
+            model.withLab { [lab, station, server] in Task { await lab.run(station, model: server) } }
         } else {
             lab.clear(station)
         }

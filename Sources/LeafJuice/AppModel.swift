@@ -131,7 +131,7 @@ final class AppModel {
         }
         if !AdvisorTrial.isOn { Alerts.ask() }
         if checkAppUpdates, !AdvisorTrial.isOn { Task { await lookForAppUpdate() } }
-        // A wipe or restore makes a new controller for the Lab's folder.
+        // A run's lab is listed while it exists, and dropped when it's deleted.
         lab.onServerChanged = { [weak self] old, new in
             guard let self else { return }
             let wasSelected = self.selectedID == old?.id
@@ -140,6 +140,10 @@ final class AppModel {
             if wasSelected || self.selectedID == nil { self.selectedID = new?.id }
             self.saveRegistry()
         }
+        // A lab left by a quit or crash in the middle of a run goes now, if it's LeafJuice's own and not running (D229).
+        if ProcessInfo.processInfo.environment["LEAFJUICE_SNAPSHOT"] == nil, !AdvisorTrial.isOn {
+            Task { await lab.removeLeftover() }
+        }
     }
 
     /// Runs something that needs the Lab, asking for the EULA first if it hasn't been accepted.
@@ -147,23 +151,11 @@ final class AppModel {
         if lab.eulaAccepted { work() } else { labSetup = LabSetupRequest(then: work) }
     }
 
-    /// The board lives on the Lab's Overview. If there's no Lab yet, it's made first.
+    /// The board lives on the Software page of the server it's modeled on. The lab itself is built only for a run.
     func openLabBoard() {
-        if let found = lab.server {
-            selectedID = found.id
-            page = .overview
-        } else {
-            setUpLab()
-        }
-    }
-
-    func setUpLab() {
-        withLab { [self] in
-            Task {
-                if let real = lab.model(from: servers) { await lab.setUp(modeledOn: real) } else { await lab.setUpWithDefaults() }
-                if let found = lab.server { selectedID = found.id; page = .overview }
-            }
-        }
+        guard let real = lab.model(from: servers) else { return }
+        selectedID = real.id
+        page = .software
     }
 
     private func saveRegistry() {

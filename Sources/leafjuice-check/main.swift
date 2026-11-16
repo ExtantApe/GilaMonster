@@ -154,6 +154,7 @@ if CommandLine.arguments.contains("--connections") {
     await sessionAccessChecks()
     await sessionActionChecks()
     await launchStartChecks()
+    await labRunChecks()
     await smartBackupChecks()
     await backupCapChecks()
     inviteTicketChecks()
@@ -4761,6 +4762,7 @@ func makePack(_ name: String, _ files: [String: String], inside: String? = nil) 
     await sessionAccessChecks()
     await sessionActionChecks()
     await launchStartChecks()
+    await labRunChecks()
     await smartBackupChecks()
     await backupCapChecks()
     inviteTicketChecks()
@@ -5605,127 +5607,92 @@ func residentBytes() -> UInt64 {
     }
 }
 
-/// The Lab on real software, inside the sandbox folder: protection, seed, saves, and a real rehearsal.
+/// The lab on real software, inside the sandbox folder: someone's own folder kept, each run building a lab and deleting
+/// it at the end (D229), a saved copy only when asked, and real rehearsals that pass and fail.
 @MainActor func runLabScenario() async {
     let base = URL(fileURLWithPath: FileManager.default.currentDirectoryPath).appendingPathComponent(".lab-sandbox", isDirectory: true)
     setenv("LEAFJUICE_HOME", base.appendingPathComponent("home").path, 1)
     setenv("LEAFJUICE_SERVERS", base.appendingPathComponent("servers").path, 1)
     let root = LabFiles.root
-    check(root.path.contains(".lab-sandbox"), "the test Lab is in the sandbox: \(root.path)")
+    check(root.path.contains(".lab-sandbox"), "the test lab is in the sandbox: \(root.path)")
     guard root.path.contains(".lab-sandbox") else { return }
     try? FileManager.default.removeItem(at: root)
     try? FileManager.default.removeItem(at: LabFiles.saves)
     try? FileManager.default.removeItem(at: LabFiles.state)
-    do {
-        print("• LAB: someone else's folder called lab is kept")
-        try FileOps.ensureDir(root)
-        write("mine", root.appendingPathComponent("precious.txt"))
-        let lab = LabController()
-        check(lab.server == nil, "a plain folder called lab isn't the Lab")
-        var didRefuse = false
-        await lab.setUpWithDefaults()
-        didRefuse = lab.failure?.contains("EULA") == true
-        check(didRefuse, "no Lab without the EULA: \(lab.failure ?? "-")")
-        check(FileOps.exists(root.appendingPathComponent("precious.txt")), "and nothing moved")
-        lab.acceptEULA()
-
-        print("• LAB: set up on 1.21.11 with the built-in seed")
-        let old = try await SoftwareCatalog.latestBuild(.paper, mc: "1.21.11")!
-        await lab.setUp(LabSpec(build: old))
-        check(lab.failure == nil, "set up: \(lab.failure ?? "") \(lab.log.suffix(4))")
-        let aside = FileOps.children(root.deletingLastPathComponent()).first { $0.lastPathComponent.hasPrefix("lab-previous-") }
-        check(aside.map { FileOps.exists($0.appendingPathComponent("precious.txt")) } == true, "that folder was moved aside, whole")
-        if let aside { try? FileManager.default.removeItem(at: aside) }
-        guard let c = lab.server else { failures.append("no Lab"); return }
-        check(c.isLab, "it's a Lab"); check(c.isTrialCopy, "and has no restore points or schedules")
-        equal(c.state, .stopped, "it stops after seeding")
-        check(FileOps.isDirectory(root.appendingPathComponent("mining")) || FileOps.isDirectory(root.appendingPathComponent("world/dimensions")), "worlds made")
-        equal(Set(PlayerFiles.list(c.paths).compactMap(\.name)), ["Alice", "Bob", "Carol"], "bot players made")
-        let props = PropertiesDocument(try String(contentsOf: c.paths.properties, encoding: .utf8))
-        equal(props.value("server-ip"), "127.0.0.1", "only listens on this Mac"); equal(props.value("online-mode"), "false", "bots allowed in")
-        var refused = false
-        do { _ = try c.rename(to: "Other", moveFolderTo: "other") } catch { refused = true }
-        check(refused, "the Lab can't be renamed"); check(FileOps.exists(root), "still there")
-
-        print("• LAB: save, change, restore")
-        await lab.save(note: "Clean seed")
-        check(lab.failure == nil, "saved: \(lab.failure ?? "")")
-        equal(lab.saves.count, 1, "one save listed")
-        print("    \(lab.saves.first?.fileName ?? "") \(Format.bytes(lab.saves.first?.size ?? 0))")
-        check(lab.saves.first?.fileName.hasSuffix("_clean-seed.tar.gz") == true, "named from the note")
-        write("scribble", root.appendingPathComponent("scribble.txt"))
-        let before = c.id
-        await lab.restore(lab.saves[0])
-        check(lab.failure == nil, "restored: \(lab.failure ?? "")")
-        check(!FileOps.exists(root.appendingPathComponent("scribble.txt")), "later changes are gone")
-        equal(lab.server?.id, before, "same server, as far as the app can tell")
-        equal(Set(PlayerFiles.list(lab.server!.paths).compactMap(\.name)), ["Alice", "Bob", "Carol"], "players are back")
-
-        print("• LAB: wipe and start fresh")
-        await lab.wipeAndStartFresh()
-        check(lab.failure == nil, "wiped: \(lab.failure ?? "") \(lab.log.suffix(3))")
-        equal(lab.server?.profile.software.mcVersion, "1.21.11", "same version"); check(lab.server?.plugins.contains { $0.key == "multiverse-core" } == true, "same plugins")
-        equal(lab.saves.count, 1, "saves survive a wipe")
-
-        print("• LAB: rehearse a stand-in server's upgrade to 26.3, using the seeded Lab as last time's data")
-        let targetRoot = base.appendingPathComponent("servers/lab-rehearsal-target", isDirectory: true)
+    let targetRoot = base.appendingPathComponent("servers/lab-rehearsal-target", isDirectory: true)
+    try? FileManager.default.removeItem(at: targetRoot)
+    defer {
+        // D226: everything this made goes, pass or fail.
         try? FileManager.default.removeItem(at: targetRoot)
+        try? FileManager.default.removeItem(at: root)
+        try? FileManager.default.removeItem(at: LabFiles.saves)
+        try? FileManager.default.removeItem(at: LabFiles.state)
+        for aside in FileOps.children(root.deletingLastPathComponent()) where aside.lastPathComponent.hasPrefix("lab-previous-") {
+            try? FileManager.default.removeItem(at: aside)
+        }
+    }
+    do {
         try FileOps.ensureDir(targetRoot)
         let target = try await ServerController.adopt(root: targetRoot, name: "Pretend")
-        defer { target.stopTicker(); try? FileManager.default.removeItem(at: targetRoot) }
+        defer { target.stopTicker() }
         target.profile.software.flavor = .paper; target.profile.software.mcVersion = "1.21.11"
         target.profile.backup.enabled = false; target.profile.lastPluginCheck = Date(); target.profile.software.lastCheck = Date()
         for source in LabRecipe.defaultPlugins { try await target.addPlugin(source: source) }
         await target.refreshPlugins()
+
+        print("• LAB: someone else's folder called lab is kept")
+        try FileOps.ensureDir(root)
+        write("mine", root.appendingPathComponent("precious.txt"))
+        let lab = LabController()
+        check(lab.server == nil, "a plain folder called lab isn't the lab")
+        await lab.removeLeftover()
+        check(FileOps.exists(root.appendingPathComponent("precious.txt")), "a launch leaves it alone")
+        await lab.run(.plugins, model: target)
+        check(lab.failure?.contains("EULA") == true, "no lab without the EULA: \(lab.failure ?? "-")")
+        check(FileOps.exists(root.appendingPathComponent("precious.txt")), "and nothing moved")
+        lab.acceptEULA()
+
+        print("• LAB: a run builds the lab, named lab, and deletes it when it ends")
+        var seen: [String] = []
+        lab.onServerChanged = { _, new in if let new { seen.append(new.profile.name) } }
+        await lab.run(.plugins, model: target)
+        check(lab.failure == nil, "the plugins station ran: \(lab.failure ?? "") \(lab.log.suffix(4))")
+        let aside = FileOps.children(root.deletingLastPathComponent()).first { $0.lastPathComponent.hasPrefix("lab-previous-") }
+        check(aside.map { FileOps.exists($0.appendingPathComponent("precious.txt")) } == true, "that folder was moved aside, whole")
+        check(seen.allSatisfy { $0 == "lab" } && !seen.isEmpty, "the generated server is called lab: \(seen)")
+        equal(lab.result(.plugins)?.outcome, .passed, "it passed, and the result stays")
+        check(!FileOps.exists(root), "the lab is gone after a pass")
+        check(lab.server == nil, "and nothing lists it")
+
+        print("• LAB: Save This Lab keeps a copy, once")
+        lab.keepCopy(note: "Clean seed")
+        await lab.run(.settings, model: target)
+        check(lab.failure == nil, "the settings station ran: \(lab.failure ?? "") \(lab.log.suffix(4))")
+        equal(lab.saves.count, 1, "one saved copy")
+        check(lab.saves.first?.fileName.hasSuffix("_clean-seed.tar.gz") == true, "named from the note")
+        check(!FileOps.exists(root), "the lab is gone after it's saved")
+        check(lab.keepRequest == nil, "the request was for that run only")
+
+        print("• LAB: rehearse an upgrade to 26.3")
         let new = try await SoftwareCatalog.latestBuild(.paper, mc: "26.3")!
         await lab.rehearse(for: target, to: new)
         check(lab.failure == nil, "rehearsal ran: \(lab.failure ?? "") \(lab.log.suffix(4))")
-        guard let report = lab.report else { failures.append("no report"); return }
-        print("    \(report.headline)")
-        for path in [report.migrated, report.fresh] {
-            print("    \(path.title): \(path.route)")
-            for line in path.checks { print("      [\(line.outcome.rawValue)] \(line.title) \(line.detail.prefix(160))") }
-        }
-        check(report.migrated.route.contains("Kept the Lab's data"), "it used the data from last time")
-        check(report.migrated.passed, "the upgrade path passes on good software: \(report.migrated.failures.map(\.title))")
-        check(report.fresh.passed, "and so does the fresh path: \(report.fresh.failures.map(\.title))")
-        equal(report.verdict, .bothPassed, "verdict")
-        equal(Set(report.migrated.checks.filter { $0.outcome != .failed }.map(\.title)), Set(report.fresh.checks.filter { $0.outcome != .failed }.map(\.title)), "the same checks on both")
-        check(!report.migrated.checks.contains { $0.outcome == .skipped }, "nothing skipped")
-        equal(lab.server?.profile.software.mcVersion, "26.3", "the Lab ends on the new version, ready for next time")
+        if let report = lab.report {
+            print("    \(report.headline)")
+            check(report.migrated.route.hasPrefix("New seed on"), "the upgrade path starts from a new seed")
+            equal(report.verdict, .bothPassed, "both paths pass on good software")
+        } else { failures.append("no report") }
+        check(!FileOps.exists(root), "the lab is gone after the rehearsal")
         equal(Set(FileOps.children(targetRoot).map(\.lastPathComponent)).contains("world"), false, "the target server wasn't started or touched")
+        equal(lab.saves.count, 1, "and no copy was kept without asking")
 
         // A check that can't fail proves nothing, so break things on purpose.
-        print("• LAB: damaged data on the upgrade path only")
-        await lab.restore(lab.saves[0])
-        check(lab.failure == nil, "back to the 1.21.11 save: \(lab.failure ?? "")")
-        guard let damaged = lab.server else { failures.append("no Lab"); return }
-        let alice = PlayerPaths(damaged.paths).data(PlayerFiles.offlineUUID(name: "Alice"))
-        check(FileOps.exists(alice), "Alice's file found to damage")
-        try FileManager.default.removeItem(at: alice)
-        for container in PlayerPaths(damaged.paths).inventoryContainers(name: "Alice") {
-            try? FileManager.default.removeItem(at: PlayerPaths(damaged.paths).inventories.appendingPathComponent(container))
-        }
-        await lab.rehearse(for: target, to: new)
-        if let r = lab.report {
-            for line in r.migrated.failures { print("      [upgrade failed] \(line.title) \(line.detail.prefix(140))") }
-            for line in r.fresh.failures { print("      [fresh failed] \(line.title) \(line.detail.prefix(140))") }
-            equal(r.verdict, .upgradeFailed, "lost data fails the upgrade path, not the fresh one")
-            check(r.migrated.failures.contains { $0.title == "Inventory came through" }, "and says what was lost")
-        } else { failures.append("no report") }
-
-        print("• LAB: a plugin that can't load fails both paths")
+        print("• LAB: a plugin that can't load fails both paths, and the lab still goes")
         write("not a jar at all", target.paths.plugins.appendingPathComponent("Broken.jar"))
         await target.refreshPlugins()
-        print("    target plugins: \(target.plugins.map { "\($0.fileName) enabled=\($0.enabled)" })")
         await lab.rehearse(for: target, to: new)
-        if let r = lab.report {
-            for line in r.migrated.failures { print("      [upgrade failed] \(line.title) \(line.detail.prefix(140))") }
-            for line in r.fresh.failures { print("      [fresh failed] \(line.title) \(line.detail.prefix(140))") }
-            equal(r.verdict, .bothFailed, "a bad plugin fails both")
-        } else { failures.append("no report") }
-        check(lab.failure == nil, "those ran to the end: \(lab.failure ?? "")")
-        lab.server?.stopTicker()
+        if let r = lab.report { equal(r.verdict, .bothFailed, "a bad plugin fails both") } else { failures.append("no report") }
+        check(!FileOps.exists(root), "the lab is gone after a failure")
     } catch { failures.append("Lab scenario threw: \(error)") }
 }
 
