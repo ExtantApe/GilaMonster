@@ -309,7 +309,7 @@ public final class LabController {
         profile.software.lastCheck = Date()
         profile.software.flavor = spec.build.flavor
         profile.launch.restartOnCrash = false
-        profile.launch.startWithApp = false
+        profile.launch.startWhenAppOpens = false
         profile.launch.keepAwake = false
         profile.launch.logGC = false
         profile.launch.maxMemoryMB = min(2048, SystemInfo.memoryMB / 2)
