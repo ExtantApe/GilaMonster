@@ -134,7 +134,10 @@ struct ServerWindow: View {
             .navigationSubtitle(server.profile.software.label)
             .toolbar { ServerToolbar(model: model, server: server) }
             .toolbarBackground(Juice.background, for: .windowToolbar)
-            .inspector(isPresented: $model.showIssues) {
+            .inspector(isPresented: Binding(
+                get: { model.showIssues && (model.issuesOpenedByHand || server.issues.contains { $0.status == .open }) },
+                set: { shown in if !shown { model.showIssues = false; model.issuesOpenedByHand = false } }
+            )) {
                 IssuesPanel(model: model, server: server)
                     .inspectorColumnWidth(min: 300, ideal: 340, max: 460)
             }
@@ -348,7 +351,11 @@ struct ServerToolbar: ToolbarContent {
                 Button(role: .destructive) { server.forceStop() } label: { Label("Force Stop", systemImage: "bolt.slash.fill") }
                     .help("Stop immediately without waiting for a clean save")
             }
-            Button { model.showIssues.toggle() } label: {
+            Button {
+                let shown = model.showIssues && (model.issuesOpenedByHand || openIssues > 0)
+                model.showIssues = !shown
+                model.issuesOpenedByHand = !shown && openIssues == 0
+            } label: {
                 Label("Issues", systemImage: openIssues > 0 ? "exclamationmark.bubble.fill" : "exclamationmark.bubble")
             }
             .help("Show or hide the Issues panel (⌥⌘I)")
@@ -564,8 +571,10 @@ struct AddServerSheet: View {
                 Button(mode == .existing ? "Choose Another…" : "Change…") { chooseFolder() }.buttonStyle(.juice)
             }
 
-            TextField("Name", text: $name, prompt: Text(folder?.lastPathComponent ?? "My Server"))
-                .textFieldStyle(.roundedBorder)
+            LabeledContent("Name in LeafJuice") {
+                TextField("Name in LeafJuice", text: $name, prompt: Text(folder?.lastPathComponent ?? "My Server"))
+                    .labelsHidden().textFieldStyle(.roundedBorder)
+            }
 
             if mode == .existing {
                 Hint("LeafJuice reads what's there and detects the software, version and start script settings. Everything it adds goes in a .leafjuice folder inside; your server files aren't touched.")

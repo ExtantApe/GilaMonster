@@ -40,6 +40,16 @@ struct ConsolePage: View {
             ConsoleTextView(lines: visible, signature: "\(filter)|\(minimumLevel.rawValue)", follow: follow)
                 .overlay { Rectangle().strokeBorder(Juice.border, lineWidth: 1) }
                 .accessibilityLabel("Server output")
+                .overlay {
+                    if visible.isEmpty {
+                        if server.console.isEmpty {
+                            EmptyMessage(icon: "terminal", title: server.state.isLive ? "Waiting for output" : "The server is stopped",
+                                         detail: server.state.isLive ? "Lines appear here as the server writes them." : "Its output appears here when it starts.")
+                        } else {
+                            EmptyMessage(icon: "line.3.horizontal.decrease", title: "No lines match", detail: "Clear the filter or choose All to see every line.")
+                        }
+                    }
+                }
 
             HStack(spacing: 8) {
                 Image(systemName: "chevron.right").foregroundStyle(Juice.pulp).accessibilityHidden(true)

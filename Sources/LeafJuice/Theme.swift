@@ -418,3 +418,20 @@ extension SourceKind {
         }
     }
 }
+
+/// Disables a control and says why, as a tooltip and a VoiceOver hint, so a grey button is never a mystery
+/// (UX audit 2026-11-15, finding 3). Nil means enabled. Busy states can still use plain `.disabled`.
+struct DisabledBecause: ViewModifier {
+    let reason: String?
+    func body(content: Content) -> some View {
+        if let reason {
+            content.disabled(true).help(reason).accessibilityHint(reason)
+        } else {
+            content
+        }
+    }
+}
+
+extension View {
+    func disabled(because reason: String?) -> some View { modifier(DisabledBecause(reason: reason)) }
+}

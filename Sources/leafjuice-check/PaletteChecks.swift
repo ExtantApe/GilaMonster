@@ -44,6 +44,8 @@ import LeafJuiceCore
     check(PluginSource.jenkins(jobURL: "https://ci.example.com/job/Folder/job/Plugin/", artifactPattern: "").badge! == ("Jenkins", "ci.example.com/Plugin"), "a Jenkins job shows its host and job name")
     check(PluginSource.spigot(resourceID: 1234).badge! == ("SpigotMC", "#1234") && PluginSource.none.badge == nil, "SpigotMC shows its number, and no source shows no badges")
     check(PluginSource.modrinth(project: "", allowBeta: false).badge == nil && PluginSource.modrinth(project: "", allowBeta: false).spoken == "No source", "a half-filled source shows as no source, with no empty ID badge")
+    // Sizes read as numbers (UX audit finding 10): "0 KB", never "Zero KB".
+    check(!Format.bytes(0).lowercased().contains("zero") && Format.bytes(0).contains("0"), "a size of nothing reads as a number (\(Format.bytes(0)))")
     // The real test.
     check(Palette.pairs.count >= 45, "every pair the app uses is listed (\(Palette.pairs.count))")
     let failing = Palette.failures()

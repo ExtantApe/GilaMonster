@@ -57,7 +57,8 @@ struct BackupsPage: View {
             }
             HStack {
                 Button(server.drillRunning ? "Testing…" : "Test Latest Backup") { Task { await server.runBackupDrill() } }
-                    .buttonStyle(.juice).disabled(server.drillRunning || server.trialPhase != nil || server.backups.isEmpty)
+                    .buttonStyle(.juice).disabled(server.drillRunning)
+                    .disabled(because: server.drillRunning ? nil : server.backups.isEmpty ? "Make a backup first." : server.trialPhase != nil ? "Wait for the test copy to finish." : nil)
                 if server.drillRunning { ProgressView().controlSize(.small).accessibilityLabel("Testing the backup") }
                 Toggle("Test automatically each week, when nobody's on", isOn: $server.profile.backup.autoDrill).toggleStyle(.checkbox)
             }
@@ -68,11 +69,11 @@ struct BackupsPage: View {
     private var settingsCard: some View {
         Card(title: "Schedule", systemImage: "calendar") {
             Toggle("Back up automatically while the server runs", isOn: $server.profile.backup.enabled)
+            if server.profile.backup.enabled {
             Picker("When", selection: $server.profile.backup.smart.timing) {
                 Text("After people play").tag(BackupTiming.afterPlay)
                 Text("On a fixed schedule").tag(BackupTiming.interval)
             }
-            .disabled(!server.profile.backup.enabled)
             if server.profile.backup.smart.timing == .afterPlay {
                 Stepper("Once the server's been empty \(server.profile.backup.smart.idleMinutes) minutes", value: $server.profile.backup.smart.idleMinutes, in: 1...240)
                 Stepper("At least \(server.profile.backup.smart.minimumGapMinutes) minutes apart", value: $server.profile.backup.smart.minimumGapMinutes, in: 5...1440, step: 5)
@@ -88,7 +89,8 @@ struct BackupsPage: View {
                 Text("Every day").tag(24)
                 Text("Every week").tag(168)
             }
-            .disabled(!server.profile.backup.enabled || server.profile.backup.smart.timing == .afterPlay)
+            .disabled(server.profile.backup.smart.timing == .afterPlay)
+            }
             Picker("What to include", selection: $server.profile.backup.scope) {
                 ForEach(BackupScope.allCases) { Text($0.title).tag($0) }
             }

@@ -11,7 +11,7 @@ struct ConfigsPage: View {
 
     var body: some View {
         HSplitView {
-            fileList.frame(minWidth: 190, idealWidth: 230, maxWidth: 340)
+            if server.configs.count > 1 { fileList.frame(minWidth: 190, idealWidth: 230, maxWidth: 340) }
             Group {
                 if let file = server.configs.first(where: { $0.path == selectedPath }) {
                     ConfigEditor(model: model, server: server, file: file).id(file.path)

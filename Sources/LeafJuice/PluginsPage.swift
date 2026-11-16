@@ -285,8 +285,8 @@ struct SourceForm: View {
     @State private var didParse = false
 
     var body: some View {
-        VStack(alignment: .leading, spacing: 10) {
-            TextField("Paste a web address", text: $paste, prompt: Text("https://… a Modrinth, Hangar, SpigotMC, GitHub or Jenkins page"))
+        Form {
+            TextField("Paste a link", text: $paste, prompt: Text("https://… a Modrinth, Hangar, SpigotMC, GitHub or Jenkins page"))
                 .textFieldStyle(.roundedBorder)
                 .onChange(of: paste) { _, text in
                     if let parsed = SourceParser.parse(text), text.contains(".") {
@@ -300,6 +300,7 @@ struct SourceForm: View {
             fields
             Hint(source.kind.evidence)
         }
+        .formStyle(.columns)
     }
 
     private var kindBinding: Binding<SourceKind> {
@@ -322,15 +323,15 @@ struct SourceForm: View {
         case .none:
             EmptyView()
         case let .modrinth(project, beta):
-            TextField("Project", text: Binding(get: { project }, set: { source = .modrinth(project: $0, allowBeta: beta) }), prompt: Text("luckperms"))
+            TextField("Project", text: Binding(get: { project }, set: { source = .modrinth(project: $0, allowBeta: beta) }), prompt: Text("such as luckperms"))
             Toggle("Include beta releases", isOn: Binding(get: { beta }, set: { source = .modrinth(project: project, allowBeta: $0) }))
         case let .hangar(project, channel):
-            TextField("Project", text: Binding(get: { project }, set: { source = .hangar(project: $0, channel: channel) }), prompt: Text("Owner/Project"))
+            TextField("Project", text: Binding(get: { project }, set: { source = .hangar(project: $0, channel: channel) }), prompt: Text("such as Owner/Project"))
             TextField("Channel", text: Binding(get: { channel }, set: { source = .hangar(project: project, channel: $0) }), prompt: Text("Release"))
         case let .spigot(id):
             TextField("Resource number", value: Binding(get: { id }, set: { source = .spigot(resourceID: $0) }), format: .number.grouping(.never))
         case let .github(repo, pattern, pre):
-            TextField("Repository", text: Binding(get: { repo }, set: { source = .github(repo: $0, assetPattern: pattern, prereleases: pre) }), prompt: Text("owner/name"))
+            TextField("Repository", text: Binding(get: { repo }, set: { source = .github(repo: $0, assetPattern: pattern, prereleases: pre) }), prompt: Text("such as owner/name"))
             TextField("File pattern (optional)", text: Binding(get: { pattern }, set: { source = .github(repo: repo, assetPattern: $0, prereleases: pre) }), prompt: Text("Regular expression, such as Bukkit"))
             Toggle("Include pre-releases", isOn: Binding(get: { pre }, set: { source = .github(repo: repo, assetPattern: pattern, prereleases: $0) }))
         case let .jenkins(url, pattern):

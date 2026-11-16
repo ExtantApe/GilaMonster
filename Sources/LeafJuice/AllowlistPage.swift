@@ -66,7 +66,8 @@ struct AllowlistPage: View {
         Card(title: "Add a player", systemImage: "person.badge.plus") {
             Hint("Java accounts only. Capitals don't matter, but the name has to belong to a real account. Looking it up sends the name to Mojang.")
             HStack {
-                TextField("Minecraft username", text: $typed).textFieldStyle(.roundedBorder).frame(maxWidth: 260)
+                Text("Username").foregroundStyle(Juice.ink).accessibilityHidden(true)
+                TextField("Minecraft username", text: $typed).labelsHidden().textFieldStyle(.roundedBorder).frame(maxWidth: 260)
                     .onChange(of: typed) { outcome = nil; pendingWarnings = [] }
                     .onSubmit(lookUp)
                 Button(looking ? "Looking…" : "Look Up", action: lookUp).buttonStyle(.juice)

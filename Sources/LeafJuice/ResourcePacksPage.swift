@@ -108,13 +108,16 @@ struct ResourcePacksPage: View {
                 if let pack = packs.first(where: { $0.id == entry.pack }) { row(pack, entry, index) }
             }
             HStack {
+                Text("Link").foregroundStyle(Juice.ink).accessibilityHidden(true)
                 TextField("Link", text: $link, prompt: Text("A Modrinth or GitHub page, or a link to a zip"))
                     .accessibilityLabel("Link to a resource pack")
-                Button("Add Link") { addLink() }.buttonStyle(.juice).disabled(link.isEmpty || working != nil)
+                Button("Add Link") { addLink() }.buttonStyle(.juice).disabled(working != nil)
+                    .disabled(because: link.isEmpty ? "Paste a link first." : nil)
                 Button("Add Files…") { addFiles() }.buttonStyle(.juicePrimary).disabled(working != nil)
             }
             HStack {
-                Button("Check for Updates") { checkUpdates() }.buttonStyle(.juice).disabled(working != nil || !packs.contains { $0.source.canCheckForUpdates })
+                Button("Check for Updates") { checkUpdates() }.buttonStyle(.juice).disabled(working != nil)
+                    .disabled(because: packs.contains { $0.source.canCheckForUpdates } ? nil : "Only packs added from Modrinth or GitHub can be checked. Files added by hand can't.")
                 Button("Show in Finder") {
                     try? FileOps.ensureDir(ResourcePacks.library)
                     NSWorkspace.shared.open(ResourcePacks.library)
