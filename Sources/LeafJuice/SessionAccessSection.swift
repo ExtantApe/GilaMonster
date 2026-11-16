@@ -13,6 +13,8 @@ struct SessionAccessSection: View {
     @State private var marks: [UUID: SessionPermission] = [:]
     @State private var markError: String?
     private let service = SessionAccessService.shared
+    /// Proper names for the groups, such as WelcomeWagon, from the plugins installed on any server.
+    private var pluginNames: [String] { service.servers().flatMap { $0.plugins.compactMap { $0.descriptor?.name } } }
 
     var body: some View {
         Section {
@@ -25,18 +27,29 @@ struct SessionAccessSection: View {
                 Text(service.isListening ? "Listening on this Mac only." : "Not listening yet.").font(.callout).foregroundStyle(Juice.muted)
             }
             VStack(alignment: .leading, spacing: 6) {
-                Text("Commands sessions may run, exactly as written").font(.callout.weight(.semibold)).foregroundStyle(Juice.ink)
+                Text("Commands sessions may run").font(.callout.weight(.semibold)).foregroundStyle(Juice.ink)
+                Text("Exactly as written, or a pattern with typed slots: {world} is one of that server's worlds, {int} a whole number, {player} a player name. Nothing else can be added to a pattern. The list sorts itself.")
+                    .font(.caption).foregroundStyle(Juice.muted).fixedSize(horizontal: false, vertical: true)
                 if settings.commands.isEmpty { Text("None. Sessions can still read status and the log.").font(.callout).foregroundStyle(Juice.muted) }
-                ForEach(settings.commands, id: \.self) { command in
-                    HStack {
-                        Text(command).font(.body.monospaced()).foregroundStyle(Juice.ink).textSelection(.enabled)
-                        Spacer()
-                        Button("Remove") { settings.commands.removeAll { $0 == command }; save() }
-                            .accessibilityLabel("Remove \(command) from the list")
+                ForEach(CommandPattern.grouped(settings.commands, plugins: pluginNames), id: \.name) { group in
+                    Text(group.name).font(.caption.weight(.semibold)).foregroundStyle(Juice.muted).padding(.top, 4)
+                        .accessibilityAddTraits(.isHeader)
+                    ForEach(group.entries, id: \.self) { command in
+                        HStack(alignment: .firstTextBaseline) {
+                            VStack(alignment: .leading, spacing: 2) {
+                                Text(command).font(.body.monospaced()).foregroundStyle(Juice.ink).textSelection(.enabled)
+                                if CommandPattern.isPattern(command) {
+                                    Text("For example: \(CommandPattern.example(command))").font(.caption.monospaced()).foregroundStyle(Juice.muted)
+                                }
+                            }
+                            Spacer()
+                            Button("Remove") { settings.commands.removeAll { $0 == command }; save() }
+                                .accessibilityLabel("Remove \(command) from the list")
+                        }
                     }
                 }
                 HStack {
-                    TextField("Add a command, such as save-all", text: $adding).textFieldStyle(.roundedBorder)
+                    TextField("Add a command, such as save-all or rewild scan {world}", text: $adding).textFieldStyle(.roundedBorder)
                         .onSubmit(add).accessibilityLabel("Command to add")
                     Button("Add", action: add).disabled(adding.trimmingCharacters(in: .whitespaces).isEmpty)
                 }
@@ -45,22 +58,12 @@ struct SessionAccessSection: View {
             if !service.waiting.isEmpty {
                 VStack(alignment: .leading, spacing: 6) {
                     Text("Waiting for you").font(.callout.weight(.semibold)).foregroundStyle(Juice.ink)
-                    ForEach(service.waiting) { ask in
-                        HStack(alignment: .firstTextBaseline) {
-                            VStack(alignment: .leading, spacing: 2) {
-                                Text(ask.sentence).foregroundStyle(Juice.ink)
-                                Text("No answer by \(ask.deadline.formatted(date: .omitted, time: .shortened)) means no.").font(.caption).foregroundStyle(Juice.muted)
-                            }
-                            Spacer()
-                            Button("Deny") { service.resolve(ask.id, allow: false) }.accessibilityLabel("Deny: \(ask.sentence)")
-                            Button("Allow") { service.resolve(ask.id, allow: true) }.buttonStyle(.juicePrimary).accessibilityLabel("Allow: \(ask.sentence)")
-                        }
-                    }
+                    SessionAskList(service: service)
                 }
             }
             VStack(alignment: .leading, spacing: 8) {
                 Text("Starting, stopping and pack changes").font(.callout.weight(.semibold)).foregroundStyle(Juice.ink)
-                Text("Sessions can ask to start, stop or restart a server, publish a pack, change pack serving, or check a named player against the pack gate. Each ask shows a notification with Allow and Deny. No answer in 2 minutes means no, and nothing is done while a backup is being written.")
+                Text("Sessions can ask to start, stop or restart a server, publish a pack, change pack serving, or check a named player against the pack gate. Each ask opens a small LeafJuice window with Allow and Deny, shows a count on the menu bar leaf, and sends a notification when macOS allows one. No answer in 2 minutes means no, and nothing is done while a backup is being written.")
                     .font(.caption).foregroundStyle(Juice.muted).fixedSize(horizontal: false, vertical: true)
                 ForEach(service.servers().filter { !$0.isLab }, id: \.profile.id) { server in
                     let mark = marks[server.profile.id] ?? server.sessionPermission

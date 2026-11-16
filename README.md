@@ -246,6 +246,13 @@ access**. A session can:
 - read the recent log, with chat left out, and player names, UUIDs and network addresses replaced;
 - run the commands on your list, exactly as written. It starts with `welcomewagon reload`, `save-all` and `list`. You can
   add and remove commands in Settings. `stop` can't be added, so stopping stays in the app.
+- run a command that fills a pattern on your list. A pattern has typed slots: `rewild why {world} {int} {int}` allows
+  `rewild why world 120 -64`. `{world}` must be one of that server's world folders, `{int}` a whole number of up to 9
+  digits, `{player}` 3 to 16 letters, digits or underscores. Patterns can't be added for commands that change
+  permissions, the allowlist, bans, or the server itself (`lp`, `op`, `whitelist`, `ban`, `kick`, `stop` and others).
+
+Settings sorts the list as you add to it: Server commands first, then each plugin, alphabetically, with reloads at the
+end of each group.
 
 Anything else is refused: commands off the list, extra words after a listed command, a second command after a line
 break, unknown calls, a wrong token. Every call, allowed or refused, is listed in Settings with who said they were
@@ -284,8 +291,11 @@ A session can also do these. Some go ahead, and some wait for you:
   updated, start or stop pack serving, give a recipe a pack address or take it away, and ask whether a named player
   would get a pack right now. That last one says whether they're joining, so it asks too.
 
-Each ask shows a Mac notification such as "Server lead wants to stop Made-up Server", with **Allow** and **Deny**. The
-same request also waits in Settings > Session access, in case notifications are off. No answer in 2 minutes is a no.
+Each ask opens a small LeafJuice window, such as "Server lead wants to stop Made-up Server", with **Allow** and
+**Deny**. It stays in front of other windows without taking the keyboard, and the menu bar leaf shows how many asks are
+waiting. A Mac notification with the same buttons goes out too, when macOS lets LeafJuice show one; the window is there
+because notifications can be off or hidden by a Focus. The request also waits in Settings > Session access. No answer
+in 2 minutes is a no.
 Nothing that asks runs while a backup is being written, and anything that can't happen anyway (stopping a stopped
 server, publishing a recipe with no build) is refused before you're bothered.
 
