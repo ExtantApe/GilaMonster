@@ -24,7 +24,7 @@ struct SessionAccessSection: View {
             }))
             if let error = service.error { Text(error).foregroundStyle(Juice.danger).font(.callout) }
             if settings.enabled {
-                Text(service.isListening ? "Listening on this Mac only." : "Not listening yet.").font(.callout).foregroundStyle(Juice.muted)
+                Text(service.isListening ? "Listening on this Mac only." : service.waitingForKeychain ? "Waiting for Keychain access. macOS may be asking you to allow LeafJuice." : "Not listening yet.").font(.callout).foregroundStyle(Juice.muted)
             }
             VStack(alignment: .leading, spacing: 6) {
                 Text("Commands sessions may run").font(.callout.weight(.semibold)).foregroundStyle(Juice.ink)
@@ -110,7 +110,7 @@ struct SessionAccessSection: View {
             Text("Only clear it if no child ever plays here. Cleared, the server can be given standing permission, so sessions could start, stop or change its packs without asking. The change is written to the server's log.")
         }
         .confirmationDialog("Make a new token?", isPresented: $confirmNewToken) {
-            Button("Make New Token") { _ = try? SessionAccess.newToken() }
+            Button("Make New Token") { Task { try? await service.newToken() } }
         } message: {
             Text("Anything holding the old token is refused from now on. Sessions read the new one from the Keychain, and macOS may ask you to allow that again.")
         }
@@ -134,7 +134,7 @@ struct SessionAccessSection: View {
 
     private func save() {
         do { try SessionAccess.saveSettings(settings); problem = nil } catch { problem = error.localizedDescription }
-        service.apply(settings)
+        Task { await service.apply(settings) }
     }
 
     private func reload() { log = SessionAccess.recentLog(30) }

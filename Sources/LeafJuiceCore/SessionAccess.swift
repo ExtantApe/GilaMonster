@@ -385,16 +385,46 @@ public final class SessionAccessService {
 
     public var isListening: Bool { socket?.isListening == true }
 
-    /// Starts or stops the socket to match the owner's switch.
-    public func apply(_ settings: SessionAccessSettings, path: String = SessionAccess.socketPath) {
+    /// True while the token is being read from the Keychain, which can wait on a macOS prompt.
+    public private(set) var waitingForKeychain = false
+    /// The token once read, so requests don't go back to the Keychain. Only LeafJuice changes it.
+    @ObservationIgnored var cachedToken: String?
+
+    /// Starts or stops the socket to match the owner's switch. The Keychain is read off the main thread: after a
+    /// rebuild macOS can ask the owner before handing it over, and on 2026-11-16 that prompt, waited for on the main
+    /// thread, kept the window from ever opening. Without a token nothing listens.
+    public func apply(_ settings: SessionAccessSettings, path: String = SessionAccess.socketPath) async {
         if settings.enabled {
+            guard socket == nil, !waitingForKeychain else { return }
+            waitingForKeychain = true
+            let token = await Self.readToken(create: true, keychain: keychain)
+            waitingForKeychain = false
+            guard let token, !token.isEmpty else {
+                error = "LeafJuice couldn't read its session token from the Keychain, so sessions can't connect. Turn this off and on to try again."
+                return
+            }
+            cachedToken = token
             guard socket == nil else { return }
-            _ = SessionAccess.token(create: true, keychain: keychain)
             let s = SessionSocket(path: path) { data in await SessionAccessService.answerOnMain(self, data) }
             do { try s.start(); socket = s; error = nil } catch { self.error = error.localizedDescription }
         } else {
-            socket?.stop(); socket = nil
+            stop()
         }
+    }
+
+    /// Stops listening and removes the socket.
+    public func stop() { socket?.stop(); socket = nil }
+
+    /// Replaces the token, off the main thread, and remembers the new one.
+    public func newToken() async throws {
+        let box = KeychainBox(keychain)
+        let value = try await Task.detached { try SessionAccess.newToken(keychain: box.keychain) }.value
+        cachedToken = value
+    }
+
+    nonisolated static func readToken(create: Bool, keychain: SecKeychain?) async -> String? {
+        let box = KeychainBox(keychain)
+        return await Task.detached { SessionAccess.token(create: create, keychain: box.keychain) }.value
     }
 
     nonisolated static func answerOnMain(_ service: SessionAccessService, _ data: Data) async -> Data {
@@ -403,7 +433,8 @@ public final class SessionAccessService {
 
     public func answer(_ data: Data) async -> Data {
         let settings = SessionAccess.loadSettings()
-        let (request, decision) = SessionAccess.authorize(data, settings: settings, token: SessionAccess.token(create: false, keychain: keychain))
+        if cachedToken == nil { cachedToken = await Self.readToken(create: false, keychain: keychain) }
+        let (request, decision) = SessionAccess.authorize(data, settings: settings, token: cachedToken)
         defer { calls += 1 }
         let log = logFile ?? SessionAccess.logFile
         guard case let .success(call) = decision else {
@@ -492,4 +523,10 @@ public final class SessionAccessService {
     static func reply(_ object: [String: Any]) -> Data {
         (try? JSONSerialization.data(withJSONObject: object, options: [.sortedKeys, .withoutEscapingSlashes])) ?? Data(#"{"ok":false}"#.utf8)
     }
+}
+
+/// Carries a test keychain to a background read. The app passes nil.
+struct KeychainBox: @unchecked Sendable {
+    let keychain: SecKeychain?
+    init(_ keychain: SecKeychain?) { self.keychain = keychain }
 }
