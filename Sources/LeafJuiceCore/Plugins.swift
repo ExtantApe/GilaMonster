@@ -183,7 +183,9 @@ public enum PluginSource: Codable, Equatable, Sendable {
     }
 
     /// The two badges on the Plugins page: where it comes from, and which project there (owner, 2026-11-15).
+    /// Nil for no source, and for one that isn't filled in yet, which counts as none (see isSet).
     public var badge: (source: String, id: String)? {
+        guard isSet else { return nil }
         switch self {
         case .none: return nil
         case let .modrinth(project, _): return ("Modrinth", project)
