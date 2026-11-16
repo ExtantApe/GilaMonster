@@ -94,6 +94,25 @@ public enum PackPublish {
         return Array(builds.dropFirst())
     }
 
+    /// Whether Packmule's config.yml gives `pack` this build: the same link, and the same SHA-1 (written as `sha1:`, or
+    /// read from the per-build file name when there's none). Read only; a pack with `sha1-url:` or anything unclear is no.
+    public static func packmuleConfigGives(_ yaml: String, pack: String, build: PublishedBuild) -> Bool {
+        let fields = ConfigForm.fields(yaml, format: .yaml)
+        func value(_ key: String) -> String? { fields.first { $0.path == ["packs", pack, key] }?.value.trimmingCharacters(in: .whitespaces) }
+        guard let url = value("url"), url == build.url, value("sha1-url") == nil else { return false }
+        let named = ((url as NSString).lastPathComponent as NSString).deletingPathExtension.lowercased()
+        let sha1 = value("sha1")?.lowercased() ?? named
+        return sha1 == build.sha1.lowercased() && named == build.sha1.lowercased()
+    }
+
+    /// Whether Packmule has loaded a config.yml written at `written`: always when the server isn't running (the next start
+    /// reads it), and while it runs only if LeafJuice started it after that. Not knowing when it started counts as no.
+    public static func packmuleHasLoaded(configWritten written: Date, live: Bool, startedAt: Date?) -> Bool {
+        guard live else { return true }
+        guard let startedAt else { return false }
+        return startedAt > written
+    }
+
     /// Only an https link to a published build, in characters that can't do anything else in a console line.
     public static func isSendable(_ url: String) -> Bool {
         url.count <= 400 && url.hasPrefix("https://")
@@ -187,6 +206,31 @@ extension ServerController {
         case let other:
             return finish(.notTold(Self.plain(other, doing: "Telling Packmule the new link")))
         }
+    }
+
+    /// Reads Packmule's config.yml (never writes it) and marks the current build in use when it gives this build's link
+    /// and SHA-1, so this works with plugin commands off (2026-11-16). A file Packmule hasn't loaded yet doesn't count:
+    /// the old build would be removed while Packmule still sends it. So with the server live, it counts only when
+    /// LeafJuice started the server after the file was last written. Returns a note when the file matches but waits.
+    @discardableResult
+    public func checkPackmuleConfig(recipe name: String) -> String? {
+        var s = packPublishSettings
+        let key = ResourcePacks.slug(name)
+        guard var list = s.builds[key], let current = list.first, current.handedOff != true,
+              let pack = s.packmuleNames?[key], !pack.isEmpty else { return nil }
+        let file = paths.plugins.appendingPathComponent("Packmule/config.yml")
+        guard let text = try? String(contentsOf: file, encoding: .utf8),
+              PackPublish.packmuleConfigGives(text, pack: pack, build: current) else { return nil }
+        let written = (try? FileManager.default.attributesOfItem(atPath: file.path)[.modificationDate] as? Date) ?? Date.distantFuture
+        guard PackPublish.packmuleHasLoaded(configWritten: written, live: state.isLive, startedAt: startedAt) else {
+            return "Packmule's config.yml has this link, but Packmule hasn't loaded it yet. Run /packmule reload in the console, then press Updated by Hand."
+        }
+        list[0].handedOff = true
+        list[0].handOffNote = state.isLive ? "Packmule's config.yml has this link and SHA-1, and Packmule has loaded it." : "Packmule's config.yml has this link and SHA-1. Packmule uses it when the server starts."
+        s.builds[key] = list
+        packPublishSettings = s
+        appendWrapper("Packmule's config.yml has \(name) build \(current.sha1.prefix(8)), so it's marked in use.", level: .info)
+        return nil
     }
 
     /// For a Packmule updated by hand: marks the current build as the one players are sent.

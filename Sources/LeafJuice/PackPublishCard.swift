@@ -11,9 +11,14 @@ struct PackPublishCard: View {
     @State private var problem: String?
     @State private var copied: String?
     @State private var telling: String?
+    @State private var configNotes: [String: String] = [:]
 
     var body: some View {
         Card(title: "Publish to your web server", systemImage: "arrow.up.doc") {
+            // Each build's status and its buttons come first, so Updated by Hand is in view without scrolling (2026-11-16).
+            ForEach(recipeNames.filter { !ResourcePacks.history($0).isEmpty }, id: \.self) { name in recipeRow(name) }
+            if let problem { Callout(tone: .danger, title: "Not published", detail: problem) }
+            Divider()
             Hint("For a web server such as Caddy that serves a folder on this Mac. Each build goes in under a new random address, named by its SHA-1, so Packmule reads the hash from the link. Only the current build and one on its way out are ever there.")
             LabeledContent("Folder it serves") {
                 HStack {
@@ -26,11 +31,9 @@ struct PackPublishCard: View {
                     .onSubmit(save).accessibilityLabel("Web address of that folder")
             }
             if let why = PackPublish.problem(settings) { Hint(why) }
-            ForEach(recipeNames.filter { !ResourcePacks.history($0).isEmpty }, id: \.self) { name in recipeRow(name) }
-            if let problem { Callout(tone: .danger, title: "Not published", detail: problem) }
-            Hint("With Packmule 0.2.1 or later and Plugin commands on, LeafJuice tells Packmule each new link itself, and Packmule downloads and checks it before switching. Otherwise copy the link into Packmule's config.yml, run /packmule reload, and press Updated by Hand. The old build is kept until Packmule uses the new one.")
+            Hint("With Packmule 0.2.1 or later and Plugin commands on, LeafJuice tells Packmule each new link itself, and Packmule downloads and checks it before switching. Otherwise copy the link into Packmule's config.yml and run /packmule reload. LeafJuice reads config.yml (it never changes it) and marks the build in use once Packmule has it, or press Updated by Hand. The old build is kept until Packmule uses the new one.")
         }
-        .onAppear { settings = server.packPublishSettings }
+        .onAppear(perform: readPackmuleConfig)
     }
 
     @ViewBuilder private func recipeRow(_ name: String) -> some View {
@@ -59,10 +62,16 @@ struct PackPublishCard: View {
                 if current.handedOff == true {
                     Label(current.handOffNote ?? "Packmule uses this link.", systemImage: "checkmark.circle.fill").font(.callout).foregroundStyle(Juice.ink)
                 } else {
-                    if let note = current.handOffNote { Callout(tone: .warning, title: "Packmule doesn't use this link yet", detail: note) }
+                    if let waiting = configNotes[key] {
+                        Callout(tone: .info, title: "Waiting for Packmule to load its config", detail: waiting)
+                    } else if let note = current.handOffNote {
+                        Callout(tone: .warning, title: "Packmule doesn't use this link yet", detail: note)
+                    }
                     HStack {
                         Button(telling == key ? "Telling Packmule…" : "Send to Packmule") { send(name) }.buttonStyle(.juice).disabled(telling != nil)
                             .accessibilityLabel("Send the new link for \(name) to Packmule")
+                        Button("Check config.yml Again") { readPackmuleConfig() }.buttonStyle(.juice)
+                            .accessibilityLabel("Check Packmule's config.yml again for \(name)")
                         Button("Updated by Hand") { server.markHandedOff(recipe: name); settings = server.packPublishSettings }.buttonStyle(.juice)
                             .accessibilityLabel("Mark Packmule as updated by hand for \(name)")
                     }
@@ -78,6 +87,14 @@ struct PackPublishCard: View {
             }
         }
         .padding(.vertical, 4)
+    }
+
+    /// Reads Packmule's config.yml for each recipe (read only) and picks up any build it already gives players.
+    private func readPackmuleConfig() {
+        var notes: [String: String] = [:]
+        for name in recipeNames { if let note = server.checkPackmuleConfig(recipe: name) { notes[ResourcePacks.slug(name)] = note } }
+        configNotes = notes
+        settings = server.packPublishSettings
     }
 
     private func save() {
