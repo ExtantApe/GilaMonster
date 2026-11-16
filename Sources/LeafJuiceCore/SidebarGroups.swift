@@ -15,7 +15,7 @@ public enum SidebarGroups {
     public static let top = (key: "overview", title: "Overview")
 
     public static let groups: [Group] = [
-        Group(id: "server", title: "Server", pages: [("configs", "Configs"), ("console", "Console"), ("launch", "Launch"), ("software", "Software")]),
+        Group(id: "server", title: "Server", pages: [("configs", "Configs"), ("console", "Console"), ("lab", "Lab"), ("launch", "Launch"), ("software", "Software")]),
         Group(id: "content", title: "Content", pages: [("links", "Plugin Links"), ("plugins", "Plugins"), ("resourcePacks", "Resource Packs"), ("worlds", "Worlds")]),
         Group(id: "people", title: "People", pages: [("allowlist", "Allowlist"), ("players", "Players")]),
         Group(id: "upkeep", title: "Upkeep", pages: [("advisor", "Advisor"), ("backups", "Backups"), ("changes", "Changes"), ("cleanup", "Cleanup"), ("history", "History")]),

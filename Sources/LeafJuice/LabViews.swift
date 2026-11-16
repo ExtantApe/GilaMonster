@@ -2,70 +2,147 @@ import AppKit
 import LeafJuiceCore
 import SwiftUI
 
-/// The Lab on a server's Software page: what the lab is, saving a copy, saved copies, and the status board. The lab
-/// itself is built for each run and deleted when the run ends (D229, owner, 2026-11-16).
-struct LabPanel: View {
+/// The Lab page (Head of Design review, 2026-11-16): what the lab is, the checks to run with one Run Checks button,
+/// keeping a copy, and saved copies. The lab itself is built for each run and deleted when it ends (D229).
+struct LabPage: View {
     let model: AppModel
+    let server: ServerController
     @State private var note = ""
     @State private var confirmDelete: LabSave?
+    @State private var versions: [String] = []
+    @State private var chosen = ""
+    @State private var skipped: [String] = []
+    @AppStorage("labChecks") private var checksText = "plugins,upgrade,fresh"
 
     private var lab: LabController { model.lab }
+    private var included: Set<LabStation> { Set(checksText.split(separator: ",").compactMap { LabStation(rawValue: String($0)) }) }
 
     var body: some View {
-        Card(title: "Lab", systemImage: "flask") {
-            Text("Each run on the status board builds a practice server called lab, with its own worlds and bot players, listening only on this Mac. It's deleted when the run ends, pass or fail. The results and the report stay.")
-                .foregroundStyle(Juice.ink).fixedSize(horizontal: false, vertical: true)
-            LabProgress(lab: lab)
-            if let keep = lab.keepRequest {
-                HStack {
-                    Text(keepLine(keep)).foregroundStyle(Juice.ink).fixedSize(horizontal: false, vertical: true)
-                    Spacer()
-                    Button("Don't Save It") { lab.dontKeepCopy() }.buttonStyle(.juice)
-                }
+        Page(title: "Lab", subtitle: "Tests \(server.profile.name)'s plugins and rehearses its upgrades on a practice server.") {
+            if server.isLab {
+                LabRunCard(model: model)
             } else {
-                VStack(alignment: .leading, spacing: 4) {
-                    Text("Note for a saved copy").font(.callout).foregroundStyle(Juice.muted)
+                Card(title: "Checks", systemImage: "flask") {
+                    Text("Each run builds a practice server, the Lab, with its own worlds and bot players, listening only on this Mac. It's deleted when the run ends, pass or fail. The results and the report stay.")
+                        .foregroundStyle(Juice.ink).fixedSize(horizontal: false, vertical: true)
                     HStack {
-                        TextField("Note for a saved copy", text: $note, prompt: Text(""))
-                            .labelsHidden().frame(maxWidth: 300).accessibilityLabel("Note for a saved copy")
-                        Button("Save This Lab") {
-                            lab.keepCopy(note: note)
-                            note = ""
+                        Text("Upgrade to").foregroundStyle(Juice.muted)
+                        Picker("Version to upgrade to", selection: $chosen) {
+                            Text("Choose…").tag("")
+                            ForEach(versions, id: \.self) { Text($0).tag($0) }
                         }
-                        .buttonStyle(.juice)
-                        .help("Keeps a copy of the lab from this run, or the next one, just before it's deleted.")
+                        .labelsHidden().frame(maxWidth: 200).disabled(lab.isBusy)
+                        .onChange(of: chosen) { _, version in pick(version) }
+                        if let target = lab.target { Hint("\(target.flavor.title) \(target.label)") }
+                        Spacer()
+                        Text("Now \(server.profile.software.label)").foregroundStyle(Juice.muted)
                     }
-                    Hint("Such as before the 26 upgrade. Nothing is kept unless you click Save This Lab.")
+                    Text("Checks to run").font(.callout.weight(.semibold)).foregroundStyle(Juice.ink).padding(.top, 4)
+                        .accessibilityAddTraits(.isHeader)
+                    ForEach(LabStation.allCases) { station in
+                        LabStationRow(station: station, lab: lab, server: server, included: Binding(get: { included.contains(station) }, set: { on in
+                            var set = included
+                            if on { set.insert(station) } else { set.remove(station) }
+                            checksText = LabStation.allCases.filter(set.contains).map(\.rawValue).joined(separator: ",")
+                        }))
+                        if station != LabStation.allCases.last { Divider() }
+                    }
+                    LabProgress(lab: lab)
+                    ForEach(skipped, id: \.self) { Hint($0) }
+                    HStack {
+                        Button("Run Checks") { runChecks() }
+                            .buttonStyle(.juicePrimary)
+                            .disabled(lab.isBusy || included.isEmpty)
+                            .help(lab.isBusy ? "A run is going now." : included.isEmpty ? "Tick at least one check first." : "Runs the ticked checks in order.")
+                        Spacer()
+                    }
+                    keepRow
+                    if let report = lab.report, lab.result(.fresh) != nil { RehearsalVerdict(report: report, model: model, server: server) }
                 }
-            }
-            if !lab.saves.isEmpty {
-                Text("Saved copies").font(.callout.weight(.semibold)).foregroundStyle(Juice.ink)
-                ForEach(lab.saves) { save in row(save) }
-                Button("Show Saved Copies in Finder") { NSWorkspace.shared.open(LabFiles.saves) }.buttonStyle(.juice)
+                if !lab.saves.isEmpty { savesCard }
             }
         }
+        .onAppear { if !server.isLab, !lab.isBusy { lab.chooseModel(server) } }
+        .task(id: server.id) { await loadVersions() }
         .confirmationDialog("Delete this saved copy?", isPresented: Binding(get: { confirmDelete != nil }, set: { if !$0 { confirmDelete = nil } })) {
             Button("Delete", role: .destructive) { if let save = confirmDelete { try? lab.deleteSave(save) } }
         } message: {
             Text(confirmDelete?.fileName ?? "")
         }
-        LabBoard(model: model, lab: lab)
     }
 
-    private func keepLine(_ note: String) -> String {
-        let which = lab.isBusy ? "this run's lab" : "the next run's lab"
-        return note.isEmpty ? "A copy of \(which) will be saved before it's deleted." : "A copy of \(which) will be saved as \u{201C}\(note)\u{201D} before it's deleted."
-    }
-
-    private func row(_ save: LabSave) -> some View {
-        HStack(alignment: .firstTextBaseline) {
-            VStack(alignment: .leading, spacing: 2) {
-                Text(save.note.isEmpty ? save.software : save.note).foregroundStyle(Juice.ink)
-                Hint("\(save.date.formatted(date: .abbreviated, time: .shortened)), \(save.software), \(Format.bytes(save.size))")
+    /// A choice for the next run, or, during a run, for this one.
+    @ViewBuilder private var keepRow: some View {
+        VStack(alignment: .leading, spacing: 6) {
+            if lab.isBusy, lab.keepRequest == nil {
+                Button("Keep This Lab") { lab.keepCopy(note: note) }.buttonStyle(.juice)
+                    .help("Saves a copy of this run's lab just before it's deleted.")
+            } else {
+                Toggle(lab.isBusy ? "Keep a copy of this lab when the run ends" : "Keep a copy of the lab after the next run", isOn: Binding(
+                    get: { lab.keepRequest != nil },
+                    set: { on in if on { lab.keepCopy(note: note) } else { lab.dontKeepCopy() } }
+                ))
+                .toggleStyle(.checkbox).foregroundStyle(Juice.ink)
             }
-            Spacer()
-            Button("Delete…") { confirmDelete = save }.buttonStyle(.juice).disabled(lab.isBusy)
-                .accessibilityLabel("Delete \(save.note.isEmpty ? save.software : save.note)")
+            if lab.keepRequest != nil {
+                HStack {
+                    Text("Note").foregroundStyle(Juice.muted)
+                    TextField("Note", text: $note, prompt: Text("Such as before the 26 upgrade"))
+                        .labelsHidden().textFieldStyle(.plain).padding(.horizontal, 6).padding(.vertical, 4)
+                        .overlay { RoundedRectangle(cornerRadius: 6).strokeBorder(Juice.controlBorder, lineWidth: 1) }
+                        .frame(maxWidth: 320).accessibilityLabel("Note for the kept copy")
+                        .onChange(of: note) { _, text in lab.keepCopy(note: text) }
+                }
+                Hint("The copy goes in Saved copies below. Nothing else is kept.")
+            }
+        }
+    }
+
+    private var savesCard: some View {
+        Card(title: "Saved copies", systemImage: "archivebox") {
+            ForEach(lab.saves) { save in
+                HStack(alignment: .firstTextBaseline) {
+                    VStack(alignment: .leading, spacing: 2) {
+                        Text(save.note.isEmpty ? save.software : save.note).foregroundStyle(Juice.ink)
+                        Hint("\(save.date.formatted(date: .abbreviated, time: .shortened)), \(save.software), \(Format.bytes(save.size))")
+                    }
+                    Spacer()
+                    Button("Delete…") { confirmDelete = save }.buttonStyle(.juice).disabled(lab.isBusy)
+                        .accessibilityLabel("Delete \(save.note.isEmpty ? save.software : save.note)")
+                }
+            }
+            Button("Show Saved Copies in Finder") { NSWorkspace.shared.open(LabFiles.saves) }.buttonStyle(.juice)
+        }
+    }
+
+    private func runChecks() {
+        skipped = []
+        let chosen = included
+        model.withLab { [lab, server] in
+            Task {
+                let left = await lab.runChecks(chosen, model: server)
+                skipped = left.map { "\($0.0.title) didn't run: \($0.1.prefix(1).lowercased() + $0.1.dropFirst())." }
+            }
+        }
+    }
+
+    private func loadVersions() async {
+        guard server.profile.software.flavor.canDownload else { return }
+        let all = (try? await SoftwareCatalog.versions(server.profile.software.flavor)) ?? []
+        let now = server.profile.software.gameVersion
+        versions = all.filter { version in
+            guard let v = GameVersion(version), v.isStableRelease else { return false }
+            return now.map { v >= $0 } ?? true
+        }
+        chosen = lab.target?.mcVersion ?? ""
+    }
+
+    private func pick(_ version: String) {
+        guard !version.isEmpty, version != lab.target?.mcVersion else { return }
+        Task {
+            if let build = try? await SoftwareCatalog.latestBuild(server.profile.software.flavor, mc: version, channels: server.profile.software.channels) {
+                lab.chooseTarget(build)
+            }
         }
     }
 }
@@ -76,12 +153,12 @@ struct LabRunCard: View {
 
     var body: some View {
         Card(title: "This lab is for one run", systemImage: "flask") {
-            Text("The status board built it for the run that's going now, and deletes it when the run ends. Its results stay on the Software page of the server it's modeled on.")
+            Text("A Lab run built it for the checks going now, and deletes it when the run ends. The results stay on the Lab page of the server it's modeled on.")
                 .foregroundStyle(Juice.ink).fixedSize(horizontal: false, vertical: true)
             LabProgress(lab: model.lab)
             if let real = model.lab.model(from: model.servers) {
-                Button("Open the Status Board") { model.openLabBoard() }.buttonStyle(.juice)
-                    .accessibilityHint("On \(real.profile.name)'s Software page")
+                Button("Open the Lab") { model.openLabBoard() }.buttonStyle(.juice)
+                    .accessibilityHint("\(real.profile.name)'s Lab page")
             }
         }
     }
@@ -103,159 +180,75 @@ struct LabProgress: View {
     }
 }
 
-/// A switch and a light for each stage. A green light unlocks the switch below it.
-struct LabBoard: View {
-    let model: AppModel
-    let lab: LabController
-    @State private var versions: [String] = []
-    @State private var chosen = ""
-
-    private var real: [ServerController] { model.servers.filter { !$0.isLab } }
-
-    var body: some View {
-        Card(title: "Status board", systemImage: "switch.2") {
-            if let current = lab.model(from: model.servers) {
-                modelRow(current)
-                ForEach(LabStation.allCases) { station in
-                    if station == .upgrade { versionRow(current) }
-                    LabStationRow(model: model, station: station, lab: lab, server: current)
-                    if station != LabStation.allCases.last { Divider() }
-                }
-                ready(current)
-            } else {
-                Text("Add a server, and the Lab can test its plugins and rehearse its upgrades.").foregroundStyle(Juice.ink)
-            }
-        }
-        .task(id: lab.model(from: model.servers)?.id) { await loadVersions() }
-    }
-
-    @ViewBuilder private func modelRow(_ current: ServerController) -> some View {
-        HStack {
-            Text("Modeled on").foregroundStyle(Juice.muted)
-            if real.count > 1 {
-                Picker("Server to model", selection: Binding(get: { current.id }, set: { id in
-                    if let picked = real.first(where: { $0.id == id }) { lab.chooseModel(picked) }
-                })) {
-                    ForEach(real) { Text($0.profile.name).tag($0.id) }
-                }
-                .labelsHidden().frame(maxWidth: 240).disabled(lab.isBusy)
-            } else {
-                Text(current.profile.name).foregroundStyle(Juice.ink)
-            }
-            Spacer()
-            Text(current.profile.software.label).foregroundStyle(Juice.muted)
-        }
-    }
-
-    private func versionRow(_ current: ServerController) -> some View {
-        HStack {
-            Text("Upgrade to").foregroundStyle(Juice.muted)
-            Picker("Version to upgrade to", selection: $chosen) {
-                Text("Choose…").tag("")
-                ForEach(versions, id: \.self) { Text($0).tag($0) }
-            }
-            .labelsHidden().frame(maxWidth: 200).disabled(lab.isBusy)
-            .onChange(of: chosen) { _, version in pick(version, current) }
-            if let target = lab.target { Hint("\(target.flavor.title) \(target.label)") }
-        }
-    }
-
-    @ViewBuilder private func ready(_ current: ServerController) -> some View {
-        if let report = lab.report, lab.result(.fresh) != nil {
-            RehearsalVerdict(report: report, model: model, server: current)
-        }
-    }
-
-    private func loadVersions() async {
-        guard let current = lab.model(from: model.servers), current.profile.software.flavor.canDownload else { return }
-        let all = (try? await SoftwareCatalog.versions(current.profile.software.flavor)) ?? []
-        let now = current.profile.software.gameVersion
-        versions = all.filter { version in
-            guard let v = GameVersion(version), v.isStableRelease else { return false }
-            return now.map { v >= $0 } ?? true
-        }
-        chosen = lab.target?.mcVersion ?? ""
-    }
-
-    private func pick(_ version: String, _ current: ServerController) {
-        guard !version.isEmpty, version != lab.target?.mcVersion else { return }
-        Task {
-            if let build = try? await SoftwareCatalog.latestBuild(current.profile.software.flavor, mc: version, channels: current.profile.software.channels) {
-                lab.chooseTarget(build)
-            }
-        }
-    }
-}
-
+/// One check: whether it's in the next run, what it does, its light, and its details behind a chevron.
 struct LabStationRow: View {
-    let model: AppModel
     let station: LabStation
     let lab: LabController
     let server: ServerController
+    @Binding var included: Bool
     @State private var open = false
 
     private var light: StationLight { lab.light(station, model: server) }
     private var result: StationResult? { lab.result(station) }
+    private var hasDetails: Bool { result.map { !$0.checks.isEmpty || !$0.groups.isEmpty } ?? false }
 
     var body: some View {
         VStack(alignment: .leading, spacing: 6) {
             HStack(alignment: .top, spacing: 12) {
-                Toggle(station.title, isOn: Binding(get: { isOn }, set: flick))
-                    .toggleStyle(.switch).labelsHidden().disabled(locked)
-                    .accessibilityLabel(station.title)
+                Toggle(station.title, isOn: $included)
+                    .toggleStyle(.switch).labelsHidden().disabled(lab.isBusy)
+                    .accessibilityLabel("Include \(station.title) in the next run")
                 VStack(alignment: .leading, spacing: 2) {
                     HStack(spacing: 8) {
-                        Text(station.title).font(.body.weight(.semibold)).foregroundStyle(locked ? Juice.muted : Juice.ink)
-                        if station.isOptional { Text("Optional").font(.caption).foregroundStyle(Juice.muted) }
+                        Text(station.title).font(.body.weight(.semibold)).foregroundStyle(Juice.ink)
+                        if station.isOptional { Text("Optional").font(.system(size: 11)).foregroundStyle(Juice.muted) }
                     }
                     Hint(detailLine)
+                    if case .failed = light, let next = nextStep { Text(next).font(.callout).foregroundStyle(Juice.ink).fixedSize(horizontal: false, vertical: true) }
                     if light == .running, let step = lab.step { Text(step).font(.callout).foregroundStyle(Juice.ink) }
                 }
                 Spacer(minLength: 8)
                 StatusLight(light: light)
+                Button { open.toggle() } label: {
+                    Image(systemName: "chevron.right").rotationEffect(.degrees(open ? 90 : 0)).foregroundStyle(Juice.muted)
+                        .frame(width: 20, height: 20).contentShape(Rectangle())
+                }
+                .buttonStyle(.plain).opacity(hasDetails ? 1 : 0).disabled(!hasDetails)
+                .accessibilityLabel("Details for \(station.title)").accessibilityValue(open ? "Shown" : "Hidden")
+                .accessibilityHidden(!hasDetails)
             }
             if case .failed(acknowledged: false) = light, !station.isOptional {
                 Button("Continue Anyway") { lab.continueAnyway(station) }.buttonStyle(.juice)
-                    .help("Unlocks the next switch. This light stays red.")
+                    .help("Unlocks the next check. This light stays red.")
             }
-            if let result, !result.checks.isEmpty || !result.groups.isEmpty {
-                DisclosureGroup("Details", isExpanded: $open) {
-                    StationDetails(result: result).frame(maxWidth: .infinity, alignment: .leading)
-                }
-                .foregroundStyle(Juice.ink)
+            if open, let result, hasDetails {
+                StationDetails(result: result).frame(maxWidth: .infinity, alignment: .leading).padding(.leading, 52)
             }
-        }
-    }
-
-    private var locked: Bool {
-        if lab.isBusy { return true }
-        if case .locked = light { return true }
-        return false
-    }
-
-    private var isOn: Bool {
-        switch light {
-        case .running, .passed, .failed, .stale: true
-        case .ready, .locked: false
         }
     }
 
     private var detailLine: String {
         switch light {
         case let .locked(reason): reason
-        case .stale: "The plugins or version have changed since this ran. Flick it off and on to run it again."
+        case .stale: "Your plugins or version changed since this ran. Run it again for a current answer."
         case .passed, .failed: result?.note.isEmpty == false ? result!.note : station.summary
         case .ready, .running: station.summary
         }
     }
 
-    private func flick(_ on: Bool) {
-        if on {
-            // The EULA is asked once, before the first run builds a lab.
-            model.withLab { [lab, station, server] in Task { await lab.run(station, model: server) } }
-        } else {
-            lab.clear(station)
+    /// What failed first, and what to do about it.
+    private var nextStep: String? {
+        guard let result else { return nil }
+        let first = result.checks.first { $0.outcome == .failed }?.title
+            ?? result.groups.first { $0.outcome != .passed }.map { "\($0.title): \($0.plugins.prefix(3).joined(separator: ", "))" }
+        let what: String = switch station {
+        case .plugins: "Update or remove that plugin, then run again."
+        case .settings: "Fresh settings passed, so one of your plugin settings is the cause. Check that plugin's config, then run again."
+        case .upgrade: "Moving your data to the new version broke this. Wait for the plugin's update before upgrading, or Continue Anyway to see the fresh install."
+        case .fresh: "The new version fails even from nothing, so a plugin isn't ready for it yet. Wait for its update."
+        case .freshSettings: "The new version works with fresh settings, so change that plugin's settings before upgrading."
         }
+        return first.map { "Failed first: \($0). \(what)" } ?? what
     }
 }
 
