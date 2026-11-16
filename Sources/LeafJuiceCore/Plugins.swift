@@ -166,6 +166,30 @@ public enum PluginSource: Codable, Equatable, Sendable {
         }
     }
 
+    /// The two badges on the Plugins page: where it comes from, and which project there (owner, 2026-11-15).
+    public var badge: (source: String, id: String)? {
+        switch self {
+        case .none: return nil
+        case let .modrinth(project, _): return ("Modrinth", project)
+        case let .hangar(project, _): return ("Hangar", project)
+        case let .spigot(id): return ("SpigotMC", "#\(id)")
+        case let .github(repo, _, _): return ("GitHub", repo)
+        case let .jenkins(url, _):
+            // The host and the last job name, such as ci.example.com/Plugin. Nested folders keep only the last name.
+            let parts = URL(string: url)?.pathComponents ?? []
+            let job = parts.indices.last { parts[$0] == "job" && $0 + 1 < parts.count }.map { parts[$0 + 1] }
+            let host = URL(string: url)?.host ?? url
+            return ("Jenkins", job.map { "\(host)/\($0)" } ?? host)
+        case let .web(url, _): return ("Web", URL(string: url)?.host ?? url)
+        }
+    }
+
+    /// For VoiceOver: "Source Modrinth, ID luckperms".
+    public var spoken: String {
+        guard let b = badge else { return "No source" }
+        return "Source \(b.source), ID \(b.id)"
+    }
+
     public var pageURL: URL? {
         switch self {
         case .none: nil

@@ -44,6 +44,17 @@ public enum Palette {
     public static let info = Swatch(0x1C6478, 0x9ADAEE)
     public static let infoWash = Swatch(0xDDF0F5, 0x274650)
 
+    /// Plugin source badges (owner, 2026-11-15): a tint per source behind ink text, and an accent for its icon.
+    /// The text is always ink, so the tint only has to keep ink readable; the accent needs 3:1 on the tint.
+    public static let sources: [(name: String, wash: Swatch, accent: Swatch)] = [
+        ("modrinth", Swatch(0xD9F2DF, 0x23493A), Swatch(0x1B6B3A, 0x8FE0A8)),
+        ("hangar", Swatch(0xDDE7FA, 0x2A3A5C), Swatch(0x2450A8, 0xA9C3FF)),
+        ("spigot", Swatch(0xFBE5D3, 0x553522), Swatch(0x9A4A10, 0xFFC08A)),
+        ("github", Swatch(0xE6E3F2, 0x3A3550), Swatch(0x4B3F8C, 0xC9BEFF)),
+        ("jenkins", Swatch(0xF6DEDB, 0x4F2F2C), Swatch(0x8E3A2E, 0xF5B3A8)),
+        ("web", Swatch(0xECF1DA, 0x414D39), Swatch(0x55614A, 0xCBD4BC)),
+    ]
+
     // MARK: Pairs and their minimums
 
     public enum Use: String, Sendable {
@@ -71,6 +82,10 @@ public enum Palette {
         for (w, wash) in [("pulpWash", pulpWash), ("warningWash", warningWash), ("dangerWash", dangerWash), ("infoWash", infoWash)] {
             add("ink", ink, w, wash, .text)
             add("muted", muted, w, wash, .text)
+        }
+        for s in sources {
+            add("ink", ink, "\(s.name) badge", s.wash, .text)
+            add("\(s.name) icon", s.accent, "\(s.name) badge", s.wash, .ui)
         }
         add("onGrapefruit", onGrapefruit, "grapefruit", grapefruit, .text)
         add("danger", danger, "dangerWash", dangerWash, .text)

@@ -73,8 +73,7 @@ struct PluginsPage: View {
             }
             TableColumn("Version") { p in Text(p.version).foregroundStyle(Juice.ink) }.width(min: 70, ideal: 110)
             TableColumn("Source") { p in
-                let source = server.record(for: p).source
-                Text(source.summary).foregroundStyle(source.isSet ? Juice.ink : Juice.muted)
+                SourceBadges(source: server.record(for: p).source)
             }
             TableColumn("Status") { p in statusBadge(p, problem: problems[p.fileName]) }.width(min: 150, ideal: 190)
         }
@@ -226,10 +225,10 @@ struct PluginDetail: View {
     private func sourceRow(_ record: PluginRecord) -> some View {
         HStack(spacing: 8) {
             Text("Source").foregroundStyle(Juice.muted)
+            SourceBadges(source: record.source)
             if let page = record.source.pageURL.flatMap({ PluginLinks.clean($0.absoluteString) }).flatMap(URL.init(string:)) {
-                Link(record.source.summary, destination: page)
-            } else {
-                Text(record.source.summary).foregroundStyle(Juice.ink)
+                Link("Open Page", destination: page)
+                    .accessibilityLabel("Open the \(record.source.badge?.source ?? "source") page")
             }
             Spacer()
             if record.source.isSet {
@@ -248,7 +247,7 @@ struct PluginDetail: View {
         ForEach(list) { suggestion in
             HStack {
                 VStack(alignment: .leading) {
-                    Text(suggestion.source.summary).foregroundStyle(Juice.ink)
+                    SourceBadges(source: suggestion.source)
                     Hint(suggestion.reason)
                 }
                 Spacer()

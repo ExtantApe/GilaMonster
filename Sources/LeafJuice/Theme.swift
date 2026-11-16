@@ -29,6 +29,9 @@ enum Juice {
     static let dangerWash = dynamic(Palette.dangerWash)
     static let info = dynamic(Palette.info)
     static let infoWash = dynamic(Palette.infoWash)
+    /// Plugin source badge colours, by SourceKind raw value: (tint, icon accent).
+    static let sourceColors: [String: (wash: Color, accent: Color)] = Dictionary(uniqueKeysWithValues:
+        Palette.sources.map { ($0.name, (dynamic($0.wash), dynamic($0.accent))) })
 
     static let controlHeight: CGFloat = 32
     static let controlRadius: CGFloat = 8
@@ -368,6 +371,50 @@ extension ServerController {
     func attempt(_ work: @escaping @MainActor () async throws -> Void) {
         Task { @MainActor in
             do { try await work() } catch { notice = error.localizedDescription }
+        }
+    }
+}
+
+/// Where a plugin comes from, as two badges side by side: the source, tinted with its own colour and icon, and the
+/// project there, outlined (owner, 2026-11-15). VoiceOver reads them as one: "Source Modrinth, ID luckperms".
+struct SourceBadges: View {
+    let source: PluginSource
+
+    var body: some View {
+        if let b = source.badge {
+            let colors = Juice.sourceColors[source.kind.rawValue] ?? (Juice.raised, Juice.muted)
+            HStack(spacing: 4) {
+                Label {
+                    Text(b.source).font(.caption.weight(.semibold)).foregroundStyle(Juice.ink).lineLimit(1).fixedSize()
+                } icon: {
+                    Image(systemName: source.kind.symbol).font(.caption).foregroundStyle(colors.accent)
+                }
+                .labelStyle(.titleAndIcon)
+                .padding(.horizontal, 8).padding(.vertical, 3)
+                .background(colors.wash, in: Capsule())
+                Text(b.id).font(.caption.monospaced()).foregroundStyle(Juice.ink).lineLimit(1).truncationMode(.middle)
+                    .padding(.horizontal, 8).padding(.vertical, 3)
+                    .overlay { Capsule().strokeBorder(Juice.controlBorder, lineWidth: 1) }
+            }
+            .accessibilityElement(children: .ignore)
+            .accessibilityLabel(source.spoken)
+        } else {
+            Badge(text: "No source", tone: .neutral)
+        }
+    }
+}
+
+extension SourceKind {
+    /// Each source's icon, so the badge doesn't rest on its colour.
+    var symbol: String {
+        switch self {
+        case .none: "circle.dashed"
+        case .modrinth: "shippingbox.fill"
+        case .hangar: "paperplane.fill"
+        case .spigot: "drop.fill"
+        case .github: "chevron.left.forwardslash.chevron.right"
+        case .jenkins: "hammer.fill"
+        case .web: "globe"
         }
     }
 }
