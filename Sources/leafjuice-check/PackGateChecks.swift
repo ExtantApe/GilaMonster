@@ -112,6 +112,69 @@ import LeafJuiceCore
         let old = tickets.issue(now: now.addingTimeInterval(-121))
         check(!tickets.redeem(old, now: now), "a pass lapses after two minutes")
 
+        // Packmule's link check, with the pack-check token (D219, contract agreed 2026-11-16).
+        let tokenFile = PackGate.tokenFile(server: c.profile.id)
+        let tokenInfo = try? FileManager.default.attributesOfItem(atPath: tokenFile.path)
+        equal((tokenInfo?[.posixPermissions] as? NSNumber)?.intValue, 0o600, "starting with joining only makes the token file, mode 600")
+        equal(((try? FileManager.default.attributesOfItem(atPath: tokenFile.deletingLastPathComponent().path))?[.posixPermissions] as? NSNumber)?.intValue, 0o700, "in a folder only this account can open")
+        check(!tokenFile.path.hasPrefix(root.path), "kept out of the server folder, so backups and copies never carry it")
+        equal(c.packCheckTokenPath, tokenFile.path, "the card shows where it is")
+        let secret = PackGate.readToken(tokenFile) ?? ""
+        check(secret.range(of: "^[0-9a-f]{64}$", options: .regularExpression) != nil, "it holds 64 hex characters")
+        let path = URL(string: url)!.path
+        func tokenStatus(_ method: String = "GET", _ value: String? = nil, _ extra: String = "", at p: String? = nil) async -> Int? {
+            await rawStatus(port: port, "\(method) \(p ?? path) HTTP/1.1\r\nHost: x\r\n\(value.map { "X-Pack-Check-Token: \($0)\r\n" } ?? "")\(extra)\r\n")
+        }
+        equal(await tokenStatus("GET", secret), 200, "the right token gets the pack, without any player headers")
+        equal(await tokenStatus("HEAD", secret), 200, "and a HEAD, as a link check sends")
+        equal(await rawStatus(port: port, "GET \(path) HTTP/1.1\r\nHost: x\r\nx-pack-check-TOKEN: \(secret)\r\n\r\n"), 200, "the header's name is read in any case")
+        equal(await tokenStatus("POST", secret, "Content-Length: 0\r\n"), 405, "other methods are refused before the token is looked at")
+        equal(await tokenStatus("GET", String(repeating: "0", count: 64)), 404, "a wrong token gets 404")
+        equal(await tokenStatus("GET", ""), 404, "so does an empty one")
+        equal(await tokenStatus("GET", String(secret.dropLast())), 404, "and a short one")
+        for proxy in ["X-Forwarded-For: 203.0.113.9", "Forwarded: for=203.0.113.9", "Via: 1.1 caddy"] {
+            equal(await tokenStatus("GET", secret, proxy + "\r\n"), 404, "the right token through a proxy (\(proxy.split(separator: ":")[0])) is refused")
+        }
+        equal(await rawStatus(port: port, "GET \(path) HTTP/1.1\r\nHost: x\r\nX-Pack-Check-Token: \(secret)\r\nX-Pack-Check-Token: \(secret)\r\n\r\n"), 400, "a token header sent twice makes the request bad")
+        equal(await tokenStatus("GET", secret, at: "/nothing/here.zip"), 404, "the token opens no address that doesn't exist")
+        chmod(tokenFile.path, 0o644)
+        equal(await tokenStatus("GET", secret), 404, "a token file others can read is refused")
+        chmod(tokenFile.path, 0o600)
+        let moved = tokenFile.deletingLastPathComponent().appendingPathComponent("moved.token")
+        try? FileManager.default.moveItem(at: tokenFile, to: moved)
+        try? FileManager.default.createSymbolicLink(at: tokenFile, withDestinationURL: moved)
+        equal(await tokenStatus("GET", secret), 404, "a token file that's a link is refused")
+        try? FileManager.default.removeItem(at: tokenFile)
+        equal(await tokenStatus("GET", secret), 404, "with no token file, the token works for nobody")
+        try? FileManager.default.moveItem(at: moved, to: tokenFile)
+        equal(await tokenStatus("GET", secret), 200, "put back, it works again, read fresh for every request")
+        check(!c.console.contains { $0.text.contains(secret) }, "the token is never written to the console")
+        check(c.console.contains { $0.text.contains("let in with the pack-check token") }, "but the server's log says the link check got in")
+        try? FileManager.default.removeItem(at: tokenFile)
+        check(c.packCheckTokenPath == nil, "deleted, the card stops showing it")
+        try c.startPackHost()
+        await checkUntil(5, "listening with a new token") { c.packHostIsListening }
+        let renewed = PackGate.readToken(tokenFile) ?? ""
+        check(!renewed.isEmpty && renewed != secret, "starting again makes a new token")
+        equal(await tokenStatus("GET", secret), 404, "and the old one stops working")
+        equal(await tokenStatus("GET", renewed), 200, "while the new one works")
+
+        // A folder in the address (D220): https://join.example.net/zz forwarded here.
+        try c.setPackHost(address: "http://127.0.0.1:\(port)/zz/", port: port)
+        equal(c.packHostSettings.address, "http://127.0.0.1:\(port)/zz", "an address with a folder is kept, without the trailing slash")
+        try c.startPackHost()
+        await checkUntil(5, "listening with a folder") { c.packHostIsListening }
+        let folderURL = c.packBuildAddress(recipe: "gate-pack", sha1: build.sha1)!
+        check(folderURL.hasPrefix("http://127.0.0.1:\(port)/zz/"), "links include the folder: \(folderURL)")
+        let withFolder = await PackHosting.check(url: folderURL, expected: build.sha1, headers: game)
+        check(withFolder.ok, "a player gets the pack at the address with the folder: \(withFolder.summary)")
+        equal(await tokenStatus("GET", renewed, at: URL(string: folderURL)!.path), 200, "the token works with the folder")
+        equal(await tokenStatus("GET", renewed, at: path), 200, "and without it, as when Caddy strips it or Packmule calls directly")
+        equal(await tokenStatus("GET", renewed, at: "/other" + path), 404, "a different folder is no match")
+        try c.setPackHost(address: "http://127.0.0.1:\(port)", port: port)
+        try c.startPackHost()
+        await checkUntil(5, "listening without a folder") { c.packHostIsListening }
+
         // Turned off, it serves anyone, as before.
         try c.setPackJoiningOnly(false)
         await checkUntil(5, "listening again") { c.packHostIsListening }
