@@ -2,6 +2,8 @@
 
 ## Unreleased
 
+- **The pack card reads Packmule's config.yml.** With plugin commands off, the card said "Packmule doesn't use this link yet" even when config.yml already had the build's link. Now LeafJuice reads config.yml (it never changes it) and marks the build in use when the link and SHA-1 match and Packmule has loaded the file: the server is stopped, or LeafJuice started it after the file was last written. Otherwise it says to run /packmule reload. A Check config.yml Again button sits beside Updated by Hand.
+- **Updated by Hand is easier to find.** Each build's status and its buttons now come first on the publish card, above the setup fields, and the publish card comes before Hosting once a publish folder is set.
 - **First UX fixes from the audit** (docs/ux-audit-2026-11-15.md, quick wins the owner approved):
   - The Issues panel shows itself only when something is open. The toolbar button still opens it to look at ignored issues.
   - Greyed-out buttons say why, as a tooltip and to VoiceOver: "Start the server first", "Make a backup first", "Add a connection first".

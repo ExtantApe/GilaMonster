@@ -96,6 +96,39 @@ import Foundation
         check(!FileOps.exists(served2.appendingPathComponent(p1.token)) && FileOps.exists(served2.appendingPathComponent(p2.token)), "after it, with nobody on, only the current build is left")
         equal(c.packPublishSettings.builds[ResourcePacks.slug("Made-up Recipe")]?.map(\.token), [p2.token], "and the record says so")
     } catch { check(false, "publishing through the server threw: \(error)") }
+
+    // Packmule's config.yml, read only (2026-11-16): with plugin commands off, a config that already gives this build counts.
+    let pub = PublishedBuild(token: String(repeating: "e", count: 64), sha1: sha1, url: "https://join.example.test/p/\(String(repeating: "e", count: 64))/\(sha1).zip", publishedAt: Date(), onlineAtSwitch: [])
+    func yml(_ body: String) -> String { "# Packmule\npacks:\n  main:\n\(body)\nworlds:\n  world: [main]\n" }
+    check(PackPublish.packmuleConfigGives(yml("    url: \(pub.url)"), pack: "main", build: pub), "the build's own link counts, the SHA-1 read from its file name")
+    check(PackPublish.packmuleConfigGives(yml("    url: \"\(pub.url)\"\n    sha1: \(sha1.uppercased())"), pack: "main", build: pub), "quoted, with the same SHA-1 written out")
+    check(!PackPublish.packmuleConfigGives(yml("    url: \(pub.url)\n    sha1: \(String(repeating: "0", count: 40))"), pack: "main", build: pub), "a different SHA-1 written out doesn't count")
+    check(!PackPublish.packmuleConfigGives(yml("    url: https://join.example.test/p/old/\(String(repeating: "1", count: 40)).zip"), pack: "main", build: pub), "an older link doesn't count")
+    check(!PackPublish.packmuleConfigGives(yml("    url: \(pub.url)\n    sha1-url: https://join.example.test/p/x.sha1"), pack: "main", build: pub), "a hash read from elsewhere is too unclear to count")
+    check(!PackPublish.packmuleConfigGives(yml("    url: \(pub.url)"), pack: "other", build: pub), "another pack name doesn't count")
+    check(!PackPublish.packmuleConfigGives("packs: {}\n#  main:\n#    url: \(pub.url)\n", pack: "main", build: pub), "a commented-out link doesn't count")
+    let written = Date()
+    check(PackPublish.packmuleHasLoaded(configWritten: written, live: false, startedAt: nil), "with the server stopped, the next start reads it")
+    check(PackPublish.packmuleHasLoaded(configWritten: written, live: true, startedAt: written.addingTimeInterval(60)), "started after the file was written: loaded")
+    check(!PackPublish.packmuleHasLoaded(configWritten: written, live: true, startedAt: written.addingTimeInterval(-60)), "written after the start: not loaded yet, so the old build must stay")
+    check(!PackPublish.packmuleHasLoaded(configWritten: written, live: true, startedAt: nil), "running, but not started by LeafJuice: unknown counts as not loaded")
+    // Through the made-up server, which is stopped.
+    let h3 = makeBuild("three \(UUID())")
+    if let p3 = try? c.publishPack(recipe: "Made-up Recipe", sha1: h3) {
+        let key = ResourcePacks.slug("Made-up Recipe")
+        let cfg = c.paths.plugins.appendingPathComponent("Packmule/config.yml")
+        try? FileManager.default.createDirectory(at: cfg.deletingLastPathComponent(), withIntermediateDirectories: true)
+        write(yml("    url: \(p3.url)"), cfg)
+        let before = (try? Data(contentsOf: cfg)) ?? Data(), beforeDate = try? FileManager.default.attributesOfItem(atPath: cfg.path)[.modificationDate] as? Date
+        var ns = c.packPublishSettings; ns.packmuleNames = [:]; c.packPublishSettings = ns
+        c.checkPackmuleConfig(recipe: "Made-up Recipe")
+        check(c.packPublishSettings.builds[key]?.first?.handedOff != true, "without a Packmule pack name, config.yml isn't matched")
+        ns = c.packPublishSettings; ns.packmuleNames = [key: "main"]; c.packPublishSettings = ns
+        check(c.checkPackmuleConfig(recipe: "Made-up Recipe") == nil, "a matching config on a stopped server needs no waiting note")
+        check(c.packPublishSettings.builds[key]?.first?.handedOff == true, "and the build is marked in use")
+        check(c.packPublishSettings.builds[key]?.first?.handOffNote?.contains("when the server starts") == true, "saying Packmule uses it at the next start")
+        check((try? Data(contentsOf: cfg)) == before && (try? FileManager.default.attributesOfItem(atPath: cfg.path)[.modificationDate] as? Date) == beforeDate, "config.yml is read, never changed")
+    } else { check(false, "couldn't publish a third made-up build") }
 }
 
 /// The real Packmule 0.2.1 on a throwaway Paper server. No https host is reachable here, so this proves the two speak

@@ -53,8 +53,14 @@ struct ResourcePacksPage: View {
             if !packs.isEmpty { recipeCard }
             if !history.isEmpty { buildsCard }
             if !packs.isEmpty {
-                PackHostingCard(server: server, recipeNames: recipeNames, live: live) { hostingRefresh += 1 }
-                PackPublishCard(server: server, recipeNames: recipeNames)
+                // Publishing to a web server comes first once it's set up, since it's then the one in use (2026-11-16).
+                if server.packPublishSettings.folder.isEmpty {
+                    PackHostingCard(server: server, recipeNames: recipeNames, live: live) { hostingRefresh += 1 }
+                    PackPublishCard(server: server, recipeNames: recipeNames)
+                } else {
+                    PackPublishCard(server: server, recipeNames: recipeNames)
+                    PackHostingCard(server: server, recipeNames: recipeNames, live: live) { hostingRefresh += 1 }
+                }
             }
             if let browsing { PackBrowser(pack: browsing) { self.browsing = nil } }
         }
