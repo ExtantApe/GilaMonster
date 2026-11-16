@@ -2,6 +2,8 @@
 
 ## Unreleased
 
+- **Packmule's link check gets past only players joining** (D219). Starting the pack server makes a pack-check token file outside the server folder, and the hosting card shows its path for Packmule's `token-file` setting. The token works only sent straight to this Mac on GET or HEAD, never through a proxy, and is never logged. Delete the file and start serving again for a new one.
+- **The pack address can carry a short folder,** such as `https://join.example.net/zz`, for a web server that forwards one folder here. Requests match with the folder or without it.
 - **The pack card reads Packmule's config.yml.** With plugin commands off, the card said "Packmule doesn't use this link yet" even when config.yml already had the build's link. Now LeafJuice reads config.yml (it never changes it) and marks the build in use when the link and SHA-1 match and Packmule has loaded the file: the server is stopped, or LeafJuice started it after the file was last written. Otherwise it says to run /packmule reload. A Check config.yml Again button sits beside Updated by Hand.
 - **Updated by Hand is easier to find.** Each build's status and its buttons now come first on the publish card, above the setup fields, and the publish card comes before Hosting once a publish folder is set.
 - **First UX fixes from the audit** (docs/ux-audit-2026-11-15.md, quick wins the owner approved):

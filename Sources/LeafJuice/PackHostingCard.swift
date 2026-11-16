@@ -80,7 +80,7 @@ struct PackHostingCard: View {
                 }
             }
             if PackHosting.isOnlyThisMac(settings.address) { Hint("This address only works on this Mac, so it's good for testing and no use to players.") }
-            Hint("LeafJuice listens on this Mac only, so something like Caddy has to carry it through your tunnel. Use a different hostname from any sign-in page.")
+            Hint("LeafJuice listens on this Mac only, so something like Caddy has to carry it through your tunnel: a whole hostname, or one folder of one, such as https://join.example.net/zz. LeafJuice accepts requests with that folder or without it.")
             Toggle(isOn: Binding(get: { settings.joiningOnly }, set: { on in
                 do { try server.setPackJoiningOnly(on); error = nil } catch { self.error = error.localizedDescription }
                 reload()
@@ -90,6 +90,17 @@ struct PackHostingCard: View {
                     Text("A pack goes only to a game that names a whitelisted player the server shows connecting in the last 5 minutes, or online now. Anyone else, a browser included, is told there's nothing there.")
                         .font(.caption).foregroundStyle(Juice.muted).fixedSize(horizontal: false, vertical: true)
                 }
+            }
+            if settings.joiningOnly, let tokenPath = server.packCheckTokenPath {
+                LabeledContent("Packmule's token file") {
+                    HStack {
+                        Text((tokenPath as NSString).abbreviatingWithTildeInPath).font(.callout.monospaced()).foregroundStyle(Juice.ink)
+                            .lineLimit(1).truncationMode(.middle).textSelection(.enabled)
+                        Button("Copy Path") { NSPasteboard.general.clearContents(); NSPasteboard.general.setString(tokenPath, forType: .string) }
+                            .buttonStyle(.juice).accessibilityLabel("Copy the path of Packmule's token file")
+                    }
+                }
+                Hint("Packmule's own link check sends this file's token straight to this Mac, so it gets past the joining check. It never works through a web server. To make a new one, delete the file and start serving again.")
             }
             if settings.joiningOnly {
                 Hint("This stops casual downloads and shared links. A game's request can be faked, so someone who knows a whitelisted player's name and ID could still get the pack while that player is joining. Only players listed in the whitelist get it, whether or not the whitelist is switched on.")

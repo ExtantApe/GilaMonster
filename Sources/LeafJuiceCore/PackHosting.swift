@@ -97,15 +97,34 @@ public enum PackHosting {
 
     public static func isSHA1(_ text: String) -> Bool { text.range(of: "^[0-9a-f]{40}$", options: .regularExpression) != nil }
 
-    /// A web address with nothing after the host, since the route's own path follows it. nil when it isn't one.
+    /// A web address, optionally with a short folder after the host (https://join.example.net/zz) for a web server that
+    /// forwards one folder here (D220, 2026-11-16). The route's own path follows it. nil when it isn't one.
     public static func cleanAddress(_ text: String) -> String? {
         let trimmed = text.trimmingCharacters(in: .whitespacesAndNewlines)
         guard let parts = URLComponents(string: trimmed), let scheme = parts.scheme?.lowercased(), ["http", "https"].contains(scheme),
               let host = parts.host, !host.isEmpty, parts.query == nil, parts.fragment == nil, parts.user == nil, parts.password == nil,
-              parts.path.isEmpty || parts.path == "/" else { return nil }
+              let prefix = prefix(path: parts.path) else { return nil }
         var out = "\(scheme)://\(host.lowercased())"
         if let port = parts.port { out += ":\(port)" }
-        return out
+        return prefix.isEmpty ? out : out + "/" + prefix.joined(separator: "/")
+    }
+
+    /// The folder segments of an address's path: none, or 1 to 3 of lowercase letters, digits and dashes, up to 32 each.
+    /// One trailing slash is allowed. nil for anything else.
+    static func prefix(path: String) -> [String]? {
+        if path.isEmpty || path == "/" { return [] }
+        var p = path
+        if p.hasSuffix("/") { p.removeLast() }
+        guard p.hasPrefix("/") else { return nil }
+        let segments = p.dropFirst().split(separator: "/", omittingEmptySubsequences: false).map(String.init)
+        guard (1...3).contains(segments.count),
+              segments.allSatisfy({ $0.range(of: "^[a-z0-9-]{1,32}$", options: .regularExpression) != nil }) else { return nil }
+        return segments
+    }
+
+    /// The folder segments of a cleaned address, for matching requests.
+    public static func prefix(of address: String) -> [String] {
+        URLComponents(string: address).flatMap { prefix(path: $0.path) } ?? []
     }
 
     public static func isFullAddress(_ text: String) -> Bool {
@@ -137,9 +156,14 @@ public enum PackHosting {
 
     public enum Asked: Equatable, Sendable { case pack, hash, build(String) }
 
-    /// Exact matches only: there's no listing, and every other path gets the same answer.
-    public static func match(path: String, routes: [PackRoute]) -> (route: PackRoute, asked: Asked)? {
-        let parts = path.split(separator: "/", omittingEmptySubsequences: false)
+    /// Exact matches only: there's no listing, and every other path gets the same answer. With a folder in the address,
+    /// the path may come with that folder or without it (a web server that strips it, or Packmule calling this Mac
+    /// directly). Any other folder is no match.
+    public static func match(path: String, routes: [PackRoute], prefix: [String] = []) -> (route: PackRoute, asked: Asked)? {
+        var parts = path.split(separator: "/", omittingEmptySubsequences: false)
+        if !prefix.isEmpty, parts.count == 3 + prefix.count, parts[0].isEmpty, Array(parts[1...prefix.count]).map(String.init) == prefix {
+            parts.removeSubrange(1...prefix.count)
+        }
         guard parts.count == 3, parts[0].isEmpty else { return nil }
         let asked: Asked
         switch parts[2] {
@@ -232,6 +256,13 @@ public final class PackHost: @unchecked Sendable {
     private let allowed: @MainActor @Sendable () -> Bool
     /// Asked on this host's own queue, before anything about a pack is sent. False is a plain 404.
     private let admit: @Sendable ([String: String]) -> Bool
+    /// Packmule's link check with the pack-check token (D219). Asked before the player gate; false falls through to it.
+    private let tokenAdmits: @Sendable ([String: String]) -> Bool
+    /// The address's folder, so requests with it match too.
+    private let prefix: [String]
+    /// Told when the token let a request in, at most once a minute. Never given the token.
+    public var onTokenAdmit: (@MainActor @Sendable () -> Void)?
+    private var lastTokenNote = Date.distantPast
     public let tickets = PackCheckTickets()
     private var listener: NWListener?
     private var connections: [ObjectIdentifier: NWConnection] = [:]
@@ -241,11 +272,14 @@ public final class PackHost: @unchecked Sendable {
     public var onFailure: (@MainActor @Sendable (String) -> Void)?
 
     public init(routes: [PackRoute], properties: URL, allowed: @escaping @MainActor @Sendable () -> Bool = { true },
-                admit: @escaping @Sendable ([String: String]) -> Bool = { _ in true }) {
+                admit: @escaping @Sendable ([String: String]) -> Bool = { _ in true },
+                tokenAdmits: @escaping @Sendable ([String: String]) -> Bool = { _ in false }, prefix: [String] = []) {
         self.routes = routes
         self.properties = properties
         self.allowed = allowed
         self.admit = admit
+        self.tokenAdmits = tokenAdmits
+        self.prefix = prefix
     }
 
     public var isListening: Bool {
@@ -358,12 +392,18 @@ public final class PackHost: @unchecked Sendable {
         }
         let head = method == "HEAD"
         // First, so a refused request learns nothing, not even whether an address exists.
-        guard tickets.redeem(headers[PackGate.checkHeader]) || admit(headers) else {
+        let byTicket = tickets.redeem(headers[PackGate.checkHeader])
+        let byToken = !byTicket && tokenAdmits(headers)
+        guard byTicket || byToken || admit(headers) else {
             finish(status: 404, reason: "Not Found", head: head, connection)
             return
         }
+        if byToken, Date().timeIntervalSince(lastTokenNote) > 60, let note = onTokenAdmit {
+            lastTokenNote = Date()
+            Task { @MainActor in note() }
+        }
         let text = try? String(contentsOf: properties, encoding: .utf8)
-        guard let (route, asked) = PackHosting.match(path: path, routes: routes) else {
+        guard let (route, asked) = PackHosting.match(path: path, routes: routes, prefix: prefix) else {
             finish(status: 404, reason: "Not Found", head: head, connection)
             return
         }
@@ -445,6 +485,12 @@ extension ServerController {
     }
 
     public var packHostIsListening: Bool { packHost?.isListening == true }
+
+    /// Where Packmule's token-file setting should point, when joining only is on and the file is good.
+    public var packCheckTokenPath: String? {
+        let file = PackGate.tokenFile(server: profile.id)
+        return packHostSettings.joiningOnly && PackGate.readToken(file) != nil ? file.path : nil
+    }
 
     /// A one-time pass for this app's own check of a pack address. Nil when nothing is being served from here.
     public func packCheckTicket() -> String? { packHost?.isListening == true ? packHost?.tickets.issue() : nil }
@@ -533,7 +579,7 @@ extension ServerController {
     }
 
     public func setPackHost(address: String, port: Int) throws {
-        guard let clean = PackHosting.cleanAddress(address) else { throw LeafError("Enter the address players reach, with nothing after the name, such as https://packs.example.net.") }
+        guard let clean = PackHosting.cleanAddress(address) else { throw LeafError("Enter the address players reach, such as https://packs.example.net, or with one short folder, such as https://join.example.net/zz. Lowercase letters, digits and dashes only.") }
         var settings = packHostSettings
         settings.address = clean
         settings.port = port
@@ -562,8 +608,16 @@ extension ServerController {
         guard settings.portIsUsable else { throw LeafError("The port has to be between 1024 and 65535.") }
         let root = paths.root
         let gated = settings.joiningOnly
+        // With joining only on, Packmule's link check gets in with the pack-check token (D219). Off, everyone does anyway.
+        let tokenFile = PackGate.tokenFile(server: profile.id)
+        if gated {
+            do { try PackGate.ensureToken(at: tokenFile) } catch { appendWrapper("The pack-check token couldn't be made, so Packmule's link check will be refused: \(error.localizedDescription)", level: .warn) }
+        }
         let host = PackHost(routes: [], properties: paths.properties, allowed: { Modules.shared.isOn(.resourcePacks) },
-                            admit: { headers in !gated || PackGate.admits(headers: headers, root: root) })
+                            admit: { headers in !gated || PackGate.admits(headers: headers, root: root) },
+                            tokenAdmits: { headers in gated && PackGate.admitsToken(headers: headers, file: tokenFile) },
+                            prefix: PackHosting.prefix(of: settings.address))
+        host.onTokenAdmit = { [weak self] in self?.appendWrapper("Packmule's link check was let in with the pack-check token.", level: .info) }
         host.onFailure = { [weak self] message in
             self?.packHostError = message
             self?.packHost = nil

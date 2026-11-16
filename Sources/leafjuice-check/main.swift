@@ -5264,7 +5264,10 @@ func residentBytes() -> UInt64 {
     // The pure parts.
     equal(PackHosting.cleanAddress(" https://Packs.Example.net/ "), "https://packs.example.net", "an address is tidied")
     equal(PackHosting.cleanAddress("http://127.0.0.1:8766"), "http://127.0.0.1:8766", "with its port")
-    for bad in ["packs.example.net", "ftp://x", "https://x/path", "https://x?a=1", "https://u:p@x", "https://x#y"] { equal(PackHosting.cleanAddress(bad), nil, "refused: \(bad)") }
+    for bad in ["packs.example.net", "ftp://x", "https://x/Path", "https://x/a b", "https://x/a/b/c/d", "https://x//zz", "https://x/\(String(repeating: "a", count: 33))", "https://x/zz?a=1", "https://x?a=1", "https://u:p@x", "https://x#y"] { equal(PackHosting.cleanAddress(bad), nil, "refused: \(bad)") }
+    equal(PackHosting.cleanAddress("https://Join.Example.net/zz/"), "https://join.example.net/zz", "a short folder is allowed, the trailing slash dropped")
+    equal(PackHosting.cleanAddress("https://join.example.net/a/b-2/c3"), "https://join.example.net/a/b-2/c3", "up to three folders")
+    equal(PackHosting.prefix(of: "https://join.example.net/zz"), ["zz"], "the folder is read back for matching")
     check(PackHosting.isOnlyThisMac("http://localhost:1") && PackHosting.isOnlyThisMac("http://127.0.0.1") && !PackHosting.isOnlyThisMac("https://packs.example.net"), "an address only this Mac can use is noticed")
     let tokens = (0..<20).map { _ in PackHosting.newToken() }
     equal(Set(tokens).count, 20, "paths differ"); check(tokens.allSatisfy { $0.count == 64 }, "and are long")

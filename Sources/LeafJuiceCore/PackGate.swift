@@ -16,6 +16,64 @@ public enum PackGate {
     static let logTail = 512 * 1024
     static let checkHeader = "x-leaf-juice-check"
 
+    // MARK: Pack-check token (D219, contract with Packmule agreed 2026-11-16)
+    //
+    // Packmule checks its pack links when it starts. With "players joining only" on, that check isn't a player, so it
+    // was refused. A long-lived token lets it in: Packmule reads it from a file and sends it to this Mac directly.
+    // Only GET and HEAD reach this (the host refuses other methods first), and a request that came through a proxy
+    // (X-Forwarded-For, Forwarded or Via) never counts, so the token can't work from outside even if the web server's
+    // rule to strip it is missing. The token is never logged or shown.
+
+    public static let tokenHeader = "x-pack-check-token"
+    static let proxyHeaders = ["x-forwarded-for", "forwarded", "via"]
+
+    /// Kept out of the server folder, so backups, test copies and the Lab never carry it.
+    public static var tokenFolder: URL { AppPaths.home.appendingPathComponent("pack-check", isDirectory: true) }
+    public static func tokenFile(server id: UUID) -> URL { tokenFolder.appendingPathComponent("\(id.uuidString.lowercased()).token") }
+
+    /// Makes the token file if it isn't there: 32 random bytes as 64 lowercase hex characters and a newline, mode 600,
+    /// in a folder only this account can open. An existing file is left alone; a bad one is simply refused when read.
+    public static func ensureToken(at file: URL) throws {
+        let folder = file.deletingLastPathComponent()
+        try FileManager.default.createDirectory(at: folder, withIntermediateDirectories: true, attributes: [.posixPermissions: 0o700])
+        chmod(folder.path, 0o700)
+        if FileManager.default.fileExists(atPath: file.path) || (try? FileManager.default.destinationOfSymbolicLink(atPath: file.path)) != nil { return }
+        var bytes = [UInt8](repeating: 0, count: 32)
+        guard SecRandomCopyBytes(kSecRandomDefault, bytes.count, &bytes) == errSecSuccess else { throw LeafError("Couldn't make a random pack-check token.") }
+        let text = Data((bytes.map { String(format: "%02x", $0) }.joined() + "\n").utf8)
+        let fd = open(file.path, O_WRONLY | O_CREAT | O_EXCL | O_NOFOLLOW, 0o600)
+        guard fd >= 0 else { throw LeafError("Couldn't write the pack-check token file.") }
+        defer { close(fd) }
+        fchmod(fd, 0o600)
+        let written = text.withUnsafeBytes { write(fd, $0.baseAddress, $0.count) }
+        guard written == text.count else { unlink(file.path); throw LeafError("Couldn't write the pack-check token file.") }
+    }
+
+    /// The token, read fresh: a plain file, not a link, owned by this account, mode exactly 600, holding 64 lowercase
+    /// hex characters and at most one newline. Anything else is nil.
+    public static func readToken(_ file: URL) -> String? {
+        let fd = open(file.path, O_RDONLY | O_NOFOLLOW | O_NONBLOCK)
+        guard fd >= 0 else { return nil }
+        defer { close(fd) }
+        var info = stat()
+        guard fstat(fd, &info) == 0, info.st_mode & S_IFMT == S_IFREG, info.st_uid == geteuid(), info.st_mode & 0o777 == 0o600,
+              info.st_size <= 66 else { return nil }
+        var buffer = [UInt8](repeating: 0, count: 80)
+        let n = read(fd, &buffer, buffer.count)
+        guard n > 0 else { return nil }
+        var text = String(decoding: buffer[0..<n], as: UTF8.self)
+        if text.hasSuffix("\n") { text.removeLast() }
+        return text.range(of: "^[0-9a-f]{64}$", options: .regularExpression) != nil ? text : nil
+    }
+
+    /// Whether a request carries the right token, sent straight to this Mac. Anything missing or odd is a no.
+    public static func admitsToken(headers: [String: String], file: URL) -> Bool {
+        guard let sent = headers[tokenHeader], !sent.isEmpty, sent.count == 64 else { return false }
+        guard !proxyHeaders.contains(where: { headers[$0] != nil }) else { return false }
+        guard let expected = readToken(file) else { return false }
+        return SessionAccess.constantTimeEqual(sent, expected)
+    }
+
     public struct Player: Equatable, Sendable {
         public let name: String
         /// Lowercase and hyphenated.
