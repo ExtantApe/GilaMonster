@@ -286,6 +286,14 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
                 }
             }
             // The dialogs too, which otherwise only appear after a click.
+            // The quit question needs no server (D215).
+            let quitDialogs: [(String, AnyView)] = [
+                    ("quit-during-backup", AnyView(QuitDuringBackupView(state: QuitDuringBackupState(reason: .restart, progress: [
+                        BackupProgress(server: "Made-up Server", written: 12_300_000_000, expected: 47_000_000_000, started: Date().addingTimeInterval(-600))]), choose: { _ in }))),
+                    ("quit-during-backup-waiting", AnyView(QuitDuringBackupView(state: { let s = QuitDuringBackupState(reason: .user, progress: [
+                        BackupProgress(server: "Made-up Server", written: 40_000_000_000, expected: 47_000_000_000, started: Date().addingTimeInterval(-1800))]); s.waiting = true; return s }(), choose: { _ in })))
+            ]
+            var serverDialogs: [(String, AnyView)] = []
             if let server = model.servers.first(where: { !$0.isLab }) {
                 let build = PackVersion(file: "new.zip", version: "2.0", sha1: "abc", added: Date(), size: 1000, format: 75, description: "", fileCount: 3, imageCount: 1)
                 let pack = LibraryPack(id: "zig-zag", title: "Zig Zag", license: PackLicense(id: "LicenseRef-All-Rights-Reserved"), authors: ["Jamizzle"], versions: [build])
@@ -295,7 +303,7 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
                 changes.hidden = [.init(path: "assets/minecraft/items/bricks.json", detail: "zig-zag changed, but tardis-resource-pack still wins")]
                 changes.lostPicks = ["assets/minecraft/textures/block/old.png"]
                 let recipe = ResourcePacks.loadRecipe(ResourcePacks.recipeNames().first ?? "combined")
-                let dialogs: [(String, AnyView)] = [
+                serverDialogs = [
                     ("settings", AnyView(SettingsView(model: model))),
                     ("lab-setup", AnyView(LabSetupSheet(model: model, then: {}))),
                     ("share", AnyView(ShareSheet(recipe: recipe, history: []))),
@@ -307,7 +315,8 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
                     ("add-plugin", AnyView(AddPluginSheet(server: server))),
                     ("welcome", AnyView(WelcomeView(model: model).frame(width: 1000, height: 700))),
                 ]
-                for (name, view) in dialogs {
+            }
+            for (name, view) in quitDialogs + serverDialogs {
                     let host = NSHostingView(rootView: view.tint(Juice.pulp).background(Juice.background))
                     if ProcessInfo.processInfo.environment["LEAFJUICE_SNAPSHOT_LIGHT"] != nil { host.appearance = NSAppearance(named: .aqua) }
                     let size = host.fittingSize
@@ -323,7 +332,6 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
                     }
                     window.orderOut(nil)
                     windows.append(window)
-                }
             }
             exit(0)
         }
@@ -332,6 +340,9 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
 
     /// Set when macOS says it's about to power off, so the quit that follows doesn't wait for a click (K650).
     static var poweringOff = false
+
+    /// Set once the backup question has been answered with Wait or Cancel, so the rest of that quit doesn't ask again.
+    static var quitApproved = false
 
     /// Quitting is logged to the system log under the app's own bundle id, to look back on after a shutdown.
     static let quitLog = Logger(subsystem: Bundle.main.bundleIdentifier ?? "LeafJuice", category: "quit")
@@ -357,6 +368,24 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
     @MainActor @objc func handleQuit(_ event: NSAppleEventDescriptor, withReplyEvent reply: NSAppleEventDescriptor) {
         let reason = Self.reason(of: event)
         Self.pendingQuitReason = reason
+        // A backup running at a shutdown, restart or log out: ask first (D215). macOS waits while the request is held.
+        if reason.unattended, Backups.writing, !Self.quitApproved {
+            Self.quitLog.notice("\(reason.words, privacy: .public) during a backup: asking first")
+            let held = NSAppleEventManager.shared().suspendCurrentAppleEvent()
+            QuitDuringBackup.ask(reason) { [weak self] choice in
+                if choice == .keepUsing {
+                    // Tells macOS the app declined, so the shutdown, restart or log out stops here.
+                    held.map { NSAppleEventManager.shared().replyAppleEvent(forSuspensionID: $0) }?
+                        .setParam(NSAppleEventDescriptor(int32: Int32(userCanceledErr)), forKeyword: keyErrorNumber)
+                    if let held { NSAppleEventManager.shared().resume(withSuspensionID: held) }
+                    return
+                }
+                Self.quitApproved = true
+                if let held { NSAppleEventManager.shared().resume(withSuspensionID: held) }
+                self?.handleQuit(event, withReplyEvent: reply)
+            }
+            return
+        }
         guard reason.unattended, let model = Self.model, model.anyLive else { NSApp.terminate(nil); return }
         Self.quitLog.notice("\(reason.words, privacy: .public): stopping servers with a save, without asking")
         for server in model.servers where server.state.isLive {
@@ -376,6 +405,18 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
     /// A running server must get the chance to save before the app goes away.
     @MainActor
     func applicationShouldTerminate(_ sender: NSApplication) -> NSApplication.TerminateReply {
+        // A backup is running: ask first, with its progress (D215). Wait and Cancel both mean "quit", servers included.
+        if Backups.writing, !Self.quitApproved {
+            QuitDuringBackup.ask(Self.quitReason()) { choice in
+                guard choice != .keepUsing else { sender.reply(toApplicationShouldTerminate: false); return }
+                Self.quitApproved = true
+                Task { @MainActor in
+                    if let model = Self.model, model.anyLive { await model.stopAll() }
+                    sender.reply(toApplicationShouldTerminate: true)
+                }
+            }
+            return .terminateLater
+        }
         guard let model = Self.model, model.anyLive else {
             // A backup can run with every server stopped. Quitting mid-way used to leave its partial file (D213).
             Backups.cancelInFlight()
