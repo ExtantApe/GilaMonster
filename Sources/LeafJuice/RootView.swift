@@ -271,14 +271,29 @@ struct Sidebar: View {
         }
     }
 
+    /// A state icon that keeps its colour in a menu. Menus draw plain symbols in one colour, so this one is drawn
+    /// coloured and marked as not a template.
+    static func menuIcon(_ state: ServerState) -> NSImage {
+        let config = NSImage.SymbolConfiguration(pointSize: 13, weight: .medium)
+            .applying(NSImage.SymbolConfiguration(paletteColors: [NSColor(state.tone.color)]))
+        let image = NSImage(systemSymbolName: state.icon, accessibilityDescription: state.title)?.withSymbolConfiguration(config) ?? NSImage()
+        image.isTemplate = false
+        return image
+    }
+
     private var switcher: some View {
         Menu {
+            // Each server with its state before choosing it (owner, 2026-11-15): the state's own icon in its colour, and
+            // its name in words, so it doesn't rest on colour alone. The current one keeps the menu's checkmark.
             ForEach(model.listed) { other in
-                Button {
-                    model.selectedID = other.id
-                } label: {
-                    if other.id == server.id { Label(other.profile.name, systemImage: "checkmark") } else if other.isLab { Label(other.profile.name, systemImage: "flask") } else { Text(other.profile.name) }
+                Toggle(isOn: Binding(get: { other.id == server.id }, set: { if $0 { model.selectedID = other.id } })) {
+                    Label {
+                        Text("\(other.profile.name)\(other.isLab ? " (Lab)" : "") · \(other.state.title)")
+                    } icon: {
+                        Image(nsImage: Self.menuIcon(other.state))
+                    }
                 }
+                .accessibilityLabel("\(other.profile.name)\(other.isLab ? ", the Lab" : ""), \(other.state.title)")
             }
             Divider()
             Button("Add Server…") { model.showAddServer = true }
