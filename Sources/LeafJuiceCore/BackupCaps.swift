@@ -188,3 +188,40 @@ public enum BackupCaps {
         return removed
     }
 }
+
+/// How far a running backup has got, for the quit question (D215).
+public struct BackupProgress: Equatable, Sendable {
+    public var server: String
+    public var written: Int64
+    public var expected: Int64
+    public var started: Date
+    public init(server: String, written: Int64, expected: Int64, started: Date) {
+        self.server = server; self.written = written; self.expected = expected; self.started = started
+    }
+
+    /// 0...1, or nil when there's nothing to compare with. Held under 99% until it's done, since sizes are a guess.
+    public var fraction: Double? {
+        guard expected > 0 else { return nil }
+        return min(0.99, Double(written) / Double(expected))
+    }
+
+    /// Seconds left at the speed so far. Nil in the first ten seconds, with nothing to go by, or once past the guess.
+    public func secondsLeft(now: Date = Date()) -> Double? {
+        let elapsed = now.timeIntervalSince(started)
+        guard expected > 0, elapsed >= 10, written > 0, written < expected else { return nil }
+        return Double(expected - written) / (Double(written) / elapsed)
+    }
+
+    /// "Made-up Server: 12.3 GB of about 47 GB, about 9 minutes left."
+    public func words(now: Date = Date()) -> String {
+        var out = "\(server): \(Format.bytes(written))"
+        if expected > 0 { out += " of about \(Format.bytes(expected))" }
+        if let left = secondsLeft(now: now) {
+            let minutes = Int((left / 60).rounded(.up))
+            out += minutes <= 1 ? ", under a minute left" : ", about \(minutes) minutes left"
+        } else if expected > 0, written >= expected {
+            out += ", nearly done"
+        }
+        return out + "."
+    }
+}
