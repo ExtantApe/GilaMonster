@@ -153,6 +153,7 @@ if CommandLine.arguments.contains("--connections") {
     quitReasonChecks()
     await sessionAccessChecks()
     await sessionActionChecks()
+    await launchStartChecks()
     await smartBackupChecks()
     await backupCapChecks()
     inviteTicketChecks()
@@ -4759,6 +4760,7 @@ func makePack(_ name: String, _ files: [String: String], inside: String? = nil) 
     quitReasonChecks()
     await sessionAccessChecks()
     await sessionActionChecks()
+    await launchStartChecks()
     await smartBackupChecks()
     await backupCapChecks()
     inviteTicketChecks()
@@ -6105,7 +6107,7 @@ exit(failures.isEmpty ? 0 : 1)
         try EULA.accept(c.paths)
         try await c.installSoftware(try await SoftwareCatalog.latestBuild(.paper, mc: realMC)!)
         c.profile.lastPluginCheck = Date(); c.profile.software.lastCheck = Date()
-        c.profile.launch.startWithApp = true
+        c.profile.launch.startWhenAppOpens = true
         c.profile.backup.enabled = false
         c.profile.backup.autoDrill = false
         try JSONStore.save([root.path], to: AppPaths.registry)

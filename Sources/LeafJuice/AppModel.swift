@@ -108,7 +108,9 @@ final class AppModel {
         if let found = lab.server, !opened.contains(where: { $0.id == found.id }) { opened.append(found) }
         servers = opened
         selectedID = UserDefaults.standard.string(forKey: "selectedServer").flatMap(UUID.init) ?? servers.first?.id
-        for server in servers where server.profile.launch.startWithApp && !AdvisorTrial.isOn {
+        // Only servers with "Start when LeafJuice opens" on, which is off by default (owner, 2026-11-16).
+        for server in LaunchStart.servers(servers, advisorTrial: AdvisorTrial.isOn,
+                                          snapshot: ProcessInfo.processInfo.environment["LEAFJUICE_SNAPSHOT"] != nil) {
             Task { await server.start() }
         }
         // Its own switch, off until someone turns it on. A snapshot only draws screens.

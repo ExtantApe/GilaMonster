@@ -87,7 +87,10 @@ public struct LaunchConfig: Codable, Equatable, Sendable {
     public var noGUI = true
     public var restartOnCrash = true
     public var keepAwake = true
-    public var startWithApp = false
+    /// "Start when LeafJuice opens". Off by default, and off for every server until the owner turns it on for that
+    /// one (owner, 2026-11-16). Saved as `startWhenAppOpens`: the older `startWithApp` key is ignored when read, so a
+    /// server that had it on comes back with it off, and the key drops out at the next save.
+    public var startWhenAppOpens = false
     /// Java's own record of its pauses. Costs almost nothing, and separates memory trouble from plugin trouble.
     public var logGC = true
     public init() {}
@@ -103,6 +106,16 @@ public let fallbackRecommendedFlags = [
     "-XX:G1RSetUpdatingPauseTimePercent=5", "-XX:SurvivorRatio=32", "-XX:+PerfDisableSharedMem",
     "-XX:MaxTenuringThreshold=1", "-Dusing.aikars.flags=https://mcflags.emc.gs", "-Daikars.new.flags=true",
 ]
+
+/// What LeafJuice starts as it opens. Nothing is restored from the last run: a server that was running at quit stays
+/// stopped. Only a server with "Start when LeafJuice opens" on starts, and never the Lab, the Advisor trial or a
+/// snapshot (owner, 2026-11-16).
+public enum LaunchStart {
+    @MainActor public static func servers(_ all: [ServerController], advisorTrial: Bool, snapshot: Bool) -> [ServerController] {
+        guard !advisorTrial, !snapshot else { return [] }
+        return all.filter { $0.profile.launch.startWhenAppOpens && !$0.isLab }
+    }
+}
 
 public enum LaunchCommand {
     public static func jvmArguments(_ config: LaunchConfig, software: SoftwareState) -> [String] {

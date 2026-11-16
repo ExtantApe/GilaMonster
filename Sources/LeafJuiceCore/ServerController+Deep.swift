@@ -204,7 +204,7 @@ extension ServerController {
         p.backup.destination = copyPaths.meta.appendingPathComponent("backups").path
         p.restart.enabled = false
         p.launch.restartOnCrash = false
-        p.launch.startWithApp = false
+        p.launch.startWhenAppOpens = false
         p.launch.keepAwake = false
         p.launch.logGC = false
         p.launch.minMemoryMB = min(p.launch.minMemoryMB, 1024)

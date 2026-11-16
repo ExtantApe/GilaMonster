@@ -163,7 +163,8 @@ struct LaunchPage: View {
             Toggle("Restart automatically after a crash", isOn: $server.profile.launch.restartOnCrash)
             Hint("Pauses after 3 crashes in 10 minutes rather than looping.")
             Toggle("Keep this Mac awake while the server runs", isOn: $server.profile.launch.keepAwake)
-            Toggle("Start this server when LeafJuice opens", isOn: $server.profile.launch.startWithApp)
+            Toggle("Start when LeafJuice opens", isOn: $server.profile.launch.startWhenAppOpens)
+            Hint("Off unless you turn it on. A server that was running when LeafJuice quit stays stopped until you start it.")
             Toggle("Keep a log of Java's pauses", isOn: $server.profile.launch.logGC)
             Hint("Costs almost nothing, and shows on the History page whether stutters come from memory.")
             Toggle("Read players from the management server", isOn: Binding(

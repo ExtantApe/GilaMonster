@@ -18,6 +18,8 @@ Not affiliated with Mojang or Microsoft.
 - **Runs your server**: start, stop, a real console with history, CPU and memory, automatic restart after a
   crash (with a limit, so it can't loop), and keeps your Mac awake while running. Quitting asks first. When the Mac
   shuts down, restarts or logs out, it doesn't ask: it stops every server with a save and lets the Mac carry on.
+  Opening LeafJuice starts nothing, even a server that was running when it quit, unless that server's **Start when
+  LeafJuice opens** box (Launch page) is on. It's off for every server until you turn it on.
 - **Keeps servers together**: on first launch it offers to create `~/Minecraft`, or to use another or an existing
   folder (changeable in Settings). Add Server lists what's there, and new servers are created there.
 - **Uses your existing server**: pick one from the list, or point it at a folder. It detects the software, version, and the memory and
