@@ -1682,7 +1682,9 @@ public final class ServerController: Identifiable {
             }
             capWatch = BackupCaps.watch(chosen.folders, cap: chosen.cap)
         }
-        var record = try await Backups.create(profile, root: paths.root, trigger: trigger, scope: scope, into: into, alsoStopIf: capWatch)
+        // For progress: the last backup of this kind, or half the files' size when there's none (worlds compress about that much).
+        let expectedSize = everything.filter { $0.scope == effectiveScope }.max(by: BackupCaps.older)?.size ?? sourceBytes / 2
+        var record = try await Backups.create(profile, root: paths.root, trigger: trigger, scope: scope, into: into, alsoStopIf: capWatch, expected: expectedSize)
         record.location = (into ?? Backups.destination(profile)).path
         profile.backup.lastRun = record.date
         if Self.routineTriggers.contains(trigger) { profile.backup.playedSinceBackup = false }

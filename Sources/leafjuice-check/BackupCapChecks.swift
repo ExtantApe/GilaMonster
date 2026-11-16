@@ -77,7 +77,7 @@ import Foundation
     let sleeper = Process(); sleeper.executableURL = URL(fileURLWithPath: "/bin/sleep"); sleeper.arguments = ["30"]
     try? sleeper.run()
     let job = UUID()
-    Backups.inFlight.with { $0[job] = (sleeper, quitting) }
+    Backups.inFlight.with { $0[job] = Backups.Job(process: sleeper, partial: quitting) }
     check(Backups.writing, "a backup in progress is known")
     let cancelled = Backups.cancelInFlight(wait: 3)
     check(!sleeper.isRunning && !FileOps.exists(quitting) && cancelled == [quitting] && !Backups.writing, "Quit stops it and removes its partial file")
@@ -99,6 +99,29 @@ import Foundation
         return ["Macintosh HD"]
     }
     equal(unplugged, "Not connected.", "an unplugged drive is still just not connected")
+
+    section("Quitting during a backup: progress (D215)")
+    let t0 = Date()
+    let half = BackupProgress(server: "Made-up", written: 20 * GB, expected: 40 * GB, started: t0.addingTimeInterval(-600))
+    equal(half.fraction, 0.5, "progress is what's written over the expected size")
+    equal(half.secondsLeft(now: t0).map { Int($0) }, 600, "time left is at the speed so far: half done in ten minutes, ten to go")
+    check(half.words(now: t0) == "Made-up: 20 GB of about 40 GB, about 10 minutes left.", "and it's said in words: \(half.words(now: t0))")
+    let early = BackupProgress(server: "Made-up", written: 1 * GB, expected: 40 * GB, started: t0.addingTimeInterval(-5))
+    check(early.secondsLeft(now: t0) == nil && !early.words(now: t0).contains("left"), "no time left is guessed in the first ten seconds")
+    let over = BackupProgress(server: "Made-up", written: 45 * GB, expected: 40 * GB, started: t0.addingTimeInterval(-900))
+    check(over.fraction == 0.99 && over.words(now: t0).contains("nearly done"), "past the guess, it holds at 99% and says nearly done, never 100% before it is")
+    let unknown = BackupProgress(server: "Made-up", written: 3 * GB, expected: 0, started: t0.addingTimeInterval(-60))
+    check(unknown.fraction == nil && unknown.secondsLeft(now: t0) == nil, "with nothing to go by, no progress or time is made up")
+    let runningPartial = folder("quit-progress").appendingPathComponent("4.partial")
+    bytes(2048, runningPartial)
+    let runningJob = UUID()
+    Backups.inFlight.with { $0[runningJob] = Backups.Job(process: nil, partial: runningPartial, server: "Made-up", started: t0, expected: 4096) }
+    let seen = Backups.running()
+    check(seen.count == 1 && seen[0].written == 2048 && seen[0].fraction == 0.5, "a running backup's progress is read from its growing partial file")
+    let other = folder("quit-progress").appendingPathComponent("older-backup.tar.gz")
+    bytes(10, other)
+    Backups.cancelInFlight(wait: 1)
+    check(!FileOps.exists(runningPartial) && FileOps.exists(other), "Cancel and quit deletes only the running backup's unfinished file")
 
     section("Backup caps: a real made-up server")
     let root = folder("cap-server")

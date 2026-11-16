@@ -136,10 +136,25 @@ public enum Backups {
     // MARK: Backups being written
 
     /// Each tar writing a backup now, and its partial file, so Quit can stop it and leave nothing behind (D213).
+    public struct Job: Sendable {
+        var process: Process?
+        public var partial: URL
+        public var server: String = ""
+        public var started: Date = Date()
+        /// About how big the finished backup will be, for progress. Zero when there's nothing to go by.
+        public var expected: Int64 = 0
+    }
     final class InFlight: @unchecked Sendable {
         let lock = NSLock()
-        var jobs: [UUID: (process: Process?, partial: URL)] = [:]
-        func with<T>(_ body: (inout [UUID: (process: Process?, partial: URL)]) -> T) -> T { lock.lock(); defer { lock.unlock() }; return body(&jobs) }
+        var jobs: [UUID: Job] = [:]
+        func with<T>(_ body: (inout [UUID: Job]) -> T) -> T { lock.lock(); defer { lock.unlock() }; return body(&jobs) }
+    }
+
+    /// The backups being written now, with how far each has got, for the quit question (D215).
+    public static func running() -> [BackupProgress] {
+        inFlight.with { Array($0.values) }.map {
+            BackupProgress(server: $0.server, written: FileOps.size($0.partial), expected: $0.expected, started: $0.started)
+        }.sorted { $0.started < $1.started }
     }
     static let inFlight = InFlight()
 
@@ -150,7 +165,7 @@ public enum Backups {
     /// and a partial left behind takes space (one was 47 GB, 2026-11-15). Waits up to `wait` seconds for tar to stop.
     @discardableResult
     public static func cancelInFlight(wait: TimeInterval = 5) -> [URL] {
-        let jobs = inFlight.with { j -> [(process: Process?, partial: URL)] in let all = Array(j.values); j = [:]; return all }
+        let jobs = inFlight.with { j -> [Job] in let all = Array(j.values); j = [:]; return all }
         for job in jobs { job.process?.terminate() }
         let deadline = Date().addingTimeInterval(wait)
         for job in jobs {
@@ -162,7 +177,7 @@ public enum Backups {
     }
 
     public static func create(_ profile: ServerProfile, root: URL, trigger: String, scope: BackupScope? = nil, into folder: URL? = nil,
-                              alsoStopIf: (@Sendable () -> String?)? = nil) async throws -> BackupRecord {
+                              alsoStopIf: (@Sendable () -> String?)? = nil, expected: Int64 = 0) async throws -> BackupRecord {
         let scope = scope ?? profile.backup.scope
         let dest = folder ?? destination(profile)
         let items = withoutDestination(items(root, scope: scope), root: root, destination: dest)
@@ -191,7 +206,7 @@ public enum Backups {
         let archive = dest.appendingPathComponent(base + ".tar.gz")
         let partial = dest.appendingPathComponent(base + ".partial")
         let job = UUID()
-        inFlight.with { $0[job] = (nil, partial) }
+        inFlight.with { $0[job] = Job(process: nil, partial: partial, server: profile.name, started: Date(), expected: expected) }
         defer {
             inFlight.with { $0[job] = nil }
             try? FileManager.default.removeItem(at: partial)
@@ -205,7 +220,7 @@ public enum Backups {
         let diskWatch = DiskGuard.watch(dest)
         let stopIf: @Sendable () -> String? = { diskWatch() ?? alsoStopIf?() }
         let result = try await Tool.run("/usr/bin/tar", args, stopIf: stopIf, onStart: { process in
-            inFlight.with { if $0[job] != nil { $0[job] = (process, partial) } }
+            inFlight.with { $0[job]?.process = process }
         })
         if let stopped = result.stoppedBecause { throw LeafError("The backup was stopped part way and its partial file removed. \(stopped)") }
         var warning: String?
