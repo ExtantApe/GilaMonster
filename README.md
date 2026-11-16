@@ -426,6 +426,11 @@ cd LeafJuice && scripts/build-app.sh
 
 That needs only Apple's Command Line Tools (`xcode-select --install`), and the app appears in `dist/`.
 
+Each build gets an ad hoc signature, so macOS treats every rebuild as a new app and asks again for Keychain access
+and notifications. If you rebuild often, make a self-signed code-signing certificate named `LeafJuice Local Signing`
+in your login keychain. The script then signs with it, rebuilds keep one identity, and macOS asks only once. Release
+builds (`--dmg`) and CI builds always stay ad hoc.
+
 ## Good to know
 
 - **Accepting the EULA is yours to do.** A new server asks you to read Minecraft's EULA and accept it yourself.

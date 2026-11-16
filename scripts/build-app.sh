@@ -72,9 +72,19 @@ cat > "$app/Contents/Info.plist" <<PLIST
 </plist>
 PLIST
 
-# Ad-hoc: required to run on Apple silicon. It isn't an Apple Developer signature, so macOS still
-# asks people to approve the first launch. The README explains how.
-codesign --force --deep --sign - "$app"
+# Local builds sign with the owner's own self-signed "LeafJuice Local Signing" certificate when it's in
+# the login keychain, so every rebuild keeps one identity and macOS doesn't ask for Keychain access or
+# notification permission again after each swap. Without it, and always for release builds (--dmg, or
+# in CI), the signature is ad hoc: required to run on Apple silicon, but not an Apple Developer signature,
+# so macOS still asks people to approve the first launch. The README explains how.
+identity="LeafJuice Local Signing"
+if ! $dmg && [ -z "${CI:-}" ] && security find-identity -p codesigning 2>/dev/null | grep -q "\"$identity\""; then
+    codesign --force --deep --sign "$identity" "$app"
+    echo "Signed with $identity"
+else
+    codesign --force --deep --sign - "$app"
+    echo "Signed ad hoc"
+fi
 
 if $dmg; then
     ( cd dist && rm -f LeafJuice-*.zip LeafJuice-*.dmg && ditto -c -k --keepParent "LeafJuice.app" "LeafJuice-$version.zip" )
