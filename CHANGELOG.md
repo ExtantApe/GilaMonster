@@ -2,6 +2,9 @@
 
 ## Unreleased
 
+- **A backup cap for each drive** (D213), set on the Backups page under Space on each drive. Every server's LeafJuice backups on that drive count, including one still being written. Before a backup would go over, this server's oldest backups there are removed first, starting with the ones its keeping rules would drop anyway. Pinned backups, the newest backup, the server's first backup and other servers' backups are never removed. If that isn't enough, the backup goes to the next storage in your list, or is skipped and you're told, so the drive never fills past the cap. You're warned at 85%. While a backup is written, it's stopped and its partial file removed if the drive's backups reach the cap.
+- **No more half-written backups after a quit.** Quitting during a backup used to leave its `.partial` file, which could be tens of gigabytes. Now every way of quitting stops the backup and removes it, and any leftover from a crash is cleared when the server opens or before its next backup. Tested: 37 new checks, including a made-up server whose oldest backup is removed to fit under a cap, a backup skipped when it can't fit, and a stand-in for tar stopped with its partial file removed. Not tested: quitting the real app in the middle of a real backup.
+
 - **The shutdown save now works in release builds.** The quit handler and the power-off watcher from the shutdown change had landed inside a debug-only block, so the app built by `scripts/build-app.sh` didn't have them. Tested: a release build on a throwaway server stopped it with a world save and exited about 4 seconds after a simulated shutdown, without asking.
 - **Shutting down the Mac** no longer gets stuck on "Stop running servers and quit?". At a shutdown, restart or log out,
   LeafJuice stops every server with a save without asking, then quits so the Mac can carry on.

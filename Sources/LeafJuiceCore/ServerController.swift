@@ -168,6 +168,8 @@ public final class ServerController: Identifiable {
         }
         // The Lab is disposable, so it skips restore points, schedules and analytics.
         controller.isTrialCopy = LabFiles.isLab(root: root, profile: profile)
+        // A backup cut short by a quit or crash leaves its partial file; clear it before anything counts space.
+        controller.sweepLeftoverPartials()
         return controller
     }
 
@@ -783,6 +785,12 @@ public final class ServerController: Identifiable {
     /// For a test copy, which watches for updates from the real server's source.
     func adoptRecord(_ record: PluginRecord, key: String) {
         records[key] = record
+    }
+
+    func dropIssue(_ id: String) {
+        analyzer.remove(id: id)
+        issues = analyzer.sorted
+        persistIssues()
     }
 
     public func clearIssues() {
@@ -1614,22 +1622,56 @@ public final class ServerController: Identifiable {
         }
         defer { if wasRunning { self.process?.send("save-on") } }
         var into: URL?
+        // Drive caps (D213): each place is checked against its drive's cap, after what could be removed to make room.
+        sweepLeftoverPartials()
+        let effectiveScope = scope ?? profile.backup.scope
+        let sourceBytes = Backups.items(paths.root, scope: effectiveScope).reduce(Int64(0)) { $0 + FileOps.directorySize(paths.root.appendingPathComponent($1).resolvingSymlinksInPath()) }
+        let everything = Backups.listAll(profile)
+        let estimate = BackupCaps.estimate(records: everything, scope: effectiveScope, sourceBytes: sourceBytes)
+        var capPlans: [String: (plan: BackupCaps.Plan, cap: DriveCap, folders: [URL])] = [:]
+        func capChecked(_ t: SmartBackup.Target) -> SmartBackup.Target {
+            guard t.usable else { return t }
+            let folder = URL(fileURLWithPath: t.path, isDirectory: true)
+            guard let ctx = capContext(folder, records: everything) else { return t }
+            let plan = BackupCaps.plan(used: BackupCaps.used(ctx.folders), cap: ctx.cap, estimate: estimate, onDrive: ctx.onDrive,
+                                       all: everything, tierDrops: tierDrops(everything))
+            guard plan.fits else { return SmartBackup.Target(path: t.path, usable: false, reason: plan.reason) }
+            capPlans[t.path] = (plan, ctx.cap, ctx.folders)
+            return t
+        }
         if Self.routineTriggers.contains(trigger), !profile.backup.smart.targets.isEmpty {
-            let effectiveScope = scope ?? profile.backup.scope
-            let needed = Backups.items(paths.root, scope: effectiveScope).reduce(Int64(0)) { $0 + FileOps.directorySize(paths.root.appendingPathComponent($1).resolvingSymlinksInPath()) }
+            let needed = sourceBytes
             let folders = profile.backup.smart.targets.map { Backups.targetFolder($0, for: profile) }
-            let checked = SmartBackup.check(folders.map(\.path), needed: needed)
-            let own = SmartBackup.check([Backups.destination(profile).path], needed: needed)[0]
+            let checked = SmartBackup.check(folders.map(\.path), needed: needed).map(capChecked)
+            let own = capChecked(SmartBackup.check([Backups.destination(profile).path], needed: needed)[0])
             guard let chosen = SmartBackup.choose(checked, fallback: own) else {
-                throw LeafError("No storage has room for this backup. " + (checked + [own]).map { "\($0.path): \($0.reason)" }.joined(separator: " "))
+                let why = (checked + [own]).map { "\($0.path): \($0.reason)" }.joined(separator: " ")
+                if !capPlans.isEmpty || (checked + [own]).contains(where: { $0.reason.contains(" cap ") }) { capSkipped(why) }
+                throw LeafError("No storage has room for this backup. " + why)
             }
             let skipped = checked.prefix { $0.path != chosen.path }.map { "\($0.path): \($0.reason)" }
             lastBackupWhere = chosen.path + (skipped.isEmpty ? "" : ". Passed over: " + skipped.joined(separator: " "))
             if !skipped.isEmpty { appendWrapper("Backing up to \(chosen.path). Passed over: \(skipped.joined(separator: " "))", level: .info) }
             into = URL(fileURLWithPath: chosen.path, isDirectory: true)
             if chosen.path != Backups.destination(profile).path { try Backups.claim(into!, for: profile.id) }
+        } else {
+            let own = capChecked(SmartBackup.Target(path: Backups.destination(profile).path, usable: true, reason: "Ready."))
+            if !own.usable {
+                capSkipped(own.reason)
+                throw LeafError("This backup was skipped, so the drive stays under its cap. \(own.reason)")
+            }
         }
-        var record = try await Backups.create(profile, root: paths.root, trigger: trigger, scope: scope, into: into)
+        let writeTo = into ?? Backups.destination(profile)
+        var capWatch: (@Sendable () -> String?)?
+        if let chosen = capPlans[writeTo.path] {
+            for doomed in chosen.plan.remove { try? Backups.delete(doomed, profile: profile) }
+            if !chosen.plan.remove.isEmpty {
+                appendWrapper(chosen.plan.reason, level: .info)
+                recordEvent(.backup, "Made room under the backup cap", detail: chosen.plan.reason)
+            }
+            capWatch = BackupCaps.watch(chosen.folders, cap: chosen.cap)
+        }
+        var record = try await Backups.create(profile, root: paths.root, trigger: trigger, scope: scope, into: into, alsoStopIf: capWatch)
         record.location = (into ?? Backups.destination(profile)).path
         profile.backup.lastRun = record.date
         if Self.routineTriggers.contains(trigger) { profile.backup.playedSinceBackup = false }
@@ -1642,9 +1684,99 @@ public final class ServerController: Identifiable {
         }
         await copyToMirror(record)
         refreshBackups()
+        dropIssue("wrapper:backup-cap-skipped")
+        checkCapWarning(writeTo)
         appendWrapper("Backup finished: \(Format.bytes(record.size)).", level: .info)
         recordEvent(.backup, "Backed up", detail: "\(Format.bytes(record.size)), \(trigger)")
         return record
+    }
+
+    // MARK: Drive caps (D213)
+
+    /// Every folder this server keeps backups in.
+    public var backupFolders: [URL] {
+        var out = [Backups.destination(profile)] + profile.backup.smart.targets.map { Backups.targetFolder($0, for: profile) }
+        if let m = profile.backup.mirror, !m.isEmpty { out.append(URL(fileURLWithPath: m, isDirectory: true)) }
+        return out
+    }
+
+    /// The cap for the drive holding `folder`, this server's folders on that drive, and its backups there.
+    func capContext(_ folder: URL, records: [BackupRecord]) -> (cap: DriveCap, folders: [URL], onDrive: [BackupRecord])? {
+        guard let drive = BackupCaps.driveID(for: folder), let cap = BackupCaps.all()[drive.id] else { return nil }
+        var sameDrive: [String: Bool] = [:]
+        func onDrive(_ path: String) -> Bool {
+            if let known = sameDrive[path] { return known }
+            let yes = BackupCaps.driveID(for: URL(fileURLWithPath: path, isDirectory: true))?.id == drive.id
+            sameDrive[path] = yes
+            return yes
+        }
+        let folders = ([folder] + backupFolders).filter { onDrive($0.path) }
+        let here = records.filter { onDrive($0.location ?? Backups.destination(profile).path) }
+        return (cap, folders, here)
+    }
+
+    /// The backups this server's keeping rules would drop anyway; a cap removes these first.
+    func tierDrops(_ records: [BackupRecord]) -> Set<String> {
+        let drops = profile.backup.smart.tiered
+            ? SmartBackup.tieredPrunable(records, config: profile.backup.smart)
+            : Backups.prunable(records, keepLast: max(1, profile.backup.keepLast), keepDays: profile.backup.keepDays)
+        return Set(drops.map(\.fileName))
+    }
+
+    /// One drive this server keeps backups on, for the Backups page.
+    public struct DriveUse: Identifiable, Sendable {
+        public var id: String
+        public var name: String
+        /// A folder on that drive, to set its cap by.
+        public var folder: URL
+        public var used: Int64
+        public var cap: Int64?
+        public var warning: String?
+    }
+
+    /// Each drive this server's backups use (connected ones only), with what LeafJuice's backups take there and its cap.
+    public func driveUse() -> [DriveUse] {
+        var seen = Set<String>()
+        var out: [DriveUse] = []
+        let caps = BackupCaps.all()
+        for folder in backupFolders {
+            guard FileOps.exists(folder) || FileOps.exists(folder.deletingLastPathComponent()),
+                  let drive = BackupCaps.driveID(for: folder), seen.insert(drive.id).inserted else { continue }
+            let folders = backupFolders.filter { BackupCaps.driveID(for: $0)?.id == drive.id }
+            let used = BackupCaps.used(folders)
+            let cap = caps[drive.id]
+            out.append(DriveUse(id: drive.id, name: drive.name, folder: folder, used: used, cap: cap?.bytes,
+                                warning: cap.flatMap { BackupCaps.warning(used: used, cap: $0) }))
+        }
+        return out
+    }
+
+    private func checkCapWarning(_ folder: URL) {
+        guard let ctx = capContext(folder, records: backups) else { dropIssue("wrapper:backup-cap-near"); return }
+        guard let text = BackupCaps.warning(used: BackupCaps.used(ctx.folders), cap: ctx.cap) else { dropIssue("wrapper:backup-cap-near"); return }
+        let now = Date()
+        reportIssue(IssueRecord(
+            id: "wrapper:backup-cap-near", ruleID: "wrapper-backup-cap", title: "Backups are near their cap on \(ctx.cap.name)", severity: .warning, category: "Backups",
+            explanation: text, steps: ["Raise the cap on the Backups page if the drive has room to share.", "Or pin the backups you want to keep for sure."],
+            action: IssueAction(page: "backups", label: "Open Backups"), sample: text, firstSeen: now, lastSeen: now))
+    }
+
+    private func capSkipped(_ why: String) {
+        let now = Date()
+        reportIssue(IssueRecord(
+            id: "wrapper:backup-cap-skipped", ruleID: "wrapper-backup-cap", title: "A backup was skipped to stay under a drive's cap", severity: .error, category: "Backups",
+            explanation: "Nothing was removed and nothing was written. \(why)",
+            steps: ["Raise the cap on the Backups page, if the drive has room to share.", "Or unpin or delete older backups you don't need.", "Or add another storage drive on the Backups page."],
+            action: IssueAction(page: "backups", label: "Open Backups"), sample: why, firstSeen: now, lastSeen: now))
+        raiseAlert("A backup was skipped", "It would have gone over a drive's backup cap. \(why)")
+    }
+
+    /// Partial files from a backup or copy cut short by a quit or crash. Only while nothing is being written.
+    public func sweepLeftoverPartials() {
+        guard !Backups.writing else { return }
+        for (name, bytes) in BackupCaps.sweepPartials(backupFolders) {
+            appendWrapper("Removed \(name) (\(Format.bytes(bytes))), left by a backup that was cut short.", level: .info)
+        }
     }
 
     /// A problem here is reported loudly, but never fails the backup itself, which already exists.
