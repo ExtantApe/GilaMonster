@@ -235,6 +235,9 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
 
     func applicationShouldTerminateAfterLastWindowClosed(_ sender: NSApplication) -> Bool { false }
 
+    /// The last stop on every way out: nothing half-written is left behind (D213).
+    func applicationWillTerminate(_ notification: Notification) { Backups.cancelInFlight(wait: 2) }
+
     /// Every build, release included: the quit handler reads why macOS is quitting the app (K650).
     func applicationWillFinishLaunching(_ notification: Notification) {
         NSAppleEventManager.shared().setEventHandler(self, andSelector: #selector(handleQuit(_:withReplyEvent:)),
@@ -360,6 +363,7 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
             server.appendWrapper("\(reason.words), so LeafJuice is stopping this server with a save.", level: .info)
         }
         let held = NSAppleEventManager.shared().suspendCurrentAppleEvent()
+        Backups.cancelInFlight()
         Task { @MainActor in
             await model.stopAll()
             if let held { NSAppleEventManager.shared().resume(withSuspensionID: held) }
@@ -372,7 +376,11 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
     /// A running server must get the chance to save before the app goes away.
     @MainActor
     func applicationShouldTerminate(_ sender: NSApplication) -> NSApplication.TerminateReply {
-        guard let model = Self.model, model.anyLive else { return .terminateNow }
+        guard let model = Self.model, model.anyLive else {
+            // A backup can run with every server stopped. Quitting mid-way used to leave its partial file (D213).
+            Backups.cancelInFlight()
+            return .terminateNow
+        }
         // At a shutdown, restart or log out nobody is there to click, and a waiting box would make macOS cancel the
         // shutdown or force-quit without the save. So every server is stopped with a save, and the Mac carries on.
         var reason = Self.quitReason()
@@ -382,6 +390,7 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
             for server in model.servers where server.state.isLive {
                 server.appendWrapper("\(reason.words), so LeafJuice is stopping this server with a save.", level: .info)
             }
+            Backups.cancelInFlight()
             Task { @MainActor in
                 await model.stopAll()
                 sender.reply(toApplicationShouldTerminate: true)
@@ -394,6 +403,7 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
         alert.addButton(withTitle: "Stop and Quit")
         alert.addButton(withTitle: "Cancel")
         guard alert.runModal() == .alertFirstButtonReturn else { return .terminateCancel }
+        Backups.cancelInFlight()
         Task { @MainActor in
             await model.stopAll()
             sender.reply(toApplicationShouldTerminate: true)

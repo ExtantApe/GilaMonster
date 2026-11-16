@@ -133,7 +133,36 @@ public enum Backups {
         }
     }
 
-    public static func create(_ profile: ServerProfile, root: URL, trigger: String, scope: BackupScope? = nil, into folder: URL? = nil) async throws -> BackupRecord {
+    // MARK: Backups being written
+
+    /// Each tar writing a backup now, and its partial file, so Quit can stop it and leave nothing behind (D213).
+    final class InFlight: @unchecked Sendable {
+        let lock = NSLock()
+        var jobs: [UUID: (process: Process?, partial: URL)] = [:]
+        func with<T>(_ body: (inout [UUID: (process: Process?, partial: URL)]) -> T) -> T { lock.lock(); defer { lock.unlock() }; return body(&jobs) }
+    }
+    static let inFlight = InFlight()
+
+    /// Whether any backup is being written now.
+    public static var writing: Bool { inFlight.with { !$0.isEmpty } }
+
+    /// Stops every backup being written and removes its partial file. For Quit: a backup cut short can't be resumed,
+    /// and a partial left behind takes space (one was 47 GB, 2026-11-15). Waits up to `wait` seconds for tar to stop.
+    @discardableResult
+    public static func cancelInFlight(wait: TimeInterval = 5) -> [URL] {
+        let jobs = inFlight.with { j -> [(process: Process?, partial: URL)] in let all = Array(j.values); j = [:]; return all }
+        for job in jobs { job.process?.terminate() }
+        let deadline = Date().addingTimeInterval(wait)
+        for job in jobs {
+            while job.process?.isRunning == true, Date() < deadline { Thread.sleep(forTimeInterval: 0.1) }
+            if job.process?.isRunning == true { kill(job.process!.processIdentifier, SIGKILL); job.process?.waitUntilExit() }
+            try? FileManager.default.removeItem(at: job.partial)
+        }
+        return jobs.map(\.partial)
+    }
+
+    public static func create(_ profile: ServerProfile, root: URL, trigger: String, scope: BackupScope? = nil, into folder: URL? = nil,
+                              alsoStopIf: (@Sendable () -> String?)? = nil) async throws -> BackupRecord {
         let scope = scope ?? profile.backup.scope
         let dest = folder ?? destination(profile)
         let items = withoutDestination(items(root, scope: scope), root: root, destination: dest)
@@ -161,13 +190,23 @@ public enum Backups {
         }
         let archive = dest.appendingPathComponent(base + ".tar.gz")
         let partial = dest.appendingPathComponent(base + ".partial")
-        defer { try? FileManager.default.removeItem(at: partial) }
+        let job = UUID()
+        inFlight.with { $0[job] = (nil, partial) }
+        defer {
+            inFlight.with { $0[job] = nil }
+            try? FileManager.default.removeItem(at: partial)
+        }
 
         // -H: a linked world folder goes in as its contents, not as a link to somewhere that might be gone later.
         var args = ["-czHf", partial.path, "--exclude", "session.lock", "--exclude", ".DS_Store"]
         args += ["-C", root.path] + items
         // And while it runs: if the disk drops under the in-flight floor anyway, tar stops and the partial file goes.
-        let result = try await Tool.run("/usr/bin/tar", args, stopIf: DiskGuard.watch(dest))
+        // And the drive's backup cap, counting this partial file as it grows (D213).
+        let diskWatch = DiskGuard.watch(dest)
+        let stopIf: @Sendable () -> String? = { diskWatch() ?? alsoStopIf?() }
+        let result = try await Tool.run("/usr/bin/tar", args, stopIf: stopIf, onStart: { process in
+            inFlight.with { if $0[job] != nil { $0[job] = (process, partial) } }
+        })
         if let stopped = result.stoppedBecause { throw LeafError("The backup was stopped part way and its partial file removed. \(stopped)") }
         var warning: String?
         // tar stores a link as a link, so what it points at isn't in the backup. Better said than found out later.

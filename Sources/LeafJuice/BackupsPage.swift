@@ -110,6 +110,8 @@ struct BackupsPage: View {
             Divider()
             targetsSection
             Divider()
+            DriveCapsSection(server: server)
+            Divider()
             mirrorSection
             LabeledContent("Saved to") {
                 HStack {
@@ -300,5 +302,71 @@ private struct BackupRow: View {
         case "before-upgrade": "Restore point before a change"
         default: record.trigger
         }
+    }
+}
+
+/// A cap per drive on what LeafJuice's backups may take there (D213), for drives shared with other things.
+struct DriveCapsSection: View {
+    @Bindable var server: ServerController
+    @State private var drafts: [String: String] = [:]
+    @State private var problem: String?
+    @State private var version = 0
+
+    var body: some View {
+        let drives = { _ = version; return server.driveUse() }()
+        Text("Space on each drive").font(.callout.weight(.semibold)).foregroundStyle(Juice.ink)
+        ForEach(drives) { drive in
+            VStack(alignment: .leading, spacing: 4) {
+                HStack(spacing: 8) {
+                    Text(drive.name).foregroundStyle(Juice.ink)
+                    Text(usage(drive)).foregroundStyle(drive.warning == nil ? Juice.muted : Juice.ink)
+                    Spacer()
+                    TextField("No cap", text: binding(drive))
+                        .frame(width: 70).multilineTextAlignment(.trailing)
+                        .accessibilityLabel("Backup cap for \(drive.name), in gigabytes")
+                        .onSubmit { save(drive) }
+                    Text("GB").foregroundStyle(Juice.muted).accessibilityHidden(true)
+                    Button("Set Cap") { save(drive) }.buttonStyle(.juice)
+                        .accessibilityLabel("Set the backup cap for \(drive.name)")
+                    if drive.cap != nil {
+                        Button("No Cap") { apply(nil, drive) }.buttonStyle(.juice)
+                            .accessibilityLabel("Remove the backup cap for \(drive.name)")
+                    }
+                }
+                if let cap = drive.cap {
+                    ProgressView(value: Double(min(drive.used, cap)), total: Double(cap))
+                        .tint(drive.warning == nil ? Juice.pulp : .orange)
+                        .accessibilityLabel("\(drive.name) backups")
+                        .accessibilityValue(usage(drive))
+                }
+                if let warning = drive.warning { Hint(warning) }
+            }
+        }
+        if let problem { Hint(problem) }
+        Hint("A cap limits what LeafJuice's backups, from every server, may take on a drive you share with other things. Before a backup would go over, this server's oldest backups there are removed first, starting with the ones its keeping rules would drop anyway. Pinned backups and the newest are always kept. If that isn't enough, the backup goes to the next storage, or is skipped and you're told. You're warned at 85%.")
+    }
+
+    private func usage(_ d: ServerController.DriveUse) -> String {
+        d.cap.map { "\(Format.bytes(d.used)) of \(Format.bytes($0)) cap" } ?? "\(Format.bytes(d.used)) of backups, no cap"
+    }
+
+    private func binding(_ d: ServerController.DriveUse) -> Binding<String> {
+        Binding(get: { drafts[d.id] ?? d.cap.map { String($0 / 1_000_000_000) } ?? "" }, set: { drafts[d.id] = $0 })
+    }
+
+    private func save(_ d: ServerController.DriveUse) {
+        let text = (drafts[d.id] ?? "").trimmingCharacters(in: .whitespaces)
+        if text.isEmpty { apply(nil, d); return }
+        guard let gb = Int64(text), gb > 0, gb <= 1_000_000 else { problem = "Type the cap as a whole number of gigabytes, such as 150."; return }
+        apply(gb * 1_000_000_000, d)
+    }
+
+    private func apply(_ bytes: Int64?, _ d: ServerController.DriveUse) {
+        do {
+            try BackupCaps.set(bytes, for: d.folder)
+            problem = nil
+            drafts[d.id] = nil
+            version += 1
+        } catch { problem = error.localizedDescription }
     }
 }

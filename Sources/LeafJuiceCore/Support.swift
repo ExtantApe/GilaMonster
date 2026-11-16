@@ -286,7 +286,8 @@ public enum Tool {
     /// `stopIf` is asked every two seconds while the tool runs; a reason stops it (the disk guard uses this).
     public static func run(_ path: String, _ args: [String], cwd: URL? = nil, lowPriority: Bool = true,
                            maxOutput: Int = 64 << 20, timeout: TimeInterval? = nil,
-                           stopIf: (@Sendable () -> String?)? = nil) async throws -> ToolResult {
+                           stopIf: (@Sendable () -> String?)? = nil,
+                           onStart: (@Sendable (Process) -> Void)? = nil) async throws -> ToolResult {
         try await withCheckedThrowingContinuation { continuation in
             // Real threads, not the shared pool: this blocks while the tool runs, and enough blocked pool
             // threads leave none free to finish the work they're waiting on. Observed hanging with 37 plugins.
@@ -302,6 +303,7 @@ public enum Tool {
                     process.standardError = errPipe
                     process.standardInput = FileHandle.nullDevice
                     try process.run()
+                    onStart?(process)
                     if let timeout {
                         DispatchQueue.global().asyncAfter(deadline: .now() + timeout) { if process.isRunning { process.terminate() } }
                     }
