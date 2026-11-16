@@ -1651,7 +1651,18 @@ public final class ServerController: Identifiable {
             }
             let skipped = checked.prefix { $0.path != chosen.path }.map { "\($0.path): \($0.reason)" }
             lastBackupWhere = chosen.path + (skipped.isEmpty ? "" : ". Passed over: " + skipped.joined(separator: " "))
-            if !skipped.isEmpty { appendWrapper("Backing up to \(chosen.path). Passed over: \(skipped.joined(separator: " "))", level: .info) }
+            if !skipped.isEmpty {
+                appendWrapper("Backing up to \(chosen.path). Passed over: \(skipped.joined(separator: " "))", level: .info)
+                // Kept as an issue so the reason outlasts the app's memory (it was lost once, 2026-11-15).
+                let now = Date()
+                let detail = "This backup went to \(chosen.path) instead. " + skipped.joined(separator: " ")
+                reportIssue(IssueRecord(
+                    id: "wrapper:backup-target-passed-over", ruleID: "wrapper-backup-target", title: "A backup skipped your first storage choice", severity: .warning, category: "Backups",
+                    explanation: detail, steps: ["Check the drive is plugged in.", "If it is, check LeafJuice may use it in System Settings > Privacy & Security > Files and Folders.", "The Backups page shows each storage's state now."],
+                    action: IssueAction(page: "backups", label: "Open Backups"), sample: detail, firstSeen: now, lastSeen: now))
+            } else {
+                dropIssue("wrapper:backup-target-passed-over")
+            }
             into = URL(fileURLWithPath: chosen.path, isDirectory: true)
             if chosen.path != Backups.destination(profile).path { try Backups.claim(into!, for: profile.id) }
         } else {

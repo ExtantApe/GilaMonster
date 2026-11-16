@@ -158,13 +158,15 @@ public enum SmartBackup {
             var isDir: ObjCBool = false
             if !fileManager.fileExists(atPath: path, isDirectory: &isDir) {
                 guard fileManager.fileExists(atPath: parent, isDirectory: &isDir), isDir.boolValue else {
-                    return Target(path: path, usable: false, reason: "Not connected.")
+                    return Target(path: path, usable: false, reason: missingReason(url))
                 }
             } else if !isDir.boolValue {
                 return Target(path: path, usable: false, reason: "Something that isn't a folder is there.")
             }
             let probe = fileManager.fileExists(atPath: path) ? path : parent
-            guard fileManager.isWritableFile(atPath: probe) else { return Target(path: path, usable: false, reason: "Can't be written to.") }
+            guard fileManager.isWritableFile(atPath: probe) else {
+                return Target(path: path, usable: false, reason: "Can't be written to." + (path.hasPrefix("/Volumes/") ? " " + noAccessHelp : ""))
+            }
             let probeURL = URL(fileURLWithPath: probe)
             let room = space(probeURL)
             if let why = DiskGuard.refusal(free: room.free, capacity: room.capacity, needed: needed) {
@@ -172,6 +174,27 @@ public enum SmartBackup {
             }
             return Target(path: path, usable: true, reason: "Ready.")
         }
+    }
+
+    static let noAccessHelp = "If the drive is plugged in, macOS may not have given LeafJuice access to it: open System Settings > Privacy & Security > Files and Folders, find LeafJuice, and turn on Removable Volumes (or Network Volumes)."
+
+    /// Why a folder can't be found: an unplugged drive, or one macOS won't let LeafJuice see. Without access, macOS
+    /// answers as if the folder weren't there, so the nearest folder that does exist is listed to tell them apart.
+    static func missingReason(_ url: URL, list: (String) throws -> [String] = { try FileManager.default.contentsOfDirectory(atPath: $0) }) -> String {
+        var probe = url
+        while probe.pathComponents.count > 1 {
+            probe.deleteLastPathComponent()
+            do {
+                _ = try list(probe.path)
+                // The nearest folder that exists can be read, and the next one down isn't in it: really not there.
+                return probe.path == "/Volumes" ? "Not connected." : "Not connected, or the folder was moved."
+            } catch let error as CocoaError where error.code == .fileReadNoPermission {
+                return "LeafJuice isn't allowed to open \(probe.path). " + noAccessHelp
+            } catch let error as NSError where error.domain == NSPOSIXErrorDomain && (error.code == Int(EPERM) || error.code == Int(EACCES)) {
+                return "LeafJuice isn't allowed to open \(probe.path). " + noAccessHelp
+            } catch { continue }
+        }
+        return "Not connected."
     }
 
     /// The first usable target, then the server's own folder. Nil only when even that can't take it.

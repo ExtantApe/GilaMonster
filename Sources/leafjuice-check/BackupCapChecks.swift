@@ -83,6 +83,23 @@ import Foundation
     check(!sleeper.isRunning && !FileOps.exists(quitting) && cancelled == [quitting] && !Backups.writing, "Quit stops it and removes its partial file")
     if sleeper.isRunning { sleeper.terminate() }
 
+    section("Storage that's passed over says why")
+    let blocked = SmartBackup.missingReason(URL(fileURLWithPath: "/Volumes/MadeUpDrive/LeafJuice-backups/made-up")) { path in
+        if path.hasPrefix("/Volumes/MadeUpDrive") { throw CocoaError(.fileReadNoPermission) }
+        return ["Macintosh HD"]
+    }
+    check(blocked.contains("isn't allowed") && blocked.contains("Removable Volumes"), "a drive macOS won't let LeafJuice open says so, and how to allow it: \(blocked)")
+    let posix = SmartBackup.missingReason(URL(fileURLWithPath: "/Volumes/MadeUpDrive/x/y")) { path in
+        if path.hasPrefix("/Volumes/MadeUpDrive") { throw NSError(domain: NSPOSIXErrorDomain, code: Int(EPERM)) }
+        return []
+    }
+    check(posix.contains("isn't allowed"), "the same when macOS refuses with a plain permission error")
+    let unplugged = SmartBackup.missingReason(URL(fileURLWithPath: "/Volumes/MadeUpDrive/LeafJuice-backups/made-up")) { path in
+        if path.hasPrefix("/Volumes/MadeUpDrive") { throw CocoaError(.fileReadNoSuchFile) }
+        return ["Macintosh HD"]
+    }
+    equal(unplugged, "Not connected.", "an unplugged drive is still just not connected")
+
     section("Backup caps: a real made-up server")
     let root = folder("cap-server")
     write("server-port=25593\nlevel-name=world\n", root.appendingPathComponent("server.properties"))
