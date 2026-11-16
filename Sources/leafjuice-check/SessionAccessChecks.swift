@@ -96,14 +96,18 @@ import Security
     service.servers = { [server] }
     try? SessionAccess.saveSettings(on)
     let socketPath = "/private/tmp/lj-check-\(getpid()).sock"
-    service.apply(on, path: socketPath)
+    await service.apply(on, path: socketPath)
     check(service.isListening, "it listens when turned on")
+    check(!service.waitingForKeychain && service.cachedToken == SessionAccess.token(create: false, keychain: kc), "the token was read once, off the main thread, and kept")
+    let before = service.cachedToken
+    try? await service.newToken()
+    check(service.cachedToken != before && service.cachedToken == SessionAccess.token(create: false, keychain: kc), "a new token replaces the kept one")
     let mode = ((try? FileManager.default.attributesOfItem(atPath: socketPath))?[.posixPermissions] as? NSNumber)?.intValue ?? 0o777
     equal(mode & 0o077, 0, "the socket is private to this account (\(String(mode, radix: 8)))")
     let client = URL(fileURLWithPath: CommandLine.arguments[0]).deletingLastPathComponent().appendingPathComponent("leafjuice-session").path
     guard FileManager.default.isExecutableFile(atPath: client) else {
         check(false, "the leafjuice-session client isn't built beside this check. Run `swift build` first, so every product is built.")
-        service.apply(SessionAccessSettings()); try? SessionAccess.saveSettings(SessionAccessSettings())
+        await service.apply(SessionAccessSettings()); try? SessionAccess.saveSettings(SessionAccessSettings())
         return
     }
     let current = SessionAccess.token(create: false, keychain: kc) ?? ""
@@ -140,12 +144,12 @@ import Security
     let calls = SessionAccess.recentLog(20, from: service.logFile!)
     equal(calls.count, 9, "every call that reached LeafJuice was recorded")
     equal(calls.filter(\.allowed).count, 4, "four allowed, five refused")
-    service.apply(SessionAccessSettings())
+    await service.apply(SessionAccessSettings())
     check(!service.isListening && !FileManager.default.fileExists(atPath: socketPath), "turned off, it stops listening and removes the socket")
     r = await ask(["--as", "Made-up Session", "status"])
     equal(r.code, 2, "and the client says LeafJuice can't be reached")
     write("not a socket", URL(fileURLWithPath: socketPath))
-    service.apply(on, path: socketPath)
+    await service.apply(on, path: socketPath)
     check(!service.isListening && service.error?.contains("isn't a socket") == true, "a file in the socket's place isn't deleted or used")
     try? FileManager.default.removeItem(atPath: socketPath)
     try? SessionAccess.saveSettings(SessionAccessSettings())
@@ -175,8 +179,8 @@ import Security
         var on = SessionAccessSettings(); on.enabled = true
         try SessionAccess.saveSettings(on)
         let socketPath = "/private/tmp/lj-real-\(getpid()).sock"
-        service.apply(on, path: socketPath)
-        defer { service.apply(SessionAccessSettings()); try? SessionAccess.saveSettings(SessionAccessSettings()) }
+        await service.apply(on, path: socketPath)
+        defer { service.stop(); try? SessionAccess.saveSettings(SessionAccessSettings()) }
         let client = URL(fileURLWithPath: CommandLine.arguments[0]).deletingLastPathComponent().appendingPathComponent("leafjuice-session").path
         let token = SessionAccess.token(create: false, keychain: kc) ?? ""
         func ask(_ args: [String]) async -> [String: Any] {

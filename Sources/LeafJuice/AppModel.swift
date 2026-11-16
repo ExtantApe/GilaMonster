@@ -130,7 +130,8 @@ final class AppModel {
         SessionAccessService.shared.servers = { [weak self] in self?.servers ?? [] }
         SessionPrompts.shared.install()
         if ProcessInfo.processInfo.environment["LEAFJUICE_SNAPSHOT"] == nil, !AdvisorTrial.isOn {
-            SessionAccessService.shared.apply(SessionAccess.loadSettings())
+            // After the window is up, so a Keychain prompt can't hold up the launch.
+            Task { await SessionAccessService.shared.apply(SessionAccess.loadSettings()) }
         }
         if !AdvisorTrial.isOn { Alerts.ask() }
         if checkAppUpdates, !AdvisorTrial.isOn { Task { await lookForAppUpdate() } }
