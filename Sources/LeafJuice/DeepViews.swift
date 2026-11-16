@@ -217,7 +217,7 @@ struct PlayersPage: View {
 
     var body: some View {
         HSplitView {
-            list.frame(minWidth: 220, idealWidth: 260, maxWidth: 340)
+            if !server.knownPlayers.isEmpty { list.frame(minWidth: 220, idealWidth: 260, maxWidth: 340) }
             Group {
                 if let selected {
                     PlayerDetail(server: server, player: selected).id(selected.id)
@@ -576,11 +576,12 @@ struct CleanupPage: View {
         Page(title: "Cleanup", subtitle: "Leftovers from a server that's been running a long time. Nothing is deleted: items move beside your backups, where you can bring them back.") {
             HStack {
                 Button("Scan Again") { Task { await scan() } }.buttonStyle(.juice)
-                Button("Move \(selected.count) Selected Aside") {
+                Button(selected.isEmpty ? "Move Selected Aside" : "Move \(selected.count) Selected Aside") {
                     let items = server.cleanupItems.filter { selected.contains($0.path) }
                     server.attempt { try await server.cleanUp(items); selected = defaults }
                 }
-                .buttonStyle(.juicePrimary).disabled(selected.isEmpty || !server.state.canStart)
+                .buttonStyle(.juicePrimary)
+                .disabled(because: !server.state.canStart ? "Stop the server first." : selected.isEmpty ? "Tick what to move first." : nil)
             }
             if !server.state.canStart { Hint("Stop the server to clean up its folder.") }
             group("Known leftovers", icon: "checkmark.seal", items: server.cleanupItems.filter { $0.confidence == .safe }, empty: "Nothing obvious to clean up.")

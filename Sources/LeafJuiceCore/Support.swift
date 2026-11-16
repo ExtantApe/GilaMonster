@@ -405,7 +405,9 @@ public func regex(_ pattern: String, _ options: NSRegularExpression.Options = []
 
 public enum Format {
     public static func bytes(_ count: Int64) -> String {
-        ByteCountFormatter.string(fromByteCount: count, countStyle: .file)
+        // "0 KB", not "Zero KB" (UX audit finding 10).
+        let f = ByteCountFormatter(); f.countStyle = .file; f.allowsNonnumericFormatting = false
+        return f.string(fromByteCount: count)
     }
     public static func memory(mb: Int) -> String {
         mb >= 1024 && mb % 512 == 0 ? String(format: "%g GB", Double(mb) / 1024) : "\(mb) MB"

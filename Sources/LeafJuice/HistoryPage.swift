@@ -65,8 +65,8 @@ struct HealthSummary: View {
                 tile("Quietest hour", Calendar.current.date(bySettingHour: hour, minute: 0, second: 0, of: Date())?.formatted(date: .omitted, time: .shortened) ?? "", .neutral)
             }
             if let last = server.sizeHistory.last {
-                tile("Worlds", Format.bytes(last.worldBytes), .neutral)
-                tile("Backups", Format.bytes(last.backupBytes), .neutral)
+                tile("Worlds", last.worldBytes > 0 ? Format.bytes(last.worldBytes) : "None yet", .neutral)
+                tile("Backups", last.backupBytes > 0 ? Format.bytes(last.backupBytes) : "None yet", .neutral)
             }
         }
     }

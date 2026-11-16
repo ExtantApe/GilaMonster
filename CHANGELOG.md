@@ -2,6 +2,14 @@
 
 ## Unreleased
 
+- **First UX fixes from the audit** (docs/ux-audit-2026-11-15.md, quick wins the owner approved):
+  - The Issues panel shows itself only when something is open. The toolbar button still opens it to look at ignored issues.
+  - Greyed-out buttons say why, as a tooltip and to VoiceOver: "Start the server first", "Make a backup first", "Add a connection first".
+  - Fields have visible labels, and examples read "such as luckperms" so they don't look filled in. Add a Plugin lines its fields up with their labels.
+  - Plugin Links won't start its page while nobody could sign in (WelcomeWagon missing or online-mode off), and says which.
+  - Backups hides the schedule settings while automatic backups are off.
+  - Empty states: the Console says the server is stopped, or that no lines match the filter. Players drops its empty list column. Configs drops the file list when there's only one file. Sizes read "0 KB" and History says "None yet".
+  - Overview loses its Hide Panel button.
 - **Add Plugin waits for a complete source.** The dialog opens on Modrinth with an empty project, and Add was already on, so it could try to add nothing. Now a source counts only once it has a project, a SpigotMC number, a GitHub owner/name or a web address starting with http or https. The same rule stops automatic checks on a half-filled source, and the Overview counts it as without a source.
 - **Quitting during a backup asks first** (D215), for a quit, restart, log out or shutdown. It shows how far the backup has got and about how long is left. **Wait, Then Quit** quits as soon as it's done. **Cancel Backup and Quit** stops it and deletes only its unfinished file, so earlier backups stay. **Keep Using LeafJuice** cancels the quit, and at a restart, log out or shutdown macOS is told the app declined. Either way out stops running servers with a save, without a second question. Tested: 8 checks for the progress, the time left and what Cancel deletes, and the panel drawn in light and dark. Not tested: a real quit, restart or shutdown during a real backup.
 - **The server menu shows each server's state** before you pick it: its state icon in colour beside the name, and the state in words, such as "Creative · Running", so it doesn't rest on colour alone. VoiceOver reads "Creative, Running". The current server keeps its checkmark. Not yet seen on screen: menus can't be drawn off screen the way pages are.

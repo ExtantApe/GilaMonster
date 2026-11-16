@@ -48,9 +48,11 @@ struct ConnectionsCard: View {
                 }
                 ForEach(loaded.settings.services) { service in row(service) }
                 HStack {
-                    Button("Check") { check(outside: false) }.buttonStyle(.juice).disabled(checking || !hasAnything(loaded.settings))
+                    Button("Check") { check(outside: false) }.buttonStyle(.juice).disabled(checking)
+                        .disabled(because: hasAnything(loaded.settings) ? nil : "Add a connection first, with Edit Connections.")
                         .help("Checks each agent and what it forwards to on this Mac. Nothing goes over the internet.")
-                    Button("Check From Outside") { check(outside: true) }.buttonStyle(.juice).disabled(checking || !hasAnything(loaded.settings))
+                    Button("Check From Outside") { check(outside: true) }.buttonStyle(.juice).disabled(checking)
+                        .disabled(because: hasAnything(loaded.settings) ? nil : "Add a connection first, with Edit Connections.")
                         .help("Also connects to each public address over the internet, through the tunnel, as a player would.")
                     if checking { ProgressView().controlSize(.small).accessibilityLabel("Checking") }
                 }

@@ -135,6 +135,7 @@ struct LinksPage: View {
             Hint("Versions help anyone looking for a server with a known weakness, so turn them off if you don't need them.")
             HStack {
                 Button(serving ? "Stop Serving" : "Start Serving") { toggleServing() }.buttonStyle(serving ? .juice : .juicePrimary)
+                    .disabled(because: serving ? nil : !server.hasWelcomeWagon ? "Nobody could sign in yet: install WelcomeWagon first." : !server.onlineModeIsOn ? "Nobody could sign in yet: turn online-mode on first." : nil)
                 Badge(text: serving ? "On, this Mac only" : "Off", tone: serving ? .good : .neutral)
                 Spacer()
             }

@@ -128,7 +128,8 @@ struct ChangeVersionCard: View {
             if let loadError { Callout(tone: .warning, title: "Couldn't load versions", detail: loadError) }
             if !target.isEmpty { moveMessage }
             HStack {
-                Button("Check Plugins") { checkReadiness() }.buttonStyle(.juice).disabled(target.isEmpty || checking || server.plugins.isEmpty)
+                Button("Check Plugins") { checkReadiness() }.buttonStyle(.juice).disabled(checking)
+                    .disabled(because: server.plugins.isEmpty ? "This server has no plugins to check." : target.isEmpty ? "Choose a version first." : nil)
                 if Modules.shared.isOn(.testCopies) {
                 Button("Try on a Test Copy") { prepare(trial: true) }
                     .buttonStyle(.juicePrimary)

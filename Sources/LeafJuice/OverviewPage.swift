@@ -174,7 +174,6 @@ struct OverviewPage: View {
             let open = server.issues.filter { $0.status == .open }
             Fact(label: "Open", value: "\(open.count)")
             Fact(label: "Needing attention", value: "\(open.filter { $0.severity >= .error }.count)")
-            Button(model.showIssues ? "Hide Panel" : "Show Panel") { model.showIssues.toggle() }.buttonStyle(.juice)
         }
     }
 }
@@ -189,7 +188,8 @@ struct ConnectCheckRow: View {
             Callout(tone: result.reachable ? .good : .warning, title: result.reachable ? "Reachable from the internet" : "Not reachable from the internet", detail: result.detail)
         }
         HStack {
-            Button("Can Friends Connect?") { run() }.buttonStyle(.juice).disabled(server.state != .running || checking)
+            Button("Can Friends Connect?") { run() }.buttonStyle(.juice).disabled(checking)
+                .disabled(because: server.state != .running && !checking ? "Start the server first. This checks it from the internet." : nil)
             if checking { ProgressView().controlSize(.small).accessibilityLabel("Checking") }
         }
         .help("Asks an outside service to try connecting. This shares your public address with api.ipify.org and api.mcsrvstat.us.")

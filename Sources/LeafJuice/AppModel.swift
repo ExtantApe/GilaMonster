@@ -78,6 +78,9 @@ final class AppModel {
     var labSetup: LabSetupRequest?
     var selectedID: UUID? { didSet { UserDefaults.standard.set(selectedID?.uuidString, forKey: "selectedServer") } }
     var page: PageID = .overview
+    /// Opened from the toolbar while nothing is open, to look at ignored issues. Not saved: the panel goes back to
+    /// showing itself only when there's something open (UX audit finding 2).
+    var issuesOpenedByHand = false
     var showIssues = UserDefaults.standard.object(forKey: "showIssues") as? Bool ?? true {
         didSet { UserDefaults.standard.set(showIssues, forKey: "showIssues") }
     }
@@ -526,7 +529,7 @@ struct ServerCommands: Commands {
             .keyboardShortcut("b", modifiers: [.command, .shift]).disabled(model.selected == nil)
         }
         CommandGroup(after: .sidebar) {
-            Button(model.showIssues ? "Hide Issues" : "Show Issues") { model.showIssues.toggle() }
+            Button(model.showIssues ? "Hide Issues" : "Show Issues") { model.showIssues.toggle(); model.issuesOpenedByHand = model.showIssues }
                 .keyboardShortcut("i", modifiers: [.command, .option])
             Divider()
             ForEach(Array(PageID.visible.prefix(9).enumerated()), id: \.element) { index, page in
