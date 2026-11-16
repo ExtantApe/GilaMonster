@@ -6,7 +6,7 @@ import SwiftUI
 import UserNotifications
 
 enum PageID: String, CaseIterable, Identifiable, Hashable {
-    case overview, console, history, players, allowlist, worlds, plugins, software, configs, resourcePacks, links, advisor, launch, backups, changes, cleanup
+    case overview, console, history, players, allowlist, worlds, plugins, software, lab, configs, resourcePacks, links, advisor, launch, backups, changes, cleanup
     var id: String { rawValue }
     /// The module a page belongs to. Nil for the essentials, which are always there.
     var module: LeafModule? {
@@ -18,10 +18,11 @@ enum PageID: String, CaseIterable, Identifiable, Hashable {
         case .resourcePacks: .resourcePacks
         case .links: .links
         case .advisor: .advisor
+        case .lab: .lab
         default: nil
         }
     }
-    @MainActor static var visible: [PageID] { allCases.filter { $0.module.map(Modules.shared.isOn) ?? true } }
+    @MainActor static var visible: [PageID] { allCases.filter { ($0.module.map(Modules.shared.isOn) ?? true) && !($0 == .lab && AdvisorTrial.isOn) } }
     var title: String {
         switch self {
         case .overview: "Overview"
@@ -36,6 +37,7 @@ enum PageID: String, CaseIterable, Identifiable, Hashable {
         case .links: "Plugin Links"
         case .advisor: "Advisor"
         case .software: "Software"
+        case .lab: "Lab"
         case .configs: "Configs"
         case .launch: "Launch"
         case .backups: "Backups"
@@ -56,6 +58,7 @@ enum PageID: String, CaseIterable, Identifiable, Hashable {
         case .links: "link"
         case .advisor: "sparkle.magnifyingglass"
         case .software: "shippingbox"
+        case .lab: "flask"
         case .configs: "slider.horizontal.3"
         case .launch: "bolt"
         case .backups: "externaldrive"
@@ -151,11 +154,11 @@ final class AppModel {
         if lab.eulaAccepted { work() } else { labSetup = LabSetupRequest(then: work) }
     }
 
-    /// The board lives on the Software page of the server it's modeled on. The lab itself is built only for a run.
+    /// The Lab page of the server it's modeled on. The lab itself is built only for a run.
     func openLabBoard() {
         guard let real = lab.model(from: servers) else { return }
         selectedID = real.id
-        page = .software
+        page = .lab
     }
 
     private func saveRegistry() {

@@ -193,6 +193,7 @@ struct ServerWindow: View {
         case .cleanup: CleanupPage(server: server)
         case .plugins: PluginsPage(model: model, server: server)
         case .software: SoftwarePage(model: model, server: server)
+        case .lab: LabPage(model: model, server: server)
         case .configs: ConfigsPage(model: model, server: server)
         case .launch: LaunchPage(server: server)
         case .backups: BackupsPage(server: server)
@@ -296,12 +297,12 @@ struct Sidebar: View {
                         Image(nsImage: Self.menuIcon(other.state))
                     }
                 }
-                .accessibilityLabel("\(other.profile.name)\(other.isLab ? ", the status board's lab for this run" : ""), \(other.state.title)")
+                .accessibilityLabel("\(other.profile.name)\(other.isLab ? ", the Lab's server for this run" : ""), \(other.state.title)")
             }
             Divider()
             Button("Add Server…") { model.showAddServer = true }
             if Modules.shared.isOn(.lab), model.lab.model(from: model.servers) != nil {
-                Button("Open the Lab's Status Board") { model.openLabBoard() }
+                Button("Open the Lab") { model.openLabBoard() }
             }
             if !server.isLab { Button("Rename \(server.profile.name)…") { renaming = true } }
         } label: {

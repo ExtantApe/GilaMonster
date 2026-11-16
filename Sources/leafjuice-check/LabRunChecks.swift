@@ -82,6 +82,23 @@ import Foundation
         await lab.run(.plugins, model: model)
         equal(lab.saves.count, 1, "the next run keeps nothing")
 
+        // Run Checks: the ticked stations in order, skipping any still locked, with the reason.
+        var ran: [LabStation] = []
+        lab.stationStandIn = { station in
+            ran.append(station)
+            let c = try makeLab()
+            lab.place(station, outcome: .passed, model: model)
+            return c
+        }
+        let skipped = await lab.runChecks([.settings, .plugins, .upgrade], model: model)
+        equal(ran, [.plugins, .settings], "Run Checks runs the ticked checks in board order")
+        equal(skipped.map(\.0), [.upgrade], "and skips one still locked")
+        check(skipped.first?.1.isEmpty == false, "saying why: \(skipped.first?.1 ?? "-")")
+        check(!FileOps.exists(root), "each run's lab is deleted")
+        ran = []
+        let none = await lab.runChecks([], model: model)
+        check(ran.isEmpty && none.isEmpty, "nothing ticked runs nothing")
+
         // Interrupted: a quit or crash mid-run leaves the lab, and the next launch removes it.
         let left = try makeLab()
         left.stopTicker()

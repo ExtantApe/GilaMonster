@@ -16,8 +16,6 @@ struct SoftwarePage: View {
             if FileOps.exists(server.paths.switchedOffFile) { SwitchedOffCard(server: server) }
             IdentifyCard(server: server)
             if !server.archivedJars.isEmpty { rollbackCard }
-            // The status board, modeled on this server (D229: the lab itself exists only during a run).
-            if !server.isLab, Modules.shared.isOn(.lab), !AdvisorTrial.isOn { LabPanel(model: model) }
         }
         .onAppear { if !server.isLab, !model.lab.isBusy { model.lab.chooseModel(server) } }
         .task {
@@ -146,7 +144,7 @@ struct ChangeVersionCard: View {
                     Button("Rehearse in the Lab") { rehearse() }
                         .buttonStyle(.juice)
                         .disabled(target.isEmpty || move == .downgrade || model.lab.isBusy)
-                        .help("Opens the Lab's status board, set to this server and this version.")
+                        .help("Opens the Lab page, set to this version.")
                 }
                 if checking { ProgressView().controlSize(.small).accessibilityLabel("Checking plugins") }
             }
@@ -162,10 +160,10 @@ struct ChangeVersionCard: View {
                 Hint("Uses Preflight's upgrade tool \(UpgradeTool.version), downloaded once and checked. It needs Java \(UpgradeTool.javaMajor). Paper only.")
                 if let pluginPlan { PluginPlanView(server: server, plan: pluginPlan, checkAllowingSharedDatabase: { checkWithPreflight(allowSharedDatabase: true) }) }
             }
-            if !server.isLab, model.lab.isBusy || model.lab.failure != nil { LabProgress(lab: model.lab) }
-            if !server.isLab, !model.lab.isBusy, let report = model.lab.report, report.serverName == server.profile.name, report.to.contains(target) {
-                Callout(tone: report.verdict == .bothPassed && !report.settingsProblem ? .good : .warning, title: report.headline, detail: report.explanation) {
-                    Button("See the Board") { model.openLabBoard() }.buttonStyle(.juice)
+            if !server.isLab, Modules.shared.isOn(.lab), !AdvisorTrial.isOn, let line = labLine {
+                HStack {
+                    Hint(line)
+                    Button("Open Lab") { model.openLabBoard() }.buttonStyle(.link)
                 }
             }
         }
@@ -265,6 +263,18 @@ struct ChangeVersionCard: View {
                 pluginPlan = await server.checkPluginsForUpgrade(found, allowSharedDatabase: allowSharedDatabase)
             } catch { loadError = error.localizedDescription }
         }
+    }
+
+    /// One line about the Lab's last results for this server, or nil when there are none.
+    private var labLine: String? {
+        let lab = model.lab
+        guard lab.model(from: model.servers)?.id == server.id else { return nil }
+        if lab.isBusy { return "A Lab run is going now." }
+        let results = LabStation.allCases.compactMap { lab.result($0) }
+        guard let latest = results.map(\.date).max() else { return nil }
+        let passed = results.filter { $0.outcome == .passed }.count
+        let version = lab.target.map { " for \($0.mcVersion)" } ?? ""
+        return "Last Lab run\(version): \(passed) of \(results.count) passed, \(latest.formatted(.relative(presentation: .named)))."
     }
 
     private func rehearse() {

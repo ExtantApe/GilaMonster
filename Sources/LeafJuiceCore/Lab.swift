@@ -737,7 +737,20 @@ public final class LabController {
     /// Unlocks the next switch despite a red light. The light stays red.
     public func continueAnyway(_ station: LabStation) { state.board[station]?.acknowledged = true }
 
-    /// Flicking a switch on.
+    /// Run Checks: the chosen stations in board order, each one only once the one it waits for has settled.
+    /// A station still locked when its turn comes is skipped and says why; the rest still run if they can.
+    /// Returns the stations it skipped, with the reason.
+    @discardableResult
+    public func runChecks(_ chosen: Set<LabStation>, model: ServerController) async -> [(LabStation, String)] {
+        var skipped: [(LabStation, String)] = []
+        for station in LabStation.allCases where chosen.contains(station) {
+            if let why = lockReason(station, fingerprint: fingerprint(model)) { skipped.append((station, why)); continue }
+            await run(station, model: model)
+        }
+        return skipped
+    }
+
+    /// Runs one station.
     public func run(_ station: LabStation, model: ServerController) async {
         guard !isBusy, lockReason(station, fingerprint: fingerprint(model)) == nil else { return }
         for other in LabStation.allCases where other == station || other.follows(station) { state.board[other] = nil }
