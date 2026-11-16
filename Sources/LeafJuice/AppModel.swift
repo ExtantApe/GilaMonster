@@ -123,6 +123,7 @@ final class AppModel {
         servers.forEach(Alerts.connect)
         // Session access: off until the owner turns it on in Settings, and never in a snapshot or the Advisor trial.
         SessionAccessService.shared.servers = { [weak self] in self?.servers ?? [] }
+        SessionPrompts.shared.install()
         if ProcessInfo.processInfo.environment["LEAFJUICE_SNAPSHOT"] == nil, !AdvisorTrial.isOn {
             SessionAccessService.shared.apply(SessionAccess.loadSettings())
         }

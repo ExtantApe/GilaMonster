@@ -9,9 +9,27 @@ Usage:
   leafjuice-session --as "Your name" status [--server NAME]
   leafjuice-session --as "Your name" log [--lines 50] [--server NAME]
   leafjuice-session --as "Your name" run "save-all" [--server NAME]
+  leafjuice-session --as "Your name" backup status [--server NAME]
+
+Pack library and recipes (no prompt; nothing players see changes):
+  leafjuice-session --as "Your name" pack add /full/path/pack.zip
+  leafjuice-session --as "Your name" recipe set NAME --packs id1,id2
+  leafjuice-session --as "Your name" recipe build NAME
+
+Waits for the owner to press Allow (a Mac notification; no answer in 2 minutes means no):
+  leafjuice-session --as "Your name" start|stop|restart [--server NAME]
+  leafjuice-session --as "Your name" publish RECIPE [--server NAME]
+  leafjuice-session --as "Your name" handoff RECIPE [--by-hand] [--server NAME]
+  leafjuice-session --as "Your name" hosting start|stop [--server NAME]
+  leafjuice-session --as "Your name" hosting add|remove RECIPE [--server NAME]
+
+  leafjuice-session --as "Your name" hosting status [--server NAME]
+  leafjuice-session --as "Your name" gate check URL [--player NAME] [--server NAME]
+    (with --player it asks for Allow, since it says whether that player is joining)
 
 Prints LeafJuice's answer as JSON. Exits 0 when ok is true, 1 when refused, 2 when LeafJuice can't be reached.
-Only commands on the owner's list in LeafJuice's Settings are sent.
+Only commands on the owner's list in LeafJuice's Settings are sent with run. Nothing is done while a backup is
+being written, and a server marked "Children may play here" always asks.
 """
 
 var args = Array(CommandLine.arguments.dropFirst())
@@ -24,11 +42,59 @@ func take(_ flag: String) -> String? {
 let caller = take("--as")
 let server = take("--server")
 let lines = take("--lines").flatMap(Int.init)
-guard let caller, let call = args.first, ["status", "log", "run"].contains(call) else {
-    FileHandle.standardError.write(Data((usage + "\n").utf8)); exit(64)
+let packs = take("--packs")
+let player = take("--player")
+let byHand = args.contains("--by-hand")
+args.removeAll { $0 == "--by-hand" }
+func fail(_ text: String) -> Never { FileHandle.standardError.write(Data((text + "\n").utf8)); exit(64) }
+guard let caller, let first = args.first else { fail(usage) }
+var call = first
+var command: String?
+var extra: [String: Any] = [:]
+let rest = Array(args.dropFirst())
+switch first {
+case "status", "log", "start", "stop", "restart":
+    guard rest.isEmpty else { fail(usage) }
+case "run":
+    command = rest.joined(separator: " ")
+    if command?.isEmpty != false { fail("run needs a command.") }
+case "backup":
+    guard rest == ["status"] else { fail(usage) }
+    call = "backup-status"
+case "pack":
+    guard rest.count == 2, rest[0] == "add" else { fail(usage) }
+    extra["path"] = URL(fileURLWithPath: rest[1]).standardizedFileURL.path
+    call = "pack-add"
+case "recipe":
+    guard rest.count == 2, ["set", "build"].contains(rest[0]) else { fail(usage) }
+    call = "recipe-" + rest[0]
+    extra["recipe"] = rest[1]
+    if rest[0] == "set" {
+        guard let packs else { fail("recipe set needs --packs id1,id2") }
+        extra["packs"] = packs.split(separator: ",").map { $0.trimmingCharacters(in: .whitespaces) }
+    }
+case "publish":
+    guard rest.count == 1 else { fail(usage) }
+    extra["recipe"] = rest[0]
+case "handoff":
+    guard rest.count == 1 else { fail(usage) }
+    extra["recipe"] = rest[0]
+    if byHand { extra["byHand"] = true }
+case "hosting":
+    guard let verb = rest.first, ["start", "stop", "status", "add", "remove"].contains(verb) else { fail(usage) }
+    call = "hosting-" + verb
+    if verb == "add" || verb == "remove" {
+        guard rest.count == 2 else { fail("hosting \(verb) needs a recipe.") }
+        extra["recipe"] = rest[1]
+    } else if rest.count != 1 { fail(usage) }
+case "gate":
+    guard rest.count == 2, rest[0] == "check" else { fail(usage) }
+    call = "gate-check"
+    extra["url"] = rest[1]
+    if let player { extra["player"] = player }
+default:
+    fail(usage)
 }
-let command = call == "run" ? args.dropFirst().joined(separator: " ") : nil
-if call == "run", command?.isEmpty != false { FileHandle.standardError.write(Data("run needs a command.\n".utf8)); exit(64) }
 
 func token() -> String? {
     if let t = ProcessInfo.processInfo.environment["LEAFJUICE_SESSION_TOKEN"], !t.isEmpty { return t }
@@ -53,6 +119,7 @@ var request: [String: Any] = ["token": secret, "caller": caller, "call": call]
 if let server { request["server"] = server }
 if let lines { request["lines"] = lines }
 if let command { request["command"] = command }
+request.merge(extra) { $1 }
 var body = try! JSONSerialization.data(withJSONObject: request)
 body.append(0x0A)
 

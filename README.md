@@ -267,6 +267,42 @@ It prints LeafJuice's answer as JSON and exits 0 when it was allowed, 1 when ref
 reached. A command only runs on a server LeafJuice started; output is what the server printed in the next second and a
 half. `--as` is what the caller says about itself; it's recorded, not checked.
 
+### Starting, stopping and packs
+
+A session can also do these. Some go ahead, and some wait for you:
+
+- **Without asking**, since players see no change: add a pack zip to the library, set a recipe's packs, build a recipe,
+  and read backup status, pack hosting status, or what the pack gate would do for an address.
+- **Only after you press Allow:** start, stop or restart a server, publish a recipe's newest build, mark Packmule
+  updated, start or stop pack serving, give a recipe a pack address or take it away, and ask whether a named player
+  would get a pack right now. That last one says whether they're joining, so it asks too.
+
+Each ask shows a Mac notification such as "Server lead wants to stop Made-up Server", with **Allow** and **Deny**. The
+same request also waits in Settings > Session access, in case notifications are off. No answer in 2 minutes is a no.
+Nothing that asks runs while a backup is being written, and anything that can't happen anyway (stopping a stopped
+server, publishing a recipe with no build) is refused before you're bothered.
+
+**Children may play here** is on for every server until you clear it in Settings, with a confirm. A server with the
+mark can't be given standing permission, so every change there asks. Clear the mark only for a server no child plays
+on. Then you can let sessions do these without asking. Marking it again takes that away. Both live in a small file in the
+server's LeafJuice folder. If that file can't be read, the mark counts as on. leafjuice-session has no way to change
+either, but any program running as your macOS account could edit the file, as it could most of your files. The guard
+against that is the Allow prompt everywhere else, plus a line in the server's log each time the mark changes.
+
+```bash
+leafjuice-session --as "Server lead" pack add ~/Downloads/made-up-pack.zip
+leafjuice-session --as "Server lead" recipe set made-up --packs made-up-pack,other-pack
+leafjuice-session --as "Server lead" recipe build made-up
+leafjuice-session --as "Server lead" publish made-up --server "Made-up Server"
+leafjuice-session --as "Server lead" hosting status
+leafjuice-session --as "Server lead" gate check https://packs.example.net/<path>/pack.zip --player MadeUpPlayer
+leafjuice-session --as "Server lead" restart --server "Made-up Server"
+```
+
+**Tested:** every refusal, Allow, Deny, no answer, nobody to ask, the backup refusal and standing permission, with
+made-up servers that never start and a listener on 127.0.0.1. **Not tested:** the real notification and its buttons, a
+real start or restart through a session, and a real publish.
+
 ## Staying safe when you're not looking
 
 Every backup can also be copied to a **second location**, ideally another drive, with each copy checked against the original. If the main backups are lost, they can be copied back. LeafJuice also sends a **Mac notification** for crashes, failed backups and low disk space, and you can turn that off in Settings.
