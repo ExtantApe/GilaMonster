@@ -12,3 +12,4 @@ dist/
 
 # Built brand kit images: rebuilt from mark.txt, not kept in history.
 brand/kit/out/
+dist-next/
