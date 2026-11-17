@@ -194,6 +194,13 @@ public struct BackupConfig: Codable, Equatable, Sendable {
     public var smartSettings: SmartBackupConfig?
     /// Whether anyone has played since the last backup. Kept on disk, so a restart of the app doesn't forget it.
     public var playedSinceBackup: Bool?
+    /// Back up to the destination's drive only, with a late fallback when it's been missing a long time (2026-11-16).
+    /// Nil keeps the older behaviour: storage targets in order, then the server's own folder.
+    public var fallback: BackupFallback?
+    /// When the destination's drive was first found missing, since it was last seen. Cleared when it's back.
+    public var driveMissingSince: Date?
+    /// When the destination's drive was last seen connected.
+    public var driveLastSeen: Date?
     public var smart: SmartBackupConfig {
         get { smartSettings ?? SmartBackupConfig.legacy }
         set { smartSettings = newValue }

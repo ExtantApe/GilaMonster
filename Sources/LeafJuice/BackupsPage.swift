@@ -125,6 +125,38 @@ struct BackupsPage: View {
                 }
             }
             Hint("By default, backups sit beside your servers in LeafJuice/backups. That's the same drive, so a copy on another drive is what protects you if that one fails. Changing this doesn't move backups you've already made.")
+            if DriveCheck.volumeRoot(Backups.destination(server.profile)) != nil {
+                Divider()
+                driveOnlySection
+            }
+        }
+    }
+
+    /// Back up to the chosen drive only, with the Mac's disk as a late fallback (2026-11-16).
+    @ViewBuilder private var driveOnlySection: some View {
+        let dest = Backups.destination(server.profile)
+        let drive = DriveCheck.name(dest)
+        Toggle("Back up only to \(drive)", isOn: Binding(
+            get: { server.profile.backup.fallback != nil },
+            set: { on in
+                server.profile.backup.fallback = on
+                    ? BackupFallback(path: AppPaths.backups.deletingLastPathComponent().appendingPathComponent("fallback-backups", isDirectory: true).path)
+                    : nil
+                server.noteBackupDrive()
+            }))
+        if let rule = server.profile.backup.fallback {
+            Stepper("Use the Mac's disk after \(rule.afterHours) hours without \(drive)",
+                    value: Binding(get: { rule.afterHours }, set: { server.profile.backup.fallback?.afterHours = $0 }), in: 1...168)
+            Stepper("Only while \(rule.keepFreeGB) GB stays free on the Mac after the backup",
+                    value: Binding(get: { rule.keepFreeGB }, set: { server.profile.backup.fallback?.keepFreeGB = $0 }), in: 20...500, step: 5)
+            if DriveCheck.isConnected(dest) {
+                Badge(text: "\(drive) is connected", tone: .good)
+            } else if let since = server.profile.backup.driveMissingSince {
+                Badge(text: "\(drive) missing since \(since.formatted(date: .abbreviated, time: .shortened))", tone: .warning)
+            }
+            Hint("While \(drive) is missing, each backup is skipped with a warning. Once it's been gone \(rule.afterHours) hours, backups go to \((rule.path as NSString).abbreviatingWithTildeInPath), but only if \(rule.keepFreeGB) GB stays free. They're listed here to move later, and backups go back to \(drive) when it returns. Storage in the list above is passed over while this is on.")
+        } else {
+            Hint("Off: backups use the storage list above, then this folder.")
         }
     }
 
