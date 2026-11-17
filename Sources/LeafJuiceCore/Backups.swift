@@ -59,7 +59,7 @@ public enum Backups {
 
     private static func ownerFile(_ folder: URL) -> URL { folder.appendingPathComponent(".leafjuice-server") }
 
-    private static func owner(of folder: URL) -> UUID? {
+    static func owner(of folder: URL) -> UUID? {
         guard let text = try? String(contentsOf: ownerFile(folder), encoding: .utf8) else { return nil }
         return UUID(uuidString: text.trimmingCharacters(in: .whitespacesAndNewlines))
     }
@@ -184,6 +184,10 @@ public enum Backups {
         guard !items.isEmpty else {
             throw LeafError(scope == .worlds ? "There's no world to back up yet. Start the server once first." : "There's nothing to back up yet.")
         }
+        // A drive that isn't plugged in has no folder to write to. Making one would fill the Mac's own disk instead.
+        guard DriveCheck.isConnected(dest) else {
+            throw LeafError("The backup wasn't started: \(DriveCheck.name(dest)) isn't connected, and nothing was written to the Mac's own disk instead.")
+        }
         do { try FileOps.ensureDir(dest) } catch {
             throw LeafError("Can't write to the backup folder \(dest.path). If it's on an external drive, check it's connected.")
         }
@@ -261,12 +265,17 @@ public enum Backups {
     public static func listAll(_ profile: ServerProfile) -> [BackupRecord] {
         var seen = Set<String>()
         var out: [BackupRecord] = []
-        for folder in [destination(profile)] + profile.backup.smart.targets.map({ targetFolder($0, for: profile) }) {
+        for folder in [destination(profile)] + profile.backup.smart.targets.map({ targetFolder($0, for: profile) }) + fallbackFolders(profile) {
             // Only a folder this server claimed: another server's backups are never shown or touched here.
             if folder != destination(profile), owner(of: folder) != profile.id { continue }
             for r in list(profile, in: folder) where seen.insert(r.fileName).inserted { out.append(r) }
         }
         return out.sorted { $0.date > $1.date }
+    }
+
+    /// This server's folder for fallback backups, when it has the drive-only rule.
+    public static func fallbackFolders(_ profile: ServerProfile) -> [URL] {
+        profile.backup.fallback.map { [targetFolder($0.path, for: profile)] } ?? []
     }
 
     /// Where a record's archive is: the folder it was listed from, or the server's own folder.

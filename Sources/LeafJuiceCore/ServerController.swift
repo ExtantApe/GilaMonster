@@ -1020,7 +1020,7 @@ public final class ServerController: Identifiable {
         tickPlayerSnapshots(elapsed: now.timeIntervalSince(lastTick ?? now))
         lastTick = now
         tickCount += 1
-        if tickCount % 12 == 1 { tickDisk(); tidyPublishedPacks(now: now) }
+        if tickCount % 12 == 1 { tickDisk(); tidyPublishedPacks(now: now); noteBackupDrive(now: now) }
         if isTrialCopy { return }
         if state == .running { await applyWaitingAccess() }
         tickAnalytics(now: now)
@@ -1628,6 +1628,24 @@ public final class ServerController: Identifiable {
         let sourceBytes = Backups.items(paths.root, scope: effectiveScope).reduce(Int64(0)) { $0 + FileOps.directorySize(paths.root.appendingPathComponent($1).resolvingSymlinksInPath()) }
         let everything = Backups.listAll(profile)
         let estimate = BackupCaps.estimate(records: everything, scope: effectiveScope, sourceBytes: sourceBytes)
+        // The drive-only rule (2026-11-16): the destination's drive, or after a long absence the fallback, or nothing.
+        var onFallback = false
+        if let rule = profile.backup.fallback, !noteBackupDrive() {
+            let primary = Backups.destination(profile)
+            let folder = Backups.targetFolder(rule.path, for: profile)
+            let room = (DiskGuard.standIn ?? DiskGuard.space)(folder)
+            switch rule.decide(connected: false, missingSince: profile.backup.driveMissingSince, now: Date(), free: room.free,
+                               needed: estimate, driveName: DriveCheck.name(primary)) {
+            case .drive: break
+            case .skip(let why):
+                backupDriveMissing(why)
+                throw LeafError("This backup was skipped. " + why)
+            case .fallback:
+                try Backups.claim(folder, for: profile.id)
+                into = folder
+                onFallback = true
+            }
+        }
         var capPlans: [String: (plan: BackupCaps.Plan, cap: DriveCap, folders: [URL])] = [:]
         func capChecked(_ t: SmartBackup.Target) -> SmartBackup.Target {
             guard t.usable else { return t }
@@ -1639,7 +1657,7 @@ public final class ServerController: Identifiable {
             capPlans[t.path] = (plan, ctx.cap, ctx.folders)
             return t
         }
-        if Self.routineTriggers.contains(trigger), !profile.backup.smart.targets.isEmpty {
+        if profile.backup.fallback == nil, Self.routineTriggers.contains(trigger), !profile.backup.smart.targets.isEmpty {
             let needed = sourceBytes
             let folders = profile.backup.smart.targets.map { Backups.targetFolder($0, for: profile) }
             let checked = SmartBackup.check(folders.map(\.path), needed: needed).map(capChecked)
@@ -1666,7 +1684,7 @@ public final class ServerController: Identifiable {
             into = URL(fileURLWithPath: chosen.path, isDirectory: true)
             if chosen.path != Backups.destination(profile).path { try Backups.claim(into!, for: profile.id) }
         } else {
-            let own = capChecked(SmartBackup.Target(path: Backups.destination(profile).path, usable: true, reason: "Ready."))
+            let own = capChecked(SmartBackup.Target(path: (into ?? Backups.destination(profile)).path, usable: true, reason: "Ready."))
             if !own.usable {
                 capSkipped(own.reason)
                 throw LeafError("This backup was skipped, so the drive stays under its cap. \(own.reason)")
@@ -1698,6 +1716,7 @@ public final class ServerController: Identifiable {
         await copyToMirror(record)
         refreshBackups()
         dropIssue("wrapper:backup-cap-skipped")
+        if onFallback { noteFallbackBackups() }
         checkCapWarning(writeTo)
         appendWrapper("Backup finished: \(Format.bytes(record.size)).", level: .info)
         recordEvent(.backup, "Backed up", detail: "\(Format.bytes(record.size)), \(trigger)")
@@ -1708,7 +1727,7 @@ public final class ServerController: Identifiable {
 
     /// Every folder this server keeps backups in.
     public var backupFolders: [URL] {
-        var out = [Backups.destination(profile)] + profile.backup.smart.targets.map { Backups.targetFolder($0, for: profile) }
+        var out = [Backups.destination(profile)] + profile.backup.smart.targets.map { Backups.targetFolder($0, for: profile) } + Backups.fallbackFolders(profile)
         if let m = profile.backup.mirror, !m.isEmpty { out.append(URL(fileURLWithPath: m, isDirectory: true)) }
         return out
     }
@@ -1782,6 +1801,57 @@ public final class ServerController: Identifiable {
             steps: ["Raise the cap on the Backups page, if the drive has room to share.", "Or unpin or delete older backups you don't need.", "Or add another storage drive on the Backups page."],
             action: IssueAction(page: "backups", label: "Open Backups"), sample: why, firstSeen: now, lastSeen: now))
         raiseAlert("A backup was skipped", "It would have gone over a drive's backup cap. \(why)")
+    }
+
+    /// For the drive-only rule: is the destination's drive connected now? Records when it was last seen and since when
+    /// it's been missing, so the fallback waits for a whole absence. Does nothing without the rule.
+    @discardableResult
+    public func noteBackupDrive(now: Date = Date()) -> Bool {
+        guard profile.backup.fallback != nil else { return true }
+        let connected = DriveCheck.isConnected(Backups.destination(profile))
+        if connected {
+            if profile.backup.driveMissingSince != nil { profile.backup.driveMissingSince = nil }
+            // Saved at most every ten minutes, so ticking doesn't rewrite the settings file.
+            if profile.backup.driveLastSeen.map({ now.timeIntervalSince($0) > 600 }) ?? true { profile.backup.driveLastSeen = now }
+            dropIssue("wrapper:backup-drive-missing")
+        } else if profile.backup.driveMissingSince == nil {
+            profile.backup.driveMissingSince = now
+        }
+        noteFallbackBackups()
+        return connected
+    }
+
+    /// Skip and warn, each time: a backup that couldn't go to its drive.
+    private func backupDriveMissing(_ why: String) {
+        let now = Date()
+        reportIssue(IssueRecord(
+            id: "wrapper:backup-drive-missing", ruleID: "wrapper-backup-drive", title: "A backup was skipped because its drive isn't connected", severity: .error, category: "Backups",
+            explanation: why,
+            steps: ["Plug the backup drive back in. The next backup goes to it.", "If it is plugged in, check LeafJuice may use it in System Settings > Privacy & Security > Files and Folders."],
+            action: IssueAction(page: "backups", label: "Open Backups"), sample: why, firstSeen: now, lastSeen: now))
+        raiseAlert("A backup was skipped", why)
+    }
+
+    /// Backups written to the fallback folder stay listed, with where they are, until they're moved or deleted.
+    func noteFallbackBackups() {
+        guard let rule = profile.backup.fallback else { dropIssue("wrapper:backup-on-fallback"); return }
+        let folder = Backups.targetFolder(rule.path, for: profile)
+        let held = Backups.owner(of: folder) == profile.id ? Backups.list(profile, in: folder) : []
+        guard !held.isEmpty else { dropIssue("wrapper:backup-on-fallback"); return }
+        let total = held.reduce(Int64(0)) { $0 + $1.size }
+        let drive = DriveCheck.name(Backups.destination(profile))
+        let back = DriveCheck.isConnected(Backups.destination(profile))
+        let detail = "\(held.count) backup\(held.count == 1 ? " is" : "s are") on the Mac's own disk (\(Format.bytes(total))), in \((folder.path as NSString).abbreviatingWithTildeInPath), written while \(drive) was missing. "
+            + (back ? "\(drive) is back, and new backups go to it. Move these to it when you like." : "They stay there until you move or delete them.")
+        // Reported again only when the wording changes, so a tick doesn't count it up, and the drive coming back shows.
+        if issues.first(where: { $0.id == "wrapper:backup-on-fallback" })?.sample == detail { return }
+        dropIssue("wrapper:backup-on-fallback")
+        let now = Date()
+        reportIssue(IssueRecord(
+            id: "wrapper:backup-on-fallback", ruleID: "wrapper-backup-fallback", title: "Some backups are on the Mac's own disk", severity: .warning, category: "Backups",
+            explanation: detail,
+            steps: ["Open the folder in Finder and move the backups (each .tar.gz with its .json) to the server's folder on \(drive).", "Or delete them on the Backups page once newer backups are on \(drive)."],
+            action: IssueAction(page: "backups", label: "Open Backups"), sample: detail, firstSeen: now, lastSeen: now))
     }
 
     /// Partial files from a backup or copy cut short by a quit or crash. Only while nothing is being written.
