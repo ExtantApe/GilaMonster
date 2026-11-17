@@ -1,22 +1,50 @@
 #!/bin/bash
-# Builds dist/LeafJuice.app, ad-hoc signed. Needs only the Command Line Tools.
+# Builds dist/LeafJuice.app (or --out DIR), ad-hoc signed. Needs only the Command Line Tools.
 #   scripts/build-app.sh              this Mac's architecture
 #   scripts/build-app.sh --universal  Apple silicon and Intel
 #   scripts/build-app.sh --dmg        also makes a .zip and .dmg for a GitHub release
+#   scripts/build-app.sh --out DIR    builds DIR/LeafJuice.app instead (default: dist)
+#   scripts/build-app.sh --guard-only runs the safety check below and stops
+# Refuses to start while anything runs from the target bundle: the build deletes it first, and on 2026-11-17
+# that pulled the bundle out from under the owner's running LeafJuice. Build into another folder with --out.
 set -euo pipefail
 cd "$(dirname "$0")/.."
 
-universal=false; dmg=false
-for arg in "$@"; do
-    case "$arg" in
+universal=false; dmg=false; out="dist"; guard_only=false
+while [ $# -gt 0 ]; do
+    case "$1" in
         --universal) universal=true ;;
         --dmg) dmg=true; universal=true ;;
-        *) echo "Unknown option: $arg" >&2; exit 2 ;;
+        --out) [ $# -ge 2 ] || { echo "--out needs a folder" >&2; exit 2; }; out="$2"; shift ;;
+        --guard-only) guard_only=true ;;
+        *) echo "Unknown option: $1" >&2; exit 2 ;;
     esac
+    shift
 done
+out="${out%/}"
 
 version=$(sed -n 's/.*static let version = "\(.*\)"/\1/p' Sources/LeafJuiceCore/Support.swift)
-app="dist/LeafJuice.app"
+app="$out/LeafJuice.app"
+
+# Anything running from inside the bundle (the app, leafjuice-mcp, leafjuice-session) stops the build.
+mkdir -p "$out"
+abs_app="$(cd "$out" && pwd -P)/LeafJuice.app"
+# Paths are compared after resolving links, so /var and /private/var, or a doubled slash, can't slip past.
+running=""
+while read -r pid exe; do
+    case "$exe" in */LeafJuice.app/Contents/*) ;; *) continue ;; esac
+    real="$(cd "$(dirname "$exe")" 2>/dev/null && pwd -P)/$(basename "$exe")" || continue
+    case "$real" in "$abs_app"/*) running+="$pid $exe"$'\n' ;; esac
+done < <(ps -axo pid=,comm=)
+running="${running%$'\n'}"
+if [ -n "$running" ]; then
+    echo "Not building: $app is in use, and the build deletes it first." >&2
+    echo "$running" | sed 's/^/  running: /' >&2
+    echo "Quit it first, or build somewhere else: scripts/build-app.sh --out dist-next" >&2
+    exit 3
+fi
+if $guard_only; then echo "Nothing is running from $app."; exit 0; fi
+
 rm -rf "$app"
 mkdir -p "$app/Contents/MacOS" "$app/Contents/Resources"
 
@@ -87,11 +115,11 @@ else
 fi
 
 if $dmg; then
-    ( cd dist && rm -f LeafJuice-*.zip LeafJuice-*.dmg && ditto -c -k --keepParent "LeafJuice.app" "LeafJuice-$version.zip" )
+    ( cd "$out" && rm -f LeafJuice-*.zip LeafJuice-*.dmg && ditto -c -k --keepParent "LeafJuice.app" "LeafJuice-$version.zip" )
     staging=$(mktemp -d)
     cp -R "$app" "$staging/"
     ln -s /Applications "$staging/Applications"
-    hdiutil create -quiet -volname "LeafJuice" -srcfolder "$staging" -ov -format UDZO "dist/LeafJuice-$version.dmg"
+    hdiutil create -quiet -volname "LeafJuice" -srcfolder "$staging" -ov -format UDZO "$out/LeafJuice-$version.dmg"
     rm -rf "$staging"
 fi
 

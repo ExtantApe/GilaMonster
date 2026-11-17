@@ -20,5 +20,7 @@ jobs:
         run: swift build
       - name: Tests, including the server lifecycle against a stand-in jar
         run: swift run leafjuice-check
+      - name: The build refuses to delete a bundle something is running from
+        run: scripts/test-build-guard.sh
       - name: The app builds and bundles
         run: scripts/build-app.sh
