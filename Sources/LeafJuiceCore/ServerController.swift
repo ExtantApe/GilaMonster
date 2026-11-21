@@ -1079,7 +1079,9 @@ public final class ServerController: Identifiable {
                     reportIssue(IssueRecord(
                         id: "wrapper:backup-refused", ruleID: "wrapper-backup-refused", title: "An automatic backup didn't run", severity: .error, category: "Backups",
                         explanation: "\(detail) LeafJuice tries again in an hour.",
-                        steps: ["Free up space, or add a storage drive with room on the Backups page.", "Or back up by hand once there's room."],
+                        steps: profile.backup.fallback != nil
+                            ? ["Check \(DriveCheck.name(Backups.destination(profile))) is connected and has room. Backups go only there, and nothing is written anywhere else.", "Or back up by hand once it's back or has room."]
+                            : ["Free up space, or add a storage drive with room on the Backups page.", "Or back up by hand once there's room."],
                         action: IssueAction(page: "backups", label: "Open Backups"), sample: detail, firstSeen: now, lastSeen: now))
                     appendWrapper("Scheduled backup failed: \(error.localizedDescription)", level: .error)
                     raiseAlert("\(profile.name)'s backup failed", error.localizedDescription)
