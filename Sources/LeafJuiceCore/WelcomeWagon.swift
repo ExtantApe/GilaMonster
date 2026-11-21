@@ -132,8 +132,8 @@ extension ServerController {
     }
 
     /// Pages through WelcomeWagon's invites, newest first. Stops at `maxPages`, and says so with `more`.
-    /// The 0.3.0 release pages the spec's way (`items`, a string `next`); 0.2.0 answers one page as `invites`,
-    /// and its numeric `next` isn't a cursor it takes back, so only the first page of that is read.
+    /// Pages the spec's way (`items`, a string `next`), as WelcomeWagon has since 0.3.0. The 0.2.0 `invites` shape is no
+    /// longer read (K71): every server runs a newer release.
     public func listInvites(pageSize: Int = 50, maxPages: Int = 10) async -> Result<InviteList, SheriffProblem> {
         var all: [WelcomeWagonInvite] = []
         var cursor: String?
@@ -142,9 +142,9 @@ extension ServerController {
             if let cursor { args.append(.word(cursor)) }
             let reply = await commands.run("welcomewagon", ["invite", "list"], args)
             guard case .done(let answer) = reply.outcome else { return .failure(SheriffProblem(Self.plain(reply.outcome, doing: "Asking WelcomeWagon"))) }
-            struct Wire: Decodable { let items: [WelcomeWagonInvite]?; let invites: [WelcomeWagonInvite]? }
+            struct Wire: Decodable { let items: [WelcomeWagonInvite]? }
             guard let wire = try? answer.decode(Wire.self) else { return .failure(SheriffProblem("WelcomeWagon's list couldn't be read.")) }
-            all += wire.items ?? wire.invites ?? []
+            all += wire.items ?? []
             guard wire.items != nil, let next = answer.next else { return .success(InviteList(invites: all, more: false)) }
             // A cursor goes back as a plain word; anything else ends the list here rather than being typed.
             guard Self.isCursor(next), next != cursor else { return .success(InviteList(invites: all, more: true)) }

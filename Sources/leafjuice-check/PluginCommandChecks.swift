@@ -423,7 +423,7 @@ private func buildFakeFormatOne(jdk: JavaRuntime, into jar: URL) async throws {
           listed = true;
           answer(id, "\"ok\":true,\"status\":\"ok\",\"code\":\"applied\",\"message\":\"" + p[2] + " is approved and can join now.\"");
         } else if (body.startsWith("attempts")) {
-          answer(id, "\"ok\":true,\"attempts\":[{\"uuid\":\"" + uuid + "\",\"name\":\"MadeUpKid\",\"attempts\":3,\"first\":1,\"last\":2}],\"next\":20");
+          answer(id, "\"ok\":true,\"items\":[{\"uuid\":\"" + uuid + "\",\"name\":\"MadeUpKid\",\"attempts\":3,\"first\":1,\"last\":2}],\"next\":20");
         } else {
           answer(id, "\"ok\":false,\"error\":{\"code\":\"unknown-command\",\"message\":\"\"}");
         }
@@ -477,7 +477,7 @@ private func buildFakeFormatOne(jdk: JavaRuntime, into jar: URL) async throws {
           String ticket = !new File("welcomewagon-v5").exists() ? "" : ",\"ticket\":{\"server\":\"Made-up Realm\",\"join\":\"https://join.example.test/\",\"link\":\"https://join.example.test/" + (new File("welcomewagon-v5-odd").exists() ? "?x=1" : "") + "#{code}\",\"expires\":4000000000}";
           answer(id, "\"ok\":true,\"secretFile\":\"once/" + id + ".json\"," + fields.substring(1, fields.length() - 1) + ticket);
         } else if (body.startsWith("invite list")) {
-          if (!new File("welcomewagon-v3").exists()) { answer(id, "\"ok\":true,\"invites\":[" + String.join(",", invites) + "],\"next\":null"); return; }
+          if (!new File("welcomewagon-v3").exists()) { answer(id, "\"ok\":true,\"items\":[" + String.join(",", invites) + "],\"next\":null"); return; }
           // 0.3.0: the spec's paging, items and a string cursor. welcomewagon-bad-cursor hands out one LeafJuice must not type.
           String[] a = body.split(" ");
           int limit = a.length > 2 ? Integer.parseInt(a[2]) : 20, from = a.length > 3 ? Integer.parseInt(a[3]) : 0;
@@ -783,7 +783,7 @@ extension Result {
 
     guard case .success(let listed) = await c.listInvites() else { check(false, "invites listed"); return }
     let list = listed.invites
-    equal(list.count, 2, "both invites listed, from the 0.2.0 release's own list key")
+    equal(list.count, 2, "both invites listed, from one page with no cursor")
     check(!listed.more, "and that's all of them")
     equal(await c.revokeInvite("not-an-id"), "That isn't an invite id.", "a bad invite id is refused before anything is typed")
     equal(await c.revokeInvite(list[0].invite), nil, "revoking an invite")

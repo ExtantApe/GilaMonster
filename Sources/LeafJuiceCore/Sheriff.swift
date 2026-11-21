@@ -144,10 +144,11 @@ extension ServerController {
     public func sheriffAttempts(limit: Int = 20) async -> Result<[SheriffAttempt], SheriffProblem> {
         let reply = await commands.run("sheriff", ["attempts"], [.int(limit)])
         guard case .done(let answer) = reply.outcome else { return .failure(SheriffProblem(Self.plain(reply.outcome, doing: "Asking Sheriff"))) }
-        // The spec names a page's list `items`; the plugin's 0.4 releases, before it was Sheriff, call it `attempts`. Either is read.
-        struct Wire: Decodable { let items: [SheriffAttempt]?; let attempts: [SheriffAttempt]? }
+        // A page's list is `items`, as the spec names it. The 0.4 releases' `attempts` list is no longer read (K71): every
+        // server runs Sheriff 0.5.0 or later, which LeafJuice asks for.
+        struct Wire: Decodable { let items: [SheriffAttempt]? }
         guard let wire = try? answer.decode(Wire.self) else { return .failure(SheriffProblem("Sheriff's answer couldn't be read.")) }
-        return .success(wire.items ?? wire.attempts ?? [])
+        return .success(wire.items ?? [])
     }
 
     static func plain(_ outcome: CommandOutcome, doing: String) -> String {
