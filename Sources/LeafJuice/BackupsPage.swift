@@ -132,7 +132,7 @@ struct BackupsPage: View {
         }
     }
 
-    /// Back up to the chosen drive only, with the Mac's disk as a late fallback (2026-11-16).
+    /// Back up to the chosen drive only. While it's missing, backups are skipped and reported (D250, 2026-11-21).
     @ViewBuilder private var driveOnlySection: some View {
         let dest = Backups.destination(server.profile)
         let drive = DriveCheck.name(dest)
@@ -144,17 +144,13 @@ struct BackupsPage: View {
                     : nil
                 server.noteBackupDrive()
             }))
-        if let rule = server.profile.backup.fallback {
-            Stepper("Use the Mac's disk after \(rule.afterHours) hours without \(drive)",
-                    value: Binding(get: { rule.afterHours }, set: { server.profile.backup.fallback?.afterHours = $0 }), in: 1...168)
-            Stepper("Only while \(rule.keepFreeGB) GB stays free on the Mac after the backup",
-                    value: Binding(get: { rule.keepFreeGB }, set: { server.profile.backup.fallback?.keepFreeGB = $0 }), in: 20...500, step: 5)
+        if server.profile.backup.fallback != nil {
             if DriveCheck.isConnected(dest) {
                 Badge(text: "\(drive) is connected", tone: .good)
             } else if let since = server.profile.backup.driveMissingSince {
                 Badge(text: "\(drive) missing since \(since.formatted(date: .abbreviated, time: .shortened))", tone: .warning)
             }
-            Hint("While \(drive) is missing, each backup is skipped with a warning. Once it's been gone \(rule.afterHours) hours, backups go to \((rule.path as NSString).abbreviatingWithTildeInPath), but only if \(rule.keepFreeGB) GB stays free. They're listed here to move later, and backups go back to \(drive) when it returns. Storage in the list above is passed over while this is on.")
+            Hint("While \(drive) is missing, each backup is skipped with a warning, and nothing is written to another drive or the Mac's disk. A backup that would take \(drive) over its cap is skipped the same way. Storage in the list above is passed over while this is on.")
         } else {
             Hint("Off: backups use the storage list above, then this folder.")
         }

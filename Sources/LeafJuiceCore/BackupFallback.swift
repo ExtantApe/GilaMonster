@@ -1,15 +1,13 @@
 import Foundation
 
-/// Backups that go to one drive only, with the Mac's own disk as a late fallback. The owner, 2026-11-16: "only do
-/// minecraft backups to that ssd unless its unavailable for a period of time, like 24h, then try to backup to machine
-/// if above 75gb", then "75 GB left after the backup".
+/// Backups that go to one drive only. While that drive is missing, each backup is skipped and reported, and nothing is
+/// written anywhere else. The owner, 2026-11-21 (D250, replacing the 2026-11-16 rule that fell back to the Mac's disk
+/// after 24 hours): every Minecraft backup goes to MCBackups, "and not WDSSD or the internal Mac drive". If the drive
+/// is missing or full, the backup fails closed and says so.
 public struct BackupFallback: Codable, Equatable, Sendable {
-    /// The folder fallback backups go in. Each server gets a folder of its own inside it, claimed like a storage target.
+    /// Where the earlier rule put backups while the drive was missing. Nothing new is written here. It's kept so backups
+    /// made under that rule stay listed until they're moved to the drive or deleted.
     public var path: String
-    /// How long the drive must have been missing, without a break, before the fallback is used.
-    public var afterHours = 24
-    /// What must still be free on the fallback disk after the backup.
-    public var keepFreeGB = 75
     public init(path: String) { self.path = path }
 
     public enum Decision: Equatable, Sendable {
@@ -17,37 +15,13 @@ public struct BackupFallback: Codable, Equatable, Sendable {
         case drive
         /// Skip this backup and say why. Nothing is written anywhere.
         case skip(String)
-        /// Back up to the fallback folder.
-        case fallback
     }
 
-    /// What to do about a backup now. `needed` is the next backup's likely size (the last one of its kind and a margin).
-    /// Unknown free space is a skip: a fallback runs only when it's known to leave enough.
-    public func decide(connected: Bool, missingSince: Date?, now: Date, free: Int64?, needed: Int64, driveName: String) -> Decision {
+    /// What to do about a backup now: the drive if it's connected, otherwise skip.
+    public func decide(connected: Bool, missingSince: Date?, now: Date, driveName: String) -> Decision {
         if connected { return .drive }
         let since = missingSince ?? now
-        let away = now.timeIntervalSince(since)
-        let wait = TimeInterval(max(afterHours, 1)) * 3600
-        if away < wait {
-            let left = Self.span(wait - away)
-            return .skip("\(driveName) isn't connected (missing since \(Self.when(since))). Nothing was written to the Mac's own disk. If it's still missing in \(left), backups go to the Mac's disk instead, while \(keepFreeGB) GB stays free.")
-        }
-        let keep = Int64(keepFreeGB) << 30
-        guard let free else {
-            return .skip("\(driveName) has been missing since \(Self.when(since)), and LeafJuice couldn't tell how much room the Mac's disk has, so nothing was written.")
-        }
-        if free - needed < keep {
-            return .skip("\(driveName) has been missing since \(Self.when(since)). The Mac's disk has \(Format.bytes(free)) free, and this backup may need \(Format.bytes(needed)), which would leave less than \(keepFreeGB) GB. Nothing was written.")
-        }
-        return .fallback
-    }
-
-    /// "about 5 hours", "40 minutes": rounded up, so the fallback is never sooner than said.
-    static func span(_ seconds: TimeInterval) -> String {
-        let minutes = Int((seconds / 60).rounded(.up))
-        if minutes < 60 { return minutes == 1 ? "1 minute" : "\(minutes) minutes" }
-        let hours = Int((seconds / 3600).rounded(.up))
-        return hours == 1 ? "about 1 hour" : "about \(hours) hours"
+        return .skip("\(driveName) isn't connected (missing since \(Self.when(since))). Nothing was written to any other drive or to the Mac's own disk. Plug it in and the next backup goes to it.")
     }
 
     static func when(_ date: Date) -> String {

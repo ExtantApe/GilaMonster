@@ -1628,22 +1628,12 @@ public final class ServerController: Identifiable {
         let sourceBytes = Backups.items(paths.root, scope: effectiveScope).reduce(Int64(0)) { $0 + FileOps.directorySize(paths.root.appendingPathComponent($1).resolvingSymlinksInPath()) }
         let everything = Backups.listAll(profile)
         let estimate = BackupCaps.estimate(records: everything, scope: effectiveScope, sourceBytes: sourceBytes)
-        // The drive-only rule (2026-11-16): the destination's drive, or after a long absence the fallback, or nothing.
-        var onFallback = false
+        // The drive-only rule (D250, 2026-11-21): the destination's drive or nothing. No other drive, and never the Mac's disk.
         if let rule = profile.backup.fallback, !noteBackupDrive() {
-            let primary = Backups.destination(profile)
-            let folder = Backups.targetFolder(rule.path, for: profile)
-            let room = (DiskGuard.standIn ?? DiskGuard.space)(folder)
-            switch rule.decide(connected: false, missingSince: profile.backup.driveMissingSince, now: Date(), free: room.free,
-                               needed: estimate, driveName: DriveCheck.name(primary)) {
-            case .drive: break
-            case .skip(let why):
+            if case .skip(let why) = rule.decide(connected: false, missingSince: profile.backup.driveMissingSince, now: Date(),
+                                                  driveName: DriveCheck.name(Backups.destination(profile))) {
                 backupDriveMissing(why)
                 throw LeafError("This backup was skipped. " + why)
-            case .fallback:
-                try Backups.claim(folder, for: profile.id)
-                into = folder
-                onFallback = true
             }
         }
         var capPlans: [String: (plan: BackupCaps.Plan, cap: DriveCap, folders: [URL])] = [:]
@@ -1716,7 +1706,6 @@ public final class ServerController: Identifiable {
         await copyToMirror(record)
         refreshBackups()
         dropIssue("wrapper:backup-cap-skipped")
-        if onFallback { noteFallbackBackups() }
         checkCapWarning(writeTo)
         appendWrapper("Backup finished: \(Format.bytes(record.size)).", level: .info)
         recordEvent(.backup, "Backed up", detail: "\(Format.bytes(record.size)), \(trigger)")
@@ -1841,7 +1830,7 @@ public final class ServerController: Identifiable {
         let total = held.reduce(Int64(0)) { $0 + $1.size }
         let drive = DriveCheck.name(Backups.destination(profile))
         let back = DriveCheck.isConnected(Backups.destination(profile))
-        let detail = "\(held.count) backup\(held.count == 1 ? " is" : "s are") on the Mac's own disk (\(Format.bytes(total))), in \((folder.path as NSString).abbreviatingWithTildeInPath), written while \(drive) was missing. "
+        let detail = "\(held.count) backup\(held.count == 1 ? " is" : "s are") on the Mac's own disk (\(Format.bytes(total))), in \((folder.path as NSString).abbreviatingWithTildeInPath), written while \(drive) was missing under an earlier rule. New backups never go there. "
             + (back ? "\(drive) is back, and new backups go to it. Move these to it when you like." : "They stay there until you move or delete them.")
         // Reported again only when the wording changes, so a tick doesn't count it up, and the drive coming back shows.
         if issues.first(where: { $0.id == "wrapper:backup-on-fallback" })?.sample == detail { return }
