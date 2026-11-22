@@ -93,17 +93,7 @@ extension ServerController {
                 .appendingPathComponent("\(paths.root.lastPathComponent)-\(Int(Date().timeIntervalSince1970))", isDirectory: true)
             trialFolder = copy
             // A running server pauses saving for the moment it takes to copy.
-            let wasRunning = state == .running
-            if wasRunning, let process {
-                process.send("save-off")
-                let saved = Task { await waitForLine(containing: "saved the game", timeout: .seconds(120)) }
-                await Task.yield()
-                process.send("save-all flush")
-                _ = await saved.value
-            }
-            defer { if wasRunning { process?.send("save-on") } }
-            try await Trial.clone(paths.root, to: copy)
-            if wasRunning { process?.send("save-on") }
+            try await copyWithSavingPaused(to: copy)
 
             let child = try await prepareCopy(copy, report: &report)
             trialController = child

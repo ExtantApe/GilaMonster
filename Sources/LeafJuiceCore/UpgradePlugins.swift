@@ -216,16 +216,15 @@ extension ServerController {
 
     /// A copy taken the way test copies are: a running server stops saving for the moment it takes.
     func copyWithSavingPaused(to copy: URL) async throws {
-        let wasRunning = state == .running
-        if wasRunning, let process {
-            process.send("save-off")
-            let saved = Task { await waitForLine(containing: "saved the game", timeout: .seconds(120)) }
-            await Task.yield()
-            process.send("save-all flush")
-            _ = await saved.value
+        let paused = state == .running && process != nil
+        if paused { _ = await pauseSaving() }
+        do {
+            try await Trial.clone(paths.root, to: copy)
+        } catch {
+            if paused { await resumeSaving(after: "copying the server") }
+            throw error
         }
-        defer { if wasRunning { process?.send("save-on") } }
-        try await Trial.clone(paths.root, to: copy)
+        if paused { await resumeSaving(after: "copying the server") }
     }
 
     /// Switches off what the plan lists, through the tool. LeafJuice's own verified restore point of the whole server

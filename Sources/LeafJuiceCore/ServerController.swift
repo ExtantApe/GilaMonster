@@ -743,7 +743,7 @@ public final class ServerController: Identifiable {
     }
 
     /// Waits for a console line containing any of these, and returns it. nil on timeout or exit.
-    private func waitForLine(containingAny needles: [String], timeout: Duration) async -> String? {
+    func waitForLine(containingAny needles: [String], timeout: Duration) async -> String? {
         await withCheckedContinuation { continuation in
             var finished = false
             let resume: (String?) -> Void = { value in
@@ -1614,15 +1614,26 @@ public final class ServerController: Identifiable {
         let previousActivity = activity
         setActivity("Backing up…")
         defer { setActivity(previousActivity) }
-        let wasRunning = state == .running
-        if wasRunning, let process {
-            process.send("save-off")
-            let saved = Task { await waitForLine(containing: "saved the game", timeout: .seconds(120)) }
-            await Task.yield()
-            process.send("save-all flush")
-            if await !saved.value { appendWrapper("The server didn't confirm its save in time. Backing up anyway.", level: .warn) }
+        // K691: saving is paused only while the files are cloned, then turned back on and confirmed. The archive is made
+        // from the clone. When a clone isn't possible, the live files are archived with saving paused, and it's turned
+        // back on, and confirmed, however the backup ends.
+        var savingPaused = false
+        var clone: URL?
+        if state == .running, process != nil {
+            savingPaused = true
+            if await !pauseSaving() { appendWrapper("The server didn't confirm its save in time. Backing up anyway.", level: .warn) }
+            clone = await cloneForBackup(scope: scope ?? profile.backup.scope)
+            if clone != nil {
+                await resumeSaving(after: "cloning the files for a backup")
+                savingPaused = false
+            } else {
+                appendWrapper("The files couldn't be cloned, so saving stays paused while the backup is made.", level: .info)
+            }
         }
-        defer { if wasRunning { self.process?.send("save-on") } }
+        defer {
+            if let clone { Self.removeClone(clone) }
+            if savingPaused { Task { await self.resumeSaving(after: "a backup") } }
+        }
         var into: URL?
         // Drive caps (D213): each place is checked against its drive's cap, after what could be removed to make room.
         sweepLeftoverPartials()
@@ -1694,7 +1705,11 @@ public final class ServerController: Identifiable {
         }
         // For progress: the last backup of this kind, or half the files' size when there's none (worlds compress about that much).
         let expectedSize = everything.filter { $0.scope == effectiveScope }.max(by: BackupCaps.older)?.size ?? sourceBytes / 2
-        var record = try await Backups.create(profile, root: paths.root, trigger: trigger, scope: scope, into: into, alsoStopIf: capWatch, expected: expectedSize)
+        var record = try await Backups.create(profile, root: clone ?? paths.root, trigger: trigger, scope: scope, into: into, alsoStopIf: capWatch, expected: expectedSize)
+        if savingPaused {
+            await resumeSaving(after: "a backup")
+            savingPaused = false
+        }
         record.location = (into ?? Backups.destination(profile)).path
         profile.backup.lastRun = record.date
         if Self.routineTriggers.contains(trigger) { profile.backup.playedSinceBackup = false }

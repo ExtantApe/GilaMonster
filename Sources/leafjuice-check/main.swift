@@ -4033,7 +4033,7 @@ func buildStandIn(jdk: JavaRuntime, into jar: URL) async throws {
           switch (line.split(" ")[0]) {
             case "list" -> log("INFO", "There are 0 of a max of 20 players online:");
             case "save-off" -> log("INFO", "Automatic saving is now disabled");
-            case "save-on" -> log("INFO", "Automatic saving is now enabled");
+            case "save-on" -> { if (!new File("ignore-save-on").exists()) log("INFO", "Automatic saving is now enabled"); }
             case "save-all" -> { log("INFO", "Saving the game (this may take a moment!)"); log("INFO", "Saved the game"); }
             case "say" -> log("INFO", "[Server] " + line.substring(4));
             case "join" -> log("INFO", "Steve joined the game");
@@ -4141,6 +4141,26 @@ func buildStandIn(jdk: JavaRuntime, into jar: URL) async throws {
         try? await Task.sleep(for: .milliseconds(400))
         check(c.console.contains { $0.text.lowercased().contains("automatic saving is now enabled") }, "saving resumed")
         print("    backup: \(Format.bytes(backup.size))")
+        // K691: saving comes back on as soon as the files are cloned, before the archive is made, and the clone is gone after.
+        let lines = c.console.map { $0.text.lowercased() }
+        let resumedAt = lines.lastIndex { $0.contains("automatic saving is now enabled") }
+        let finishedAt = lines.lastIndex { $0.contains("backup finished") }
+        check(resumedAt != nil && finishedAt != nil && resumedAt! < finishedAt!, "saving resumed before the archive finished (K691)")
+        check(!lines.contains { $0.contains("saving stays paused") }, "the files were cloned, so saving wasn't held for the archive")
+        let clones = c.paths.root.deletingLastPathComponent().appendingPathComponent(AppPaths.ownFolderName).appendingPathComponent("backup-clones")
+        check(FileOps.children(clones).isEmpty, "the backup's clone was removed")
+        archiveMatchesWorld: do {
+            let listed = try await Tool.run("/usr/bin/tar", ["-tzf", c.backups.first { $0.fileName == backup.fileName }.map { URL(fileURLWithPath: $0.location ?? Backups.destination(c.profile).path).appendingPathComponent($0.fileName).path } ?? ""])
+            check(listed.ok && listed.out.contains("world/region/r.0.0.mca"), "the archive made from the clone holds the world")
+        }
+        // A server that never confirms save-on: asked twice, then an issue that says saving may still be off.
+        FileManager.default.createFile(atPath: c.paths.root.appendingPathComponent("ignore-save-on").path, contents: Data())
+        _ = try await c.backupNow()
+        check(c.console.contains { $0.text.contains("Asking again") }, "an unconfirmed save-on is retried once")
+        check(c.issues.contains { $0.id == "wrapper:saving-off" }, "and then raised as an issue (K691)")
+        try? FileManager.default.removeItem(at: c.paths.root.appendingPathComponent("ignore-save-on"))
+        _ = try await c.backupNow()
+        check(!c.issues.contains { $0.id == "wrapper:saving-off" }, "a later confirmed save-on clears it")
 
         // A restart at a set time warns players, then applies the queue.
         c.profile.restart.warnings = [30, 3]
