@@ -15,6 +15,8 @@ import UserNotifications
 final class SessionPrompts: NSObject, UNUserNotificationCenterDelegate, @unchecked Sendable {
     static let shared = SessionPrompts()
     static let category = "leafjuice.session.ask"
+    static let categoryToday = "leafjuice.session.ask.today"
+    static let allowToday = "allow-today"
     static let allow = "allow"
     static let deny = "deny"
     static let log = Logger(subsystem: Bundle.main.bundleIdentifier ?? "LeafJuice", category: "session-ask")
@@ -35,6 +37,10 @@ final class SessionPrompts: NSObject, UNUserNotificationCenterDelegate, @uncheck
                 }
             }
         }
+        service.onAutoAllowed = { text in
+            SessionPrompts.log.notice("Allowed for today: \(text, privacy: .public)")
+            SessionPrompts.notice(text)
+        }
         service.onAnswered = { id in
             UNUserNotificationCenter.current().removeDeliveredNotifications(withIdentifiers: [id.uuidString])
             UNUserNotificationCenter.current().removePendingNotificationRequests(withIdentifiers: [id.uuidString])
@@ -45,7 +51,9 @@ final class SessionPrompts: NSObject, UNUserNotificationCenterDelegate, @uncheck
         center.delegate = self
         let allow = UNNotificationAction(identifier: Self.allow, title: "Allow", options: [.authenticationRequired])
         let deny = UNNotificationAction(identifier: Self.deny, title: "Deny", options: [.destructive])
-        center.setNotificationCategories([UNNotificationCategory(identifier: Self.category, actions: [allow, deny], intentIdentifiers: [])])
+        let today = UNNotificationAction(identifier: Self.allowToday, title: "Allow for Today", options: [.authenticationRequired])
+        center.setNotificationCategories([UNNotificationCategory(identifier: Self.category, actions: [allow, deny], intentIdentifiers: []),
+                                          UNNotificationCategory(identifier: Self.categoryToday, actions: [allow, today, deny], intentIdentifiers: [])])
     }
 
     @MainActor static func post(_ approval: SessionApproval) {
@@ -62,11 +70,21 @@ final class SessionPrompts: NSObject, UNUserNotificationCenterDelegate, @uncheck
         content.title = approval.sentence
         content.body = "Asked through leafjuice-session. The name is the session's own. No answer in \(Int(approval.deadline.timeIntervalSince(approval.asked) / 60)) minutes means no."
         content.sound = .default
-        content.categoryIdentifier = category
+        content.categoryIdentifier = approval.canAllowForToday ? categoryToday : category
         content.interruptionLevel = .timeSensitive
         center.add(UNNotificationRequest(identifier: id, content: content, trigger: nil)) { error in
             if let error { log.error("Session ask \(id, privacy: .public): notification not added: \(error.localizedDescription, privacy: .public)") }
         }
+    }
+
+    /// A plain notice, no buttons: an action went ahead under Allow for today.
+    @MainActor static func notice(_ text: String) {
+        guard Bundle.main.bundleIdentifier != nil else { return }
+        let content = UNMutableNotificationContent()
+        content.title = "Allowed for today"
+        content.body = text
+        content.sound = .default
+        UNUserNotificationCenter.current().add(UNNotificationRequest(identifier: UUID().uuidString, content: content, trigger: nil))
     }
 
     func userNotificationCenter(_ center: UNUserNotificationCenter, willPresent notification: UNNotification) async -> UNNotificationPresentationOptions {
@@ -75,11 +93,12 @@ final class SessionPrompts: NSObject, UNUserNotificationCenterDelegate, @uncheck
 
     func userNotificationCenter(_ center: UNUserNotificationCenter, didReceive response: UNNotificationResponse) async {
         let content = response.notification.request.content
-        guard content.categoryIdentifier == Self.category, let id = UUID(uuidString: response.notification.request.identifier) else { return }
+        guard [Self.category, Self.categoryToday].contains(content.categoryIdentifier), let id = UUID(uuidString: response.notification.request.identifier) else { return }
         let action = response.actionIdentifier
         await MainActor.run {
             switch action {
             case Self.allow: SessionAccessService.shared.resolve(id, allow: true)
+            case Self.allowToday: SessionAccessService.shared.resolveForToday(id)
             case Self.deny: SessionAccessService.shared.resolve(id, allow: false)
             default:
                 // Clicking the notification itself answers nothing: it brings the ask window forward.
@@ -180,6 +199,11 @@ struct SessionAskList: View {
                     Spacer(minLength: 12)
                     Button("Deny") { service.resolve(ask.id, allow: false) }.buttonStyle(.juice)
                         .accessibilityLabel("Deny: \(ask.sentence)")
+                    if let family = ask.action.todayFamily {
+                        Button("Allow for Today") { service.resolveForToday(ask.id) }.buttonStyle(.juice)
+                            .help("Allows \(family.words) on every server without asking again until midnight. Each one still checks nobody is online.")
+                            .accessibilityLabel("Allow for today: \(ask.sentence). Covers \(family.words) on every server until midnight.")
+                    }
                     Button("Allow") { service.resolve(ask.id, allow: true) }.buttonStyle(.juicePrimary)
                         .accessibilityLabel("Allow: \(ask.sentence)")
                 }

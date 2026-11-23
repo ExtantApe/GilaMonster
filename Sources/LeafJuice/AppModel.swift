@@ -607,6 +607,12 @@ struct StatusMenu: View {
             Button("Requests Waiting for You (\(SessionAccessService.shared.waiting.count))…") { SessionAskWindow.shared.show() }
             Divider()
         }
+        let today = SessionAccessService.shared.today.active(now: Date())
+        if !today.isEmpty {
+            Text("Allowed for today: \(today.map(\.family.words).joined(separator: "; "))")
+            Button("Revoke Today's Allows") { SessionAccessService.shared.revokeToday() }
+            Divider()
+        }
         ForEach(model.listed) { server in
             Text("\(server.profile.name): \(server.state.title)")
             if server.state.canStart {

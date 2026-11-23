@@ -29,6 +29,7 @@ a single local app with no web server, no daemon and no container.
 | **The Change Queue is the core idea** | Nothing that needs a restart touches disk while the server runs. See below. |
 | **No AI at runtime** | Rules are a data table with a tested sample per rule. Anything unmatched is still catalogued and grouped. "Copy report" lets a person paste it wherever they like. |
 | **Unsigned, GitHub Releases only** | Ad-hoc signed; the README explains first launch. In-app "update available" notice links to the release; no self-updater. |
+| **Allow for today (2026-11-23, K721)** | The owner chose "Same action, same server (Recommended)" and "Now, as part of today's push", then "It should work for all servers". One click on a session's prompt allows that kind of action on every server until local midnight. It never covers deletes, restores, world resets, removing a pack address or naming a player. Each action still checks nobody is online and refuses when that can't be told, with a notice and a record entry. A menu bar item revokes them all, and the grants are kept only in memory, so quitting clears them. |
 
 ### Owner decisions
 

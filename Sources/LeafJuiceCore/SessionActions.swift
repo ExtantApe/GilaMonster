@@ -136,6 +136,9 @@ public struct SessionApproval: Identifiable, Equatable, Sendable {
 
     /// "Head of Games wants to stop Made-up Server". The caller's name is their own claim.
     public var sentence: String { "\(caller) wants to \(action.verb(recipe: recipe)) \(server)" }
+
+    /// Whether the prompt offers Allow for today.
+    public var canAllowForToday: Bool { action.todayFamily != nil }
 }
 
 extension PackGate {
@@ -159,6 +162,19 @@ extension SessionAccessService {
 
     /// The owner's Allow or Deny, from the notification or Settings. An id that's already answered is ignored.
     public func resolve(_ id: UUID, allow: Bool) { finish(id, allow ? .allowed : .denied) }
+
+    /// The owner's Allow for today, from the ask window, Settings or the notification. It allows this request and adds
+    /// a grant for its kind of action on every server until local midnight. Only a request that's waiting, and whose
+    /// action can be covered, adds one; anything else does nothing.
+    public func resolveForToday(_ id: UUID) {
+        guard let ask = waiting.first(where: { $0.id == id }), let family = ask.action.todayFamily else { return }
+        _ = today.add(family, now: now(), calendar: calendar)
+        lastToday.insert(id)
+        finish(id, .allowed)
+    }
+
+    /// The menu bar's revoke: every grant ends now.
+    public func revokeToday() { today.revokeAll() }
 
     func finish(_ id: UUID, _ answer: Answer) {
         guard let c = answers.removeValue(forKey: id) else { return }
@@ -231,13 +247,31 @@ extension SessionAccessService {
         let asks = action.kind == .ask || (action == .gateCheck && !player.isEmpty && gateDecides)
         if asks, let server {
             if Backups.writing { return refuse("A backup is being written, so nothing was changed. Try again when it's done.") }
+            let family = action.todayFamily
+            var coveredToday = false
             if server.sessionPermission.skipsPrompt {
                 note = "Standing permission"
-            } else {
+            } else if let family, today.covers(family, now: now()) {
+                // Allowed for today: still only with nobody on this server, and never when that can't be told.
+                let who: Online
+                if let online { who = await online(server) } else { who = await server.whoIsOnline() }
+                switch who {
+                case .nobody:
+                    coveredToday = true
+                    note = "Allowed for today by the owner; nobody online"
+                case .someone:
+                    break
+                case let .unsure(why):
+                    return refuse("This is allowed for today, but LeafJuice couldn't tell whether anyone is on \(server.profile.name) (\(why)), so nothing was done.")
+                }
+            }
+            if note == nil {
                 let now = Date()
                 let approval = SessionApproval(id: UUID(), caller: caller, action: action, server: server.profile.name,
                                                recipe: recipe.isEmpty ? nil : recipe, asked: now, deadline: now.addingTimeInterval(approvalWait))
                 switch await askOwner(approval) {
+                case .allowed where lastToday.remove(approval.id) != nil:
+                    note = "Allowed for today by the owner, until midnight"
                 case .allowed: note = "Allowed by the owner"
                 case .denied: return refuse("The owner said no.")
                 case .noAnswer:
@@ -246,6 +280,10 @@ extension SessionAccessService {
                 }
             }
             if Backups.writing { return refuse("A backup started while waiting, so nothing was changed.") }
+            if coveredToday, let family {
+                server.appendWrapper("Allowed for today: \(caller) asked to \(action.verb(recipe: recipe.isEmpty ? nil : recipe)) this server, and nobody was online.", level: .info)
+                onAutoAllowed?("\(caller) \(action.verb(recipe: recipe.isEmpty ? nil : recipe)) \(server.profile.name) without asking. You allowed \(family.words) for today.")
+            }
         }
 
         do {

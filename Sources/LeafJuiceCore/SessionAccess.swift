@@ -374,12 +374,23 @@ public final class SessionAccessService {
     public internal(set) var waiting: [SessionApproval] = []
     @ObservationIgnored var answers: [UUID: CheckedContinuation<Bool, Never>] = [:]
     @ObservationIgnored var lastAnswer: [UUID: Answer] = [:]
+    /// Requests the owner answered with Allow for today, until their action is recorded.
+    @ObservationIgnored var lastToday: Set<UUID> = []
     /// How long a request waits for Allow before it counts as no.
     public var approvalWait: TimeInterval = 120
     /// Set by the app: shows the Allow notification. Nil means nobody can be asked, so every ask is refused.
     @ObservationIgnored public var onAsk: (@MainActor (SessionApproval) -> Void)?
     /// Set by the app: takes a notification away once its request is answered or lapses.
     @ObservationIgnored public var onAnswered: (@MainActor (UUID) -> Void)?
+
+    /// Allow for today (K721): in memory only, added only by `resolveForToday`, cleared when LeafJuice quits.
+    public internal(set) var today = TodayGrants()
+    /// Set by the app: the notice for an action that went ahead under Allow for today.
+    @ObservationIgnored public var onAutoAllowed: (@MainActor (String) -> Void)?
+    /// For checks: the clock, the calendar midnight is worked out in, and who's online. The app leaves them as they are.
+    @ObservationIgnored var now: () -> Date = { Date() }
+    @ObservationIgnored var calendar = Calendar.current
+    @ObservationIgnored var online: ((ServerController) async -> Online)?
 
     public init() {}
 

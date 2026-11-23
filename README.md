@@ -310,6 +310,16 @@ server's LeafJuice folder. If that file can't be read, the mark counts as on. le
 either, but any program running as your macOS account could edit the file, as it could most of your files. The guard
 against that is the Allow prompt everywhere else, plus a line in the server's log each time the mark changes.
 
+**Allow for today** sits next to Allow on a prompt, for starts, stops and restarts, publishing a pack build, marking
+Packmule updated, pack serving on and off, and giving a pack address. One click allows that kind of action on every
+server until midnight, Mac time: allowing a stop covers starts, stops and restarts everywhere today, and nothing else.
+It never covers removing a pack address, asking about a named player, or anything that deletes, restores or resets a
+world. Each one that goes ahead this way still checks that nobody is on that server first. With someone online it asks
+as usual, and when LeafJuice can't tell (the server is starting or stopping, runs outside LeafJuice, or its management
+server doesn't answer) it's refused. Each shows a notice, a line in the server's log and an entry in the record.
+**Revoke Today's Allows** in the menu bar leaf ends them all, and quitting LeafJuice does too. The grants are kept only
+in memory: nothing writes them to a file, and no session call can make or extend one.
+
 ```bash
 leafjuice-session --as "Server lead" pack add ~/Downloads/made-up-pack.zip
 leafjuice-session --as "Server lead" recipe set made-up --packs made-up-pack,other-pack
@@ -321,8 +331,10 @@ leafjuice-session --as "Server lead" restart --server "Made-up Server"
 ```
 
 **Tested:** every refusal, Allow, Deny, no answer, nobody to ask, the backup refusal and standing permission, with
-made-up servers that never start and a listener on 127.0.0.1. **Not tested:** the real notification and its buttons, a
-real start or restart through a session, and a real publish.
+made-up servers that never start and a listener on 127.0.0.1. Allow for today: midnight, a second server covered and
+another kind of action not, revoke, players online, refusing when that can't be told, and that only a click on a
+waiting ask makes a grant. **Not tested:** the real notification and its buttons, a
+real start or restart through a session, a real publish, and the Allow for today button and notice on screen.
 
 ## Staying safe when you're not looking
 
