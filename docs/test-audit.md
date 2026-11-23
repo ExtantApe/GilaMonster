@@ -2,6 +2,13 @@
 
 Each audit lists what LeafJuice promises, which checks prove each promise, and the gaps. Run the checks with `swift run leafjuice-check` (offline, made-up data, about 80 seconds). The `--real-*`, `--lab` and `--sandbox` runs boot real Paper and are listed apart.
 
+## 2026-11-22: 31 changes since 2026-11-14
+
+- **Promises added since the last audit:** backups go to one drive only, are skipped while the drive is missing with no fallback to the Mac's disk, are capped on a shared drive, leave no partial file after a quit, say when macOS blocks a drive, and resume saving as soon as the files are cloned (D213, D215, D250); quitting during a backup asks first; sessions can start, stop and restart servers and manage packs only behind Allow and the children mark, and each session ask opens its own window, reaching the owner during a Focus; typed patterns in the command list; no server starts at launch unless its box is on; the lab is built per status-board run and deleted when the run ends; Packmule's link check lets only joining players past; token downloads use a real HTTP client; plugin source badges; the old Sheriff and WelcomeWagon list formats are no longer read; the build refuses to overwrite a running app; the shutdown quit handler is registered in release builds.
+- **Covered:** backups by `BackupCapChecks.swift` and `DriveFallbackChecks.swift`, and the resume in `main.swift`; session powers and refusals by `SessionActionChecks.swift` and `SessionAccessChecks.swift`; asks by `SessionAskChecks.swift`; patterns by `CommandPatternChecks.swift`; launch by `LaunchStartChecks.swift`; the lab by `LabRunChecks.swift`, including its deletion; the pack gate and downloads by `PackGateChecks.swift`; the pack card by `PackPublishChecks.swift`; badges by `PaletteChecks.swift`; the old formats by `PluginCommandChecks.swift`; the build guard by `scripts/test-build-guard.sh`.
+- **Gaps added:** the shutdown handler had no guard against slipping back into the debug-only block, which is how release builds lost it (6b44886). `scripts/test-release-quit.sh` now checks that, with a self-test, and runs in CI.
+- **Gaps skipped (and why):** the wording of the drive-only failure notice, the server menu's state dots, the outlined switches and the status board's station wording are on-screen text and styling, checked by eye. The signing script's stable certificate is build plumbing with no user data at stake. A real Mac shutdown is still untested, as in the last audit.
+
 ## 2026-11-14: quitting at a Mac shutdown (K650)
 
 - **The reason codes:** 'shut', 'rest', 'rlgo' and 'logo' are a shutdown, a restart and a log out, none of which waits

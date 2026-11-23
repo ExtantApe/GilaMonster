@@ -22,5 +22,7 @@ jobs:
         run: swift run leafjuice-check
       - name: The build refuses to delete a bundle something is running from
         run: scripts/test-build-guard.sh
+      - name: Release builds stop servers at a Mac shutdown too
+        run: scripts/test-release-quit.sh
       - name: The app builds and bundles
         run: scripts/build-app.sh
