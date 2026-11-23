@@ -128,6 +128,9 @@ public final class ServerController: Identifiable {
     private var flushScheduled = false
     private var nextLineID = 0
     private var expectingStop = false
+    /// From this run's own log (K692): it ran its own shutdown, and whether anything said it crashed.
+    private var sawShutdown = false
+    private var sawCrash = false
     private var restartAfterStop = false
     private var crashTimes: [Date] = []
     private var stopDeadline: Task<Void, Never>?
@@ -469,6 +472,8 @@ public final class ServerController: Identifiable {
         startedAt = Date()
         players = []
         expectingStop = false
+        sawShutdown = false
+        sawCrash = false
         state = .starting
         recordEvent(.start, "Started \(profile.software.label)")
         try? JSONStore.save(child.pid, to: paths.pid)
@@ -532,10 +537,13 @@ public final class ServerController: Identifiable {
         persistIssues()
         Task { await refreshPluginsAndConfigs() }
 
-        // Exit code 0 is a clean stop, even when someone typed /stop in the game.
-        if !failedToStart, expectingStop || code == 0 {
-            appendWrapper("Server stopped.", level: .info)
-            recordEvent(.stop, "Stopped")
+        // Exit code 0 is a clean stop, even when someone typed /stop in the game. So is a shutdown the server ran itself
+        // after a stop or SIGTERM from outside (code 143), with no crash in its log (K692): restarting it would undo
+        // a stop someone meant, and leave a server LeafJuice later orphans.
+        let stoppedElsewhere = !expectingStop && code != 0 && ShutdownSignals.stoppedItself(sawShutdown: sawShutdown, sawCrash: sawCrash)
+        if !failedToStart, expectingStop || code == 0 || stoppedElsewhere {
+            appendWrapper(stoppedElsewhere ? "The server was stopped from outside LeafJuice and saved its worlds. It wasn't restarted." : "Server stopped.", level: .info)
+            recordEvent(.stop, stoppedElsewhere ? "Stopped outside LeafJuice" : "Stopped")
             state = .stopped
             if restartAfterStop {
                 restartAfterStop = false
@@ -678,6 +686,9 @@ public final class ServerController: Identifiable {
                 failedJoins.insert(refused, at: 0)
                 if failedJoins.count > 100 { failedJoins.removeLast() }
                 recordEvent(.player, "\(refused.name) couldn't join", detail: refused.meaning)
+            }
+            if !parsed.isChat, let ending = ShutdownSignals.kind(of: parsed.message) {
+                if ending == .crash { sawCrash = true } else { sawShutdown = true }
             }
             commands.ingest(line)
             append(line, level: parsed.level, origin: .server)

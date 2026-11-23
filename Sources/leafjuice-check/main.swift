@@ -158,6 +158,7 @@ if CommandLine.arguments.contains("--connections") {
     await labRunChecks()
     await smartBackupChecks()
     await backupCapChecks()
+    shutdownSignalChecks()
     await driveFallbackChecks()
     sessionAskPlacementChecks()
     inviteTicketChecks()
@@ -4019,6 +4020,8 @@ func buildStandIn(jdk: JavaRuntime, into jar: URL) async throws {
         Files.createDirectories(Path.of("world/region"));
         Files.writeString(Path.of("world/level.dat"), "level");
         Files.writeString(Path.of("world/region/r.0.0.mca"), "region " + p.getProperty("motd"));
+        // Like a real server: a SIGTERM, or any exit, runs the shutdown hook, which logs and saves.
+        Runtime.getRuntime().addShutdownHook(new Thread(() -> log("INFO", "Stopping server")));
         log("INFO", "Starting minecraft server version 1.21.11");
         log("WARN", "**** SERVER IS RUNNING IN OFFLINE/INSECURE MODE!");
         for (var plugin : Objects.requireNonNull(new File("plugins").list())) if (plugin.endsWith(".jar")) log("INFO", "Enabling " + plugin);
@@ -4392,6 +4395,20 @@ func buildStandIn(jdk: JavaRuntime, into jar: URL) async throws {
             await checkUntil(10, "crash noticed: \(c.state)") { if case .crashed(3) = c.state { return true }; return false }
             check(c.issues.contains { $0.id == "wrapper:crash" }, "crash catalogued")
             check(!FileOps.exists(c.paths.pid), "pid cleaned after crash")
+
+            // A stop from outside (a SIGTERM to Java, as another tool or `kill` would send) saves through the server's
+            // own shutdown and isn't a crash, so it isn't restarted even with restarts on (K692).
+            c.profile.launch.restartOnCrash = true
+            await c.start()
+            await checkUntil(startupTimeout, "up for the outside stop") { c.state == .running }
+            if let pid: Int32 = try? JSONStore.decoder.decode(Int32.self, from: Data(contentsOf: c.paths.pid)) {
+                kill(pid, SIGTERM)
+                await checkUntil(10, "outside stop noticed: \(c.state)") { c.state == .stopped }
+                try? await Task.sleep(for: .seconds(12))
+                check(c.state == .stopped, "not restarted 12 seconds after an outside stop: \(c.state)")
+                check(c.console.contains { $0.text.contains("stopped from outside LeafJuice") }, "the console says it was stopped from outside")
+            } else { check(false, "pid file written") }
+            c.profile.launch.restartOnCrash = false
         }
 
         // Bad flags explain themselves.
@@ -4789,6 +4806,7 @@ func makePack(_ name: String, _ files: [String: String], inside: String? = nil) 
     await labRunChecks()
     await smartBackupChecks()
     await backupCapChecks()
+    shutdownSignalChecks()
     await driveFallbackChecks()
     sessionAskPlacementChecks()
     inviteTicketChecks()
@@ -6106,4 +6124,20 @@ exit(failures.isEmpty ? 0 : 1)
         try JSONStore.save([root.path], to: AppPaths.registry)
         print("sandbox ready: \(root.path)")
     } catch { print("sandbox failed: \(error)"); exit(1) }
+}
+
+/// K692: telling a server that shut itself down from one that crashed, by its own log lines.
+@MainActor func shutdownSignalChecks() {
+    section("Shutdown or crash, from the log")
+    equal(ShutdownSignals.kind(of: "Stopping server"), .shutdown, "vanilla and Paper's shutdown line")
+    equal(ShutdownSignals.kind(of: "  Stopping the server "), .shutdown, "the console stop line, trimmed")
+    equal(ShutdownSignals.kind(of: "Encountered an unexpected exception"), .crash, "a crash")
+    equal(ShutdownSignals.kind(of: "The server has stopped responding! This is (probably) not a Paper bug."), .crash, "a freeze")
+    equal(ShutdownSignals.kind(of: "This crash report has been saved to: /made/up/crash.txt"), .crash, "a crash report")
+    equal(ShutdownSignals.kind(of: "Exception in server tick loop"), .crash, "a tick loop exception")
+    equal(ShutdownSignals.kind(of: "Stopping server now, friends"), nil, "only the exact line counts")
+    equal(ShutdownSignals.kind(of: "Done (1.234s)! For help, type \"help\""), nil, "an ordinary line")
+    check(ShutdownSignals.stoppedItself(sawShutdown: true, sawCrash: false), "a shutdown with no crash is a stop made outside")
+    check(!ShutdownSignals.stoppedItself(sawShutdown: true, sawCrash: true), "a crash that also shut down is a crash")
+    check(!ShutdownSignals.stoppedItself(sawShutdown: false, sawCrash: false), "an exit with no shutdown is a crash")
 }

@@ -102,6 +102,9 @@ final class AppModel {
     /// The page to show, in case the one asked for belongs to a module that's off.
     var visiblePage: PageID { page.module.map(Modules.shared.isOn) ?? true ? page : .overview }
     var anyLive: Bool { servers.contains { $0.state.isLive || $0.trialIsLive } }
+    /// Servers an earlier LeafJuice started and left running when it went away (K692). Their pid file is LeafJuice's
+    /// own and the process runs in the server's folder, so stopping them with a SIGTERM (which saves) is safe.
+    var leftOver: [ServerController] { servers.filter { if case .external = $0.state { true } else { false } } }
 
     init() {
         let paths: [String] = JSONStore.load(AppPaths.registry, defaults: [])
@@ -192,6 +195,10 @@ final class AppModel {
             if server.isLab, lab.isBusy { server.forceStop() }
             if server.state.isLive { server.stop() }
         }
+        // Left-over servers stop alongside, each asked to save and shut down (K692).
+        await withTaskGroup(of: Void.self) { group in
+            for server in leftOver { group.addTask { await server.stopExternalServer() } }
+        }
         for _ in 0..<(180 * 4) where anyLive { try? await Task.sleep(for: .milliseconds(250)) }
     }
 
@@ -246,7 +253,20 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
                                                      forEventClass: AEEventClass(kCoreEventClass), andEventID: AEEventID(kAEQuitApplication))
     }
 
+    /// Kept alive for the app's life: the handlers for being told to quit by a signal.
+    private static var signalSources: [DispatchSourceSignal] = []
+    private static var signalled = false
+
     @MainActor func applicationDidFinishLaunching(_ notification: Notification) {
+        // Killed with SIGTERM, SIGHUP or SIGINT (killall, a script, a terminal), the app used to vanish and leave its
+        // servers running with nobody to stop them (K692). Now it stops them with a save first, as at a shutdown.
+        for sig in [SIGTERM, SIGHUP, SIGINT] {
+            signal(sig, SIG_IGN)
+            let source = DispatchSource.makeSignalSource(signal: sig, queue: .main)
+            source.setEventHandler { MainActor.assumeIsolated { AppDelegate.quitOnSignal(sig) } }
+            source.resume()
+            Self.signalSources.append(source)
+        }
         NSWorkspace.shared.notificationCenter.addObserver(forName: NSWorkspace.willPowerOffNotification, object: nil, queue: .main) { _ in
             AppDelegate.poweringOff = true
         }
@@ -388,7 +408,7 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
             }
             return
         }
-        guard reason.unattended, let model = Self.model, model.anyLive else { NSApp.terminate(nil); return }
+        guard reason.unattended, let model = Self.model, model.anyLive || !model.leftOver.isEmpty else { NSApp.terminate(nil); return }
         Self.quitLog.notice("\(reason.words, privacy: .public): stopping servers with a save, without asking")
         for server in model.servers where server.state.isLive {
             server.appendWrapper("\(reason.words), so LeafJuice is stopping this server with a save.", level: .info)
@@ -400,6 +420,24 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
             if let held { NSAppleEventManager.shared().resume(withSuspensionID: held) }
             NSApp.terminate(nil)
             try? await Task.sleep(for: .seconds(2))
+            exit(0)
+        }
+    }
+
+    /// A signal asked the app to quit: stop every server with a save, without asking (nobody may be there to answer),
+    /// then exit. A second signal while stopping changes nothing; the stops already have their own time limits.
+    @MainActor static func quitOnSignal(_ sig: Int32) {
+        guard !signalled else { return }
+        signalled = true
+        let name = sig == SIGTERM ? "SIGTERM" : sig == SIGHUP ? "SIGHUP" : "SIGINT"
+        quitLog.notice("Asked to quit by \(name, privacy: .public): stopping servers with a save")
+        guard let model else { exit(0) }
+        for server in model.servers where server.state.isLive {
+            server.appendWrapper("LeafJuice was asked to quit (\(name)), so it's stopping this server with a save.", level: .info)
+        }
+        Backups.cancelInFlight()
+        Task { @MainActor in
+            await model.stopAll()
             exit(0)
         }
     }
@@ -419,7 +457,7 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
             }
             return .terminateLater
         }
-        guard let model = Self.model, model.anyLive else {
+        guard let model = Self.model, model.anyLive || !model.leftOver.isEmpty else {
             // A backup can run with every server stopped. Quitting mid-way used to leave its partial file (D213).
             Backups.cancelInFlight()
             return .terminateNow
@@ -442,7 +480,8 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
         }
         let alert = NSAlert()
         alert.messageText = "Stop running servers and quit?"
-        alert.informativeText = "Players will be disconnected and worlds saved first. This can take a moment."
+        let others = model.leftOver.map(\.profile.name)
+        alert.informativeText = "Players will be disconnected and worlds saved first. This can take a moment." + (others.isEmpty ? "" : " This includes \(others.joined(separator: ", ")), left running the last time LeafJuice closed.")
         alert.addButton(withTitle: "Stop and Quit")
         alert.addButton(withTitle: "Cancel")
         guard alert.runModal() == .alertFirstButtonReturn else { return .terminateCancel }

@@ -2,6 +2,13 @@
 
 Each audit lists what LeafJuice promises, which checks prove each promise, and the gaps. Run the checks with `swift run leafjuice-check` (offline, made-up data, about 80 seconds). The `--real-*`, `--lab` and `--sandbox` runs boot real Paper and are listed apart.
 
+
+## 2026-11-22: K692 (servers outliving LeafJuice)
+
+- Promises: a shutdown the server ran itself, with no crash line, is a stop and isn't restarted; any crash marker wins; only exact, non-chat shutdown lines count; signals to the app stop servers with a save; left-over servers are stopped when quitting.
+- Covered: `shutdownSignalChecks` (11 checks) and the stand-in lifecycle's outside-SIGTERM run (no restart after 12 s with restarts on, console note). The existing crash check still sees a crash, now with the stand-in's shutdown hook logging "Stopping server" after it, so crash markers winning is covered on a real process.
+- Gaps skipped (and why): the signal handler and the quit question with a left-over server need the app running, and the app the owner uses mustn't be signalled. Left for his next restart of LeafJuice, or a separate build in another folder.
+
 ## 2026-11-22: 31 changes since 2026-11-14
 
 - **Promises added since the last audit:** backups go to one drive only, are skipped while the drive is missing with no fallback to the Mac's disk, are capped on a shared drive, leave no partial file after a quit, say when macOS blocks a drive, and resume saving as soon as the files are cloned (D213, D215, D250); quitting during a backup asks first; sessions can start, stop and restart servers and manage packs only behind Allow and the children mark, and each session ask opens its own window, reaching the owner during a Focus; typed patterns in the command list; no server starts at launch unless its box is on; the lab is built per status-board run and deleted when the run ends; Packmule's link check lets only joining players past; token downloads use a real HTTP client; plugin source badges; the old Sheriff and WelcomeWagon list formats are no longer read; the build refuses to overwrite a running app; the shutdown quit handler is registered in release builds.
