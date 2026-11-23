@@ -7,27 +7,44 @@ struct OverviewPage: View {
     let server: ServerController
     @Binding var renaming: Bool
     @State private var confirmRemove = false
+    @State private var choosingIcon = false
 
     private let columns = [GridItem(.adaptive(minimum: 250), spacing: 14, alignment: .top)]
 
     var body: some View {
-        Page(title: server.profile.name, subtitle: (server.paths.root.path as NSString).abbreviatingWithTildeInPath, oneLineSubtitle: true) {
+        Page(title: server.profile.name, subtitle: statusLine) {
             HStack(spacing: 8) {
                 Badge(text: server.state.title, tone: server.state.tone, icon: server.state.icon)
-                if server.state.isLive, let startedAt = server.startedAt {
-                    Text("since \(startedAt.formatted(date: .omitted, time: .shortened))").font(.callout).foregroundStyle(Juice.muted)
-                }
                 Spacer()
-                if !server.isLab { Button("Rename…") { renaming = true }.buttonStyle(.juice) }
-                Button("Show in Finder") { NSWorkspace.shared.open(server.paths.root) }.buttonStyle(.juice)
-                if !server.isLab {
-                    Menu {
-                        Button("Remove from LeafJuice…") { confirmRemove = true }.disabled(server.state.isLive)
-                    } label: {
-                        Label("More", systemImage: "ellipsis.circle").labelStyle(.iconOnly)
-                    }
-                    .menuStyle(.borderlessButton).fixedSize().accessibilityLabel("More actions").help("More actions")
+                // Start, Stop and Restart here and in the toolbar (owner, 2026-11-16: "Both").
+                if server.state.canStart {
+                    Button { Task { await server.start() } } label: { Label("Start", systemImage: "play.fill") }
+                        .buttonStyle(.juicePrimary).disabled(!server.canStartNow)
+                } else {
+                    Button { server.stop() } label: { Label("Stop", systemImage: "stop.fill") }
+                        .buttonStyle(.juice).disabled(server.state != .running && server.state != .starting)
+                    Button { server.restart() } label: { Label("Restart", systemImage: "arrow.clockwise") }
+                        .buttonStyle(.juice).disabled(server.state != .running)
                 }
+                Button("Show in Finder") { NSWorkspace.shared.open(server.paths.root) }.buttonStyle(.juice)
+                Menu {
+                    // The folder path, server icon and rename live here, out of the way (K672).
+                    Section((server.paths.root.path as NSString).abbreviatingWithTildeInPath) {
+                        Button("Copy Folder Path") {
+                            NSPasteboard.general.clearContents()
+                            NSPasteboard.general.setString(server.paths.root.path, forType: .string)
+                        }
+                    }
+                    if !server.isLab {
+                        Button("Rename…") { renaming = true }
+                        Button("Server Icon…") { choosingIcon = true }
+                        Divider()
+                        Button("Remove from LeafJuice…") { confirmRemove = true }.disabled(server.state.isLive)
+                    }
+                } label: {
+                    Label("More", systemImage: "ellipsis.circle").labelStyle(.iconOnly)
+                }
+                .menuStyle(.borderlessButton).fixedSize().accessibilityLabel("More actions").help("More actions")
             }
 
             if server.isLab { LabRunCard(model: model) }
@@ -46,6 +63,9 @@ struct OverviewPage: View {
                 }
             }
 
+            needsYou
+
+            Text("At a glance").font(.title3.weight(.semibold)).foregroundStyle(Juice.ink).accessibilityAddTraits(.isHeader)
             LazyVGrid(columns: columns, alignment: .leading, spacing: 14) {
                 connectCard
                 if !server.isLab { ConnectionsCard(server: server) }
@@ -54,13 +74,74 @@ struct OverviewPage: View {
                 pluginsCard
                 backupsCard
                 issuesCard
-                if !server.isLab { ServerIconCard(server: server) }
             }
+        }
+        .task(id: server.backups.first?.date) { await server.refreshDriveWarning() }
+        .sheet(isPresented: $choosingIcon) {
+            VStack(alignment: .trailing, spacing: 12) {
+                ServerIconCard(server: server)
+                Button("Done") { choosingIcon = false }.buttonStyle(.juicePrimary).keyboardShortcut(.defaultAction)
+            }
+            .padding(20).frame(minWidth: 460)
         }
         .confirmationDialog("Remove \(server.profile.name) from LeafJuice?", isPresented: $confirmRemove) {
             Button("Remove", role: .destructive) { model.remove(server) }
         } message: {
             Text("The server's folder stays where it is, with all its files and worlds. Backups aren't deleted either.")
+        }
+    }
+
+    private var statusLine: String {
+        NeedsYou.statusLine(running: server.state == .running, starting: server.state == .starting, since: server.startedAt,
+                            players: server.players.count, software: server.profile.software.label,
+                            lastBackup: server.backups.first?.date, isLab: server.isLab)
+    }
+
+    private var needsYouFacts: NeedsYouFacts {
+        var f = NeedsYouFacts()
+        f.isLab = server.isLab
+        f.hasBackup = !server.backups.isEmpty
+        f.autoBackups = server.profile.backup.enabled
+        f.driveWarning = server.backupDriveWarning
+        f.seriousIssues = server.issues.filter { $0.status == .open && $0.severity >= .error }.count
+        f.connectionProblems = server.connectionProblems
+        f.pluginUpdates = server.plugins.filter { server.record(for: $0).available != nil }.map(\.name)
+        f.softwareUpdate = server.softwareUpdate.map { u in u.build.map { "build \($0)" } ?? "version" }
+        return f
+    }
+
+    @ViewBuilder private var needsYou: some View {
+        let items = NeedsYou.items(needsYouFacts)
+        if items.isEmpty {
+            Callout(tone: .good, title: "Nothing needs you.", detail: server.isLab ? nil : "Backups are on, plugins and software are up to date, and no connection problems were found.") { EmptyView() }
+        } else {
+            HStack(spacing: 6) {
+                Text("Needs you").font(.title3.weight(.semibold)).foregroundStyle(Juice.ink)
+                Text("\(items.count)").font(.title3).foregroundStyle(Juice.muted)
+            }
+            .accessibilityElement(children: .combine).accessibilityAddTraits(.isHeader)
+            LazyVGrid(columns: columns, alignment: .leading, spacing: 14) {
+                ForEach(items) { item in
+                    Callout(tone: item.tone == .warning ? .warning : .info, title: item.title, detail: item.detail) {
+                        if let action = item.action, let title = item.actionTitle {
+                            Button(title) { perform(action) }
+                                .buttonStyle(item.kind == .noBackup ? .juicePrimary : .juice)
+                                .disabled(action == .backUpNow && server.isBackingUp)
+                        }
+                    }
+                }
+            }
+        }
+    }
+
+    private func perform(_ action: NeedsYouItem.Action) {
+        switch action {
+        case .backUpNow: server.attempt { try await server.backupNow() }
+        case .turnOnAutoBackups: server.profile.backup.enabled = true
+        case .openBackups: model.page = .backups
+        case .openIssues: model.showIssues = true
+        case .openPlugins: model.page = .plugins
+        case .openSoftware: model.page = .software
         }
     }
 

@@ -95,6 +95,11 @@ public final class ServerController: Identifiable {
     private var tickCount = 0
     public private(set) var restartPlan: RestartPlan?
     public private(set) var softwareUpdate: SoftwareBuild?
+    /// "Service: summary" for each connection whose last check needs a look or failed. Set by the connections card's
+    /// checks; empty until one has run. Shown in the Overview's Needs you.
+    public var connectionProblems: [String] = []
+    /// One sentence when a drive this server backs up to is near its cap or nearly out of room. See refreshDriveWarning().
+    public private(set) var backupDriveWarning: String?
     public private(set) var launchedCommand: [String]?
     public var nextScheduledRestart: Date?
 
@@ -1741,6 +1746,29 @@ public final class ServerController: Identifiable {
     }
 
     // MARK: Drive caps (D213)
+
+    /// Works out backupDriveWarning off the main thread, since it sizes backup folders. A capped drive warns at
+    /// BackupCaps.warnShare of its cap; an uncapped one when its free space wouldn't fit another backup like the last.
+    public func refreshDriveWarning() async {
+        let folders = backupFolders
+        let lastSize = backups.first?.size ?? 0
+        let caps = BackupCaps.all()
+        let warning: String? = await Task.detached(priority: .utility) {
+            var seen = Set<String>()
+            for folder in folders {
+                guard let drive = BackupCaps.driveID(for: folder), seen.insert(drive.id).inserted else { continue }
+                let onDrive = folders.filter { BackupCaps.driveID(for: $0)?.id == drive.id }
+                if let cap = caps[drive.id] {
+                    if let w = BackupCaps.warning(used: BackupCaps.used(onDrive), cap: cap) { return w }
+                } else if lastSize > 0, FileManager.default.fileExists(atPath: folder.path),
+                          let free = FileOps.freeSpace(at: folder), Double(free) < Double(lastSize) * BackupCaps.growth {
+                    return "\(drive.name) has \(Format.bytes(free)) free, less than another backup like the last one (\(Format.bytes(lastSize))) needs."
+                }
+            }
+            return nil
+        }.value
+        backupDriveWarning = warning
+    }
 
     /// Every folder this server keeps backups in.
     public var backupFolders: [URL] {

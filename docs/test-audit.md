@@ -3,6 +3,11 @@
 Each audit lists what LeafJuice promises, which checks prove each promise, and the gaps. Run the checks with `swift run leafjuice-check` (offline, made-up data, about 80 seconds). The `--real-*`, `--lab` and `--sandbox` runs boot real Paper and are listed apart.
 
 
+## 2026-11-23: Overview redesign (K672)
+- Promises: Needs you shows no backup, automatic backups off, a backup drive running low, serious issues, connection problems, plugin updates and a software update, most urgent first, and says "Nothing needs you" otherwise; the Lab shows no backup, drive or connection items; the status line says state, uptime, players and the last backup.
+- Covered: `needsYouChecks` in main.swift (14 checks: each item, order, wording, plural and singular, the cut connection list, the Lab, four status lines).
+- Gaps skipped (and why): the drive warning's sizing reuses BackupCaps.warning and BackupCaps.used, already covered in BackupCapChecks; the buttons only call existing actions (backupNow, page changes). The screen itself wasn't looked at, and neither a real near-full drive nor a broken tunnel was tried.
+
 ## 2026-11-22: K692 (servers outliving LeafJuice)
 
 - Promises: a shutdown the server ran itself, with no crash line, is a stop and isn't restarted; any crash marker wins; only exact, non-chat shutdown lines count; signals to the app stop servers with a save; left-over servers are stopped when quitting.

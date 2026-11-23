@@ -159,6 +159,7 @@ if CommandLine.arguments.contains("--connections") {
     await smartBackupChecks()
     await backupCapChecks()
     shutdownSignalChecks()
+    needsYouChecks()
     await driveFallbackChecks()
     sessionAskPlacementChecks()
     inviteTicketChecks()
@@ -4807,6 +4808,7 @@ func makePack(_ name: String, _ files: [String: String], inside: String? = nil) 
     await smartBackupChecks()
     await backupCapChecks()
     shutdownSignalChecks()
+    needsYouChecks()
     await driveFallbackChecks()
     sessionAskPlacementChecks()
     inviteTicketChecks()
@@ -6140,4 +6142,37 @@ exit(failures.isEmpty ? 0 : 1)
     check(ShutdownSignals.stoppedItself(sawShutdown: true, sawCrash: false), "a shutdown with no crash is a stop made outside")
     check(!ShutdownSignals.stoppedItself(sawShutdown: true, sawCrash: true), "a crash that also shut down is a crash")
     check(!ShutdownSignals.stoppedItself(sawShutdown: false, sawCrash: false), "an exit with no shutdown is a crash")
+}
+
+@MainActor func needsYouChecks() {
+    section("Overview: Needs you and the status line (K672)")
+    var f = NeedsYouFacts()
+    let kinds = { (f: NeedsYouFacts) in NeedsYou.items(f).map(\.kind) }
+    equal(kinds(f), [.noBackup, .autoBackupsOff], "a new server: no backup yet and automatic backups off, most urgent first")
+    f.hasBackup = true; f.autoBackups = true
+    check(NeedsYou.items(f).isEmpty, "backed up, automatic on, nothing else: nothing needs you")
+    f.driveWarning = "Backups on Made-up Drive use 130 GB of their 150 GB cap (87%)."
+    f.seriousIssues = 2
+    f.connectionProblems = ["playit: The tunnel isn't running.", "Made-up DNS: no answer.", "Map: not reachable.", "Sign-in: not reachable."]
+    f.pluginUpdates = ["Made-up Plugin", "Other Plugin", "Third Plugin"]
+    f.softwareUpdate = "build 254"
+    let all = NeedsYou.items(f)
+    equal(all.map(\.kind), [.backupDrive, .issues, .connection, .pluginUpdates, .softwareUpdate], "drive, issues, connection, then updates")
+    equal(all.first { $0.kind == .issues }?.title, "2 issues need attention", "issue count in words")
+    check(all.first { $0.kind == .connection }?.detail.contains("And 2 more.") == true, "a long connection list is cut to two, with the rest counted")
+    check(all.first { $0.kind == .connection }?.action == nil, "connections have no button: their card is on the same page")
+    equal(all.first { $0.kind == .pluginUpdates }?.detail, "Made-up Plugin and Other Plugin and 1 more have updates that fit this Minecraft version.", "plugin names, then a count")
+    check(all.filter { $0.tone == .warning }.count == 3 && all.filter { $0.tone == .info }.count == 2, "problems warn, updates inform")
+    f.pluginUpdates = ["Made-up Plugin"]
+    equal(NeedsYou.items(f).first { $0.kind == .pluginUpdates }?.title, "1 plugin update", "one update, singular")
+    var lab = NeedsYouFacts(); lab.isLab = true; lab.connectionProblems = ["x: y"]; lab.seriousIssues = 1
+    equal(kinds(lab), [.issues], "the Lab: no backup, drive or connection items, but issues still show")
+    let now = Date(timeIntervalSince1970: 1_800_000_000)
+    equal(NeedsYou.statusLine(running: false, starting: false, since: nil, players: 0, software: "Paper 26.3 build 253", lastBackup: nil, isLab: false, now: now),
+          "Stopped. Paper 26.3 build 253. No backup yet.", "stopped, never backed up")
+    let line = NeedsYou.statusLine(running: true, starting: false, since: now.addingTimeInterval(-7200), players: 3, software: "Paper", lastBackup: now.addingTimeInterval(-2400), isLab: false, now: now)
+    check(line.hasPrefix("Running for 2 hours. 3 players on. Last backup "), "running: how long, who's on, last backup (\(line))")
+    equal(NeedsYou.statusLine(running: true, starting: false, since: now, players: 1, software: "Paper", lastBackup: nil, isLab: true, now: now),
+          "Running for 1 minute. 1 player on.", "the Lab never mentions backups; under a minute reads as one")
+    equal(NeedsYou.statusLine(running: false, starting: true, since: nil, players: 0, software: "Paper", lastBackup: nil, isLab: true, now: now), "Starting.", "starting")
 }

@@ -149,6 +149,10 @@ struct ConnectionsCard: View {
                 for await (id, status) in group { results[id] = status }
             }
             statuses = results
+            server.connectionProblems = services.filter(\.enabled).compactMap { svc in
+                guard let st = results[svc.id], st.health >= .warning else { return nil }
+                return "\(svc.name): \(st.summary)"
+            }
             let probe = SystemConnectionProbe()
             urlStatuses = ["map": await ConnectionCheck.runURL(settings.mapURL, probe: probe, outside: outside),
                            "signin": await ConnectionCheck.runURL(settings.signInURL, probe: probe, outside: outside)]
