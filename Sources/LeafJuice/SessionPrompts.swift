@@ -214,6 +214,7 @@ struct SessionAskList: View {
                     Button("Allow") { if settled() { service.resolve(ask.id, allow: true) } }.buttonStyle(.juicePrimary)
                         .accessibilityLabel("Allow: \(ask.sentence)")
                     if let family = ask.action.todayFamily {
+                        Divider().frame(height: 18).padding(.horizontal, 6)
                         Button("Allow for Today") { if settled() { service.resolveForToday(ask.id) } }.buttonStyle(.juice)
                             .help("Allows \(family.words) on every server without asking again until midnight. Each one still checks nobody is online.")
                             .accessibilityLabel("Allow for today: \(ask.sentence). Covers \(family.words) on every server until midnight.")

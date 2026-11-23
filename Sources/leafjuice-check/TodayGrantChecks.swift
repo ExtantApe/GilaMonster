@@ -170,6 +170,13 @@ import Security
     r = await call("hosting-add", "Made-up Today A", ["recipe": "today-two"])
     check(r["ok"] as? Bool == false && asked.count == 9, "after the menu bar's revoke it asks again")
 
+    service.onAsk = { q in asked.append(q) }
+    var body: [String: Any] = ["token": token, "caller": "Made\u{202E}up\u{0007} Session", "call": "hosting-start", "server": "Made-up Today A"]
+    _ = await service.answer(try! JSONSerialization.data(withJSONObject: body))
+    check(asked.last?.caller == "Madeup Session", "control and bidi characters are taken out of the caller's name: \(asked.last?.caller ?? "")")
+    body = [:]
+    service.onAsk = { q in asked.append(q); answer?(q) }
+
     section("Allow for today: nothing kept")
     check(SessionAccessService().today.active(now: clock).isEmpty, "a new LeafJuice starts with no grants, so quitting clears them")
     let calls = SessionAccess.recentLog(200, from: service.logFile!)

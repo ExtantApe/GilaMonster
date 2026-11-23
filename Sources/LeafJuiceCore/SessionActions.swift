@@ -202,7 +202,11 @@ extension SessionAccessService {
     }
 
     func act(_ action: SessionAction, request: SessionAccess.Request, server: ServerController?, log: URL) async -> Data {
-        let caller = String((request.caller ?? "?").prefix(64))
+        // The caller's name is shown in prompts, notices, the menu and the server's log, so control and format
+        // characters (line breaks, bidi overrides) are taken out.
+        let caller = String(String(String.UnicodeScalarView((request.caller ?? "?").unicodeScalars.filter {
+            !CharacterSet.controlCharacters.contains($0) && !CharacterSet.newlines.contains($0)
+        })).prefix(64))
         var note: String?
         func refuse(_ why: String) -> Data {
             SessionAccess.record(request, outcome: .failure(.server(why)), server: server?.profile.name, to: log)

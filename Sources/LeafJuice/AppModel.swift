@@ -608,10 +608,12 @@ struct StatusMenu: View {
             Divider()
         }
         let today = SessionAccessService.shared.today.active(now: Date())
-        if !today.isEmpty {
-            Text("Allowed for today: \(today.map(\.family.words).joined(separator: "; "))")
-            Button("Revoke Today's Allows") { SessionAccessService.shared.revokeToday() }
-            let went = SessionAccessService.shared.wentAhead.prefix(5)
+        let went = SessionAccessService.shared.wentAhead.filter { Calendar.autoupdatingCurrent.isDateInToday($0.at) }.prefix(5)
+        if !today.isEmpty || !went.isEmpty {
+            if !today.isEmpty {
+                Text("Allowed for today: \(today.map(\.family.words).joined(separator: "; "))")
+                Button("Revoke Today's Allows") { SessionAccessService.shared.revokeToday() }
+            }
             if !went.isEmpty {
                 Text("Went ahead without asking:")
                 ForEach(Array(went.enumerated()), id: \.offset) { _, w in
