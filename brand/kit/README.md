@@ -1,7 +1,7 @@
 # GilaMonster brand kit
 
 **Icon chosen** by the owner on 2026-11-23 (D276): C1, warm mix, in the main palette (D272). The app icon, menu-bar
-template and profile marks are built. The banners, README header and release images wait for the wordmark and tagline.
+template and profile marks are built. Banners, a README header and release images come once the wordmark is designed.
 
 ## The idea
 
@@ -34,8 +34,8 @@ The beads sit inside the outline, so they decorate and don't carry the shape. Th
 basalt body without holding them: red-orange 3.96:1 (2.98:1 with protanopia), salmon 6.11:1, amber 7.12:1 and
 turquoise 3.63:1. The silhouette reads the same in every kind of color vision.
 
-The name, tagline and ring pairs come back with the banners once the wordmark and tagline are chosen
-(`wordmarkReady` in the script).
+The builder's banner, header and release-image code was taken out with the old wordmark. It comes back, with its
+text pairs checked the same way, once the GilaMonster wordmark is designed.
 
 ## What's in `out/`
 
@@ -74,6 +74,6 @@ Sources: [Buffer](https://buffer.com/resources/social-media-image-sizes/),
 
 ## Still to do
 
-- Choose the wordmark and tagline, then set `wordmarkReady` and build the banners, README header and release images.
-- Upload the GitHub social preview in the repo's settings once it's built. GitHub has no command for it.
+- Design the wordmark and tagline, then add the banners, README header and release images back to the builder.
+- Upload a GitHub social preview in the repo's settings once one is built. GitHub has no command for it.
 - See the icon in the Dock, on a phone and on Windows.

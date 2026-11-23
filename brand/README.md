@@ -1,9 +1,10 @@
-# LeafJuice brand
+# GilaMonster brand
 
 ## The idea
 
-A cool glass of juice on a sunny day: fresh, friendly and unfussy. Pastel green and cream do most of the
-work, with one bright note of pink grapefruit, like the slice on the rim of the glass.
+A Gila monster: slow, sturdy, and much tougher than it looks. The colors come from the real animal, a basalt-black
+body beaded with red-orange, salmon and amber, plus one cool note of turquoise. Cream and basalt do most of the
+work. Red-orange is the brand, turquoise is for doing things, and amber is a warm accent.
 
 ## Icon
 
@@ -28,67 +29,72 @@ achromatopsia simulated, and writes nothing if it falls under 3:1. The lowest is
   tints a template itself for light and dark menu bars and for Increase Contrast.
 - Flat cream tile, `#F5EBDD`. The outline is basalt, so the mark only goes on light backgrounds. There's no dark tile.
 
-Profile marks are built into `kit/out/`. [`kit/README.md`](kit/README.md) lists them. The banners, release images and
-README header wait for the wordmark and tagline.
+Profile marks are built into `kit/out/`. [`kit/README.md`](kit/README.md) lists them. Banners, release images and a
+README header come once the wordmark is designed. Until then the README shows `icon-1024.png`.
 
-## Tagline
+## Wordmark and tagline
 
-**A little pulp goes a long way.** In Fredoka, in the tagline's grapefruit, set to the wordmark's exact width. On
-banners the mark sits on its pistachio square, ringed in the same colour.
+Not designed yet. Until they are, the name is set in plain text: GilaMonster, one word, capital G and M.
 
 ## Fonts
 
-Open-licence fonts only (owner, 2026-11-14). They live in [`fonts/`](fonts/), each with its SIL Open Font License,
-and the builder refuses a font without one. **Lilita One** sets the name and **Fredoka** everything else. The app's
-own interface uses the system font through Apple's APIs, which is a different thing from setting a logo in it.
+Open-licence fonts only (owner, 2026-11-14). Any font the kit uses lives in [`fonts/`](fonts/) with its SIL Open Font
+License beside it. The fonts there now came with the earlier kit, and none is chosen for GilaMonster yet. The app's own
+interface uses the system font through Apple's APIs, which is a different thing from setting a logo in it.
 
 ## Color
 
-**Green is structure. Grapefruit is the pop.**
+**Turquoise does things. Red-orange is the pop.**
 
-- **Pink grapefruit** marks the one thing to do next: the main button on a page. Used sparingly, it stays meaningful. Never
-  use it for state, warnings or decoration.
-- **Juice green** is for icons, toggles, selection, focus and links.
-- **Cream and sage** are the surfaces. Avoid pure black and neutral gray.
-- **Danger is crimson, never coral**, and danger buttons are outlined. A destructive action should never look like the main action.
+- **Red-orange** (`pop`) marks the one thing to do next: the main button on a page, plus the brand's own text
+  (`popText`). Used sparingly, it stays meaningful. Never use it for state, warnings or decoration.
+- **Turquoise** (`accent`) is for links, selection, focus, toggles and the Up state.
+- **Cream and basalt** are the surfaces. Basalt is a warm grey-black, never pure black.
+- **Danger is a deep crimson, never the brand red-orange**, and danger buttons are outlined. A destructive action
+  should never look like the main action.
 
-| Role | Light | Dark | Lowest contrast (light / dark) |
+| Role | Light | Dark | Increase Contrast (light / dark) |
 |---|---|---|---|
-| Background | `#F8F6E9` | `#2A3225` | |
-| Surface | `#FFFEF8` | `#343E2E` | |
-| Raised | `#ECF1DA` | `#414D39` | |
-| Border (cards and dividers only) | `#CDD5B6` | `#5A6950` | Decoration |
-| Control outline (buttons, fields) | `#76845F` | `#95A487` | 3.5 / 3.4 |
-| Ink | `#2A3520` | `#F4F6E9` | 11.2 / 8.2 |
-| Muted | `#55614A` | `#CBD4BC` | 5.7 / 5.8 |
-| Juice green | `#4A6E22` | `#C3E491` | 5.1 / 6.3 |
-| Pink grapefruit (fill) | `#F4846B` | `#FF9E86` | Text on it, `#3A140B`: 6.5 / 8.2 |
-| Pink grapefruit (text, and the main button's outline) | `#A33C25` | `#FFB8A6` | 5.6 / 5.4 |
-| Warning | `#85540A` | `#F8CC72` | 5.6 / 5.9 |
-| Danger | `#A8202E` | `#FFB3B0` | 6.2 / 5.3 |
-| Info | `#1C6478` | `#9ADAEE` | 5.8 / 5.8 |
+| Background | `#F5EBDD` | `#1E1C20` | |
+| Surface | `#FFFFFF` | `#2A282C` | |
+| Raised | `#FAF3EA` | `#252327` | |
+| Border (cards and dividers only) | `#E2D4C0` | `#403C44` | `#5A5560` / `#B0ABB6` |
+| Control outline (buttons, fields) | `#857D88` | `#8F8A95` | `#5A5560` / `#B0ABB6` |
+| Ink | `#2A282C` | `#F5EBDD` | `#000000` / `#FFFFFF` |
+| Muted | `#4B474F` | `#B9B5BE` | |
+| Accent (turquoise) | `#166F74` | `#21A4AB` | `#105155` / `#2BCED6` |
+| Pop (red-orange fill), with `onPop` text `#FFFFFF` / `#1E1C20` | `#B13917` | `#EA8060` | `#822A11` / `#F1AC97` |
+| Pop text | `#B13917` | `#EA8060` | `#822A11` / `#F1AC97` |
+| Warning | `#95580B` | `#F2A541` | `#6D4008` / `#F4B058` |
+| Danger | `#B0183C` | `#FF7D93` | `#8B132F` / `#FFA5B4` |
+| Info | `#166F74` | `#21A4AB` | `#105155` / `#2BCED6` |
 
-Every pair the app draws meets WCAG AA (4.5:1 for text, 3:1 for controls and icons) in light, dark and both increased-contrast
-appearances, and still does with protanopia, deuteranopia, tritanopia or achromatopsia simulated. `leafjuice-check` fails
-if any pair drops below, so CI catches it. Source of truth: `Sources/LeafJuiceCore/Palette.swift`. Details: `docs/ux-audit.md`.
-Artwork colors, for illustration only: line `#3F5236`, juice `#93A255`, cream `#F5E8CF`.
+Every pair the app draws meets WCAG AA (4.5:1 for text, 3:1 for controls and icons) in light, dark and both
+increased-contrast appearances, and still does with protanopia, deuteranopia, tritanopia or achromatopsia simulated.
+`gilamonster-check` fails if any pair drops below, so CI catches it. Source of truth:
+`Sources/GilaMonsterCore/Palette.swift`. How the values were reached: [`kit/palette.md`](kit/palette.md).
+
+Icon art colors, for illustration only and never for text: red-orange `#E4572E`, salmon `#F28B82`, amber `#F2A541`,
+turquoise `#1C8C92`, basalt `#2A282C`, cream `#F5EBDD`. The art red-orange can't carry text: with protanopia it
+drops to 3.45:1 under dark text and 3.17:1 under white.
 
 ## Voice
 
-Plain and specific. Say what happened and what to do next. Friendly without being cute: the name carries the fun, so the
-interface doesn't need to.
+Plain and specific. Say what happened and what to do next. Friendly without being cute: the name carries the fun, so
+the interface doesn't need to.
 
 ## Shape
 
-Soft rounded tiles and controls, labels beside every icon, and state shown by shape and word as well as colour.
+Soft rounded tiles and controls, labels beside every icon, and state shown by shape and word as well as color.
 
-- Tile: 896 × 896 on a 1024 canvas, corner radius 200.
+- App icon tile: 824 × 824 on a 1024 canvas, corner radius about 185, flat cream.
 - Controls: 32 pt buttons, radius 8, 1 pt border. Cards radius 10. 2 pt focus ring.
 - Icons with labels. An icon alone gets an accessibility label and a tooltip.
-- State is shown by **shape and word as well as color**.
+- State is shown by **shape and word as well as color**: Up is a filled circle, Starting a ring, Down a triangle,
+  Stopped a square.
 
-SwiftUI's prominent button sets its own text color, which can't be relied on for contrast here, so `JuiceButtonStyle` sets it
-explicitly. Increase Contrast in System Settings gets stronger ink, muted text and borders.
+SwiftUI's prominent button sets its own text color, which can't be relied on for contrast here, so `ThemeButtonStyle`
+sets it explicitly. Increase Contrast in System Settings gets the stronger values in the table.
 
 ## Accessibility
 

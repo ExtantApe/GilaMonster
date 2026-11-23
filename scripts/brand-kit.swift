@@ -2,8 +2,8 @@
 // Builds the GilaMonster brand kit from one master file: a pixel-art mark in `mark.txt` (D276).
 //   swift scripts/brand-kit.swift brand/kit
 // Writes into <folder>/out: the mark as SVG, circle and square profile marks, the app icon at every size (.icns,
-// .ico, 1024 and 32), and the menu-bar template at 1x and 2x. The banners, README headers and release images
-// wait for the name's wordmark and tagline (`wordmarkReady`).
+// .ico, 1024 and 32), and the menu-bar template at 1x and 2x. Banners, README headers and release images come
+// back with the wordmark, which isn't designed yet.
 // Every text and outline pair is checked against WCAG first (D149), in typical color vision and with protanopia,
 // deuteranopia, tritanopia and achromatopsia simulated: large text 3:1, small text 4.5:1, outlines 3:1. If any
 // pair fails, nothing is written and the script exits 1.
@@ -53,10 +53,6 @@ let darkBack: UInt32 = 0x1E1C20, darkInk: UInt32 = 0xF5EBDD, darkMuted: UInt32 =
 // The tile is flat cream in every appearance. The mark's outline is basalt, so it only reads on a light tile: there
 // is no dark tile, and the profile marks come in one version.
 let tileTop: UInt32 = 0xF5EBDD, tileBottom: UInt32 = 0xF5EBDD
-/// The banners, README headers and release images need the name's wordmark and tagline, not chosen yet.
-let wordmarkReady = false
-/// The art red-orange, for the trim along the bottom of banners and release images.
-let brandOrange: UInt32 = 0xE4572E
 
 func linear(_ c: UInt32) -> Double { let v = Double(c) / 255; return v <= 0.04045 ? v / 12.92 : pow((v + 0.055) / 1.055, 2.4) }
 func luminance(_ h: UInt32) -> Double { 0.2126 * linear(h >> 16 & 0xFF) + 0.7152 * linear(h >> 8 & 0xFF) + 0.0722 * linear(h & 0xFF) }
@@ -65,7 +61,7 @@ func contrast(_ a: UInt32, _ b: UInt32) -> Double { let x = luminance(a), y = lu
 struct Pair { let what: String; let fg: UInt32; let bg: UInt32; let minimum: Double }
 
 // Color vision: Machado, Oliveira and Fernandes (2009) at full strength, and achromatopsia as luminance only. The
-// same matrices as LeafJuiceCore's Palette.simulate.
+// same matrices as GilaMonsterCore's Palette.simulate.
 enum Vision: String, CaseIterable { case typical, protanopia, deuteranopia, tritanopia, achromatopsia }
 let visionMatrices: [Vision: [[Double]]] = [
     .protanopia: [[0.152286, 1.052583, -0.204868], [0.114503, 0.786281, 0.099216], [-0.003882, -0.048116, 1.051998]],
@@ -228,164 +224,6 @@ func icoSizes(_ data: Data) -> [Int] {
     return (0..<n).map { i in let w = Int(b[6 + i * 16]); return w == 0 ? 256 : w }
 }
 
-func text(_ ctx: CGContext, _ string: String, size: CGFloat, weight: NSFont.Weight, color: UInt32, x: CGFloat, baseline: CGFloat, height: Int) {
-    let line = CTLineCreateWithAttributedString(NSAttributedString(string: string, attributes: [.font: font(size, weight), .foregroundColor: NSColor(cgColor: cg(color))!]))
-    ctx.textPosition = CGPoint(x: x, y: CGFloat(height) - baseline)
-    CTLineDraw(line, ctx)
-}
-
-/// The name in two tones: "Leaf" in leaf green, "Juice" in ink. Both are WCAG-checked before anything is drawn.
-func wordmark(_ ctx: CGContext, size: CGFloat, dark: Bool, x: CGFloat, baseline: CGFloat, height: Int) {
-    let f = font(size, .bold)
-    let s = NSMutableAttributedString(string: "Leaf", attributes: [.font: f, .foregroundColor: NSColor(cgColor: cg(dark ? leafOnDark : leafOnLight))!])
-    s.append(NSAttributedString(string: "Juice", attributes: [.font: f, .foregroundColor: NSColor(cgColor: cg(dark ? darkInk : ink))!]))
-    ctx.textPosition = CGPoint(x: x, y: CGFloat(height) - baseline)
-    CTLineDraw(CTLineCreateWithAttributedString(s), ctx)
-}
-
-let tagline = "A little pulp goes a long way."
-let leafOnLight: UInt32 = 0x4A6E22, leafOnDark: UInt32 = 0xC3E491
-let tagOnLight: UInt32 = 0xA33C25, tagOnDark: UInt32 = 0xFFB8A6
-
-// Fonts come only from brand/fonts, each with its open licence beside it (owner, 2026-11-14: open-licence fonts only,
-// always). A font without one stops the build. Lilita One for the name, Fredoka for everything else.
-let fontsFolder = URL(fileURLWithPath: #filePath).deletingLastPathComponent().deletingLastPathComponent()
-    .appendingPathComponent("brand/fonts", isDirectory: true)
-var loadedFonts: [String: CTFontDescriptor] = [:]
-func openFont(_ relative: String) -> CTFontDescriptor {
-    if let d = loadedFonts[relative] { return d }
-    let url = fontsFolder.appendingPathComponent(relative)
-    let licence = (try? String(contentsOf: url.deletingLastPathComponent().appendingPathComponent("OFL.txt"), encoding: .utf8)) ?? ""
-    guard licence.contains("SIL OPEN FONT LICENSE") else { fail("\(relative) has no open licence (OFL.txt) beside it, so it isn't used.") }
-    guard let ds = CTFontManagerCreateFontDescriptorsFromURL(url as CFURL) as? [CTFontDescriptor], let d = ds.first else { fail("Can't read the font \(relative).") }
-    loadedFonts[relative] = d
-    return d
-}
-
-func font(_ size: CGFloat, _ weight: NSFont.Weight) -> NSFont {
-    if weight >= .bold { return CTFontCreateWithFontDescriptor(openFont("lilitaone/LilitaOne-Regular.ttf"), size, nil) as NSFont }
-    let fredoka = CTFontDescriptorCreateCopyWithVariation(openFont("fredoka/Fredoka[wdth,wght].ttf"), 0x77676874 as CFNumber, 600) // wght
-    return CTFontCreateWithFontDescriptor(fredoka, size, nil) as NSFont
-}
-
-func width(_ string: String, size: CGFloat, weight: NSFont.Weight) -> CGFloat {
-    let line = CTLineCreateWithAttributedString(NSAttributedString(string: string, attributes: [.font: font(size, weight)]))
-    return CGFloat(CTLineGetTypographicBounds(line, nil, nil, nil))
-}
-
-/// A wide image: the mark on the left and the name and tagline beside it, centred as a group.
-/// How the mark sits on a banner: bare, or on the same square tile or circle as the profile marks.
-enum Holder: String, CaseIterable { case bare, square, circle }
-
-/// The tile's colours. Chosen on 2026-11-14: pistachio with a ring in the tagline's colour (`taglineRing`), which gives
-/// the tile's edge 5.99:1 on cream and 8.00:1 on dark. The others were the options compared on the way there.
-enum Accent: String, CaseIterable {
-    case pistachio, pistachioRing = "pistachio-ring", grapefruitWash = "grapefruit-wash"
-    /// Pistachio with a ring in the tagline's colour, or in the bottom trim's (owner, 2026-11-14).
-    case taglineRing = "tagline-ring", trimRing = "trim-ring"
-    var top: UInt32 { self == .grapefruitWash ? 0xFFE6DD : tileTop }
-    var bottom: UInt32 { self == .grapefruitWash ? 0xFBC9B8 : tileBottom }
-    /// The ring on each background, or nil. On dark, pistachio stands at 11.8:1 without one.
-    func ring(dark: Bool) -> UInt32? {
-        switch self {
-        case .pistachio: nil
-        case .pistachioRing: dark ? nil : 0x76845F
-        case .grapefruitWash: dark ? nil : 0xA33C25
-        case .taglineRing: dark ? tagOnDark : tagOnLight
-        case .trimRing: brandOrange
-        }
-    }
-}
-
-/// Every banner's parts must sit inside this share of the width, or the build fails: nothing is ever cut off.
-let bannerMargin: CGFloat = 0.06
-
-/// A wide image: the mark and the name and tagline beside it, centred as a group. `markRight` puts the mark after the
-/// text, away from the bottom-left corner where X and Bluesky put the profile picture. A tagline too wide for the
-/// image goes onto two lines, and if that's still too wide, everything is scaled down to fit.
-func banner(_ m: Mark, w: Int, h: Int, dark: Bool, showTagline: Bool = true, holder: Holder = .square,
-            accent: Accent = .taglineRing, markRight: Bool = false, name: String = "banner") -> CGImage {
-    let ctx = canvas(w, h)
-    ctx.setFillColor(cg(dark ? darkBack : cream)); ctx.fill(CGRect(x: 0, y: 0, width: w, height: h))
-    // A band of the brand red-orange along the bottom.
-    ctx.setFillColor(cg(brandOrange)); ctx.fill(CGRect(x: 0, y: 0, width: CGFloat(w), height: max(4, CGFloat(h) * 0.025)))
-    let W = CGFloat(w), H = CGFloat(h)
-    let room = W * (1 - bannerMargin * 2)
-    var scale: CGFloat = 1
-    let lines = showTagline ? [tagline] : []
-    func layout(_ s: CGFloat) -> (slot: CGFloat, gap: CGFloat, nameSize: CGFloat, tagSize: CGFloat, textWidth: CGFloat) {
-        let slot = (H * (holder == .bare ? 0.5 : 0.62) * s).rounded(.down)
-        let nameSize = H * 0.22 * s
-        let nameWidth = width("LeafJuice", size: nameSize, weight: .bold)
-        // The tagline is set to exactly the wordmark's width (owner, 2026-11-14).
-        let tagSize = lines.isEmpty ? 0 : nameSize * nameWidth / max(1, lines.map { width($0, size: nameSize, weight: .medium) }.max()!)
-        let textWidth = nameWidth
-        return (slot, H * 0.08 * s, nameSize, tagSize, textWidth)
-    }
-    var L = layout(scale)
-    while L.slot + L.gap + L.textWidth > room, scale > 0.4 { scale -= 0.02; L = layout(scale) }
-    let group = L.slot + L.gap + L.textWidth
-    let left = (W - group) / 2
-    guard left >= W * bannerMargin - 1 else { fail("\(name) doesn't fit: it would be cut off at the edges.") }
-    let slotX = markRight ? left + L.textWidth + L.gap : left
-    let textX = markRight ? left : left + L.slot + L.gap
-    let slotY = (H - L.slot) / 2
-    let cell = ((holder == .bare ? L.slot : L.slot * (holder == .circle ? 0.6 : 0.7)) / CGFloat(m.size)).rounded(.down)
-    let art = cell * CGFloat(m.size)
-    if holder != .bare {
-        let rect = CGRect(x: slotX, y: H - slotY - L.slot, width: L.slot, height: L.slot)
-        let path = holder == .circle ? CGPath(ellipseIn: rect, transform: nil)
-                                     : CGPath(roundedRect: rect, cornerWidth: L.slot * 0.2, cornerHeight: L.slot * 0.2, transform: nil)
-        ctx.saveGState(); ctx.addPath(path); ctx.clip()
-        gradient(ctx, accent.top, accent.bottom, rect)
-        ctx.restoreGState()
-        if let ring = accent.ring(dark: dark) {
-            let line = max(2, L.slot * 0.02)
-            ctx.saveGState(); ctx.addPath(path); ctx.clip()
-            ctx.setStrokeColor(cg(ring)); ctx.setLineWidth(line * 2); ctx.addPath(path); ctx.strokePath()
-            ctx.restoreGState()
-        }
-    }
-    drawMark(m, in: ctx, x: (slotX + (L.slot - art) / 2).rounded(.down), y: (slotY + (L.slot - art) / 2).rounded(.down), cell: cell, height: h)
-    // The name and tagline block, centred on the mark's middle.
-    let lineGap = L.tagSize * 1.3
-    let blockHeight = L.nameSize + (lines.isEmpty ? 0 : L.tagSize * 0.6 + lineGap * CGFloat(lines.count))
-    let nameBaseline = H / 2 - blockHeight / 2 + L.nameSize * 0.8
-    wordmark(ctx, size: L.nameSize, dark: dark, x: textX, baseline: nameBaseline, height: h)
-    for (i, line) in lines.enumerated() {
-        text(ctx, line, size: L.tagSize, weight: .medium, color: dark ? tagOnDark : tagOnLight, x: textX, baseline: nameBaseline + L.tagSize * 0.6 + lineGap * CGFloat(i + 1), height: h)
-    }
-    return ctx.makeImage()!
-}
-
-/// A release post: the mark, the name, and the version, for a release's announcement.
-let releaseLine = CommandLine.arguments.count >= 3 ? CommandLine.arguments[2] : "New version"
-func release(_ m: Mark, w: Int, h: Int) -> CGImage {
-    let ctx = canvas(w, h)
-    ctx.setFillColor(cg(cream)); ctx.fill(CGRect(x: 0, y: 0, width: w, height: h))
-    ctx.setFillColor(cg(brandOrange)); ctx.fill(CGRect(x: 0, y: 0, width: CGFloat(w), height: CGFloat(h) * 0.03))
-    let short = CGFloat(min(w, h)), H = CGFloat(h)
-    // The mark on its square with the tagline-coloured ring, as on the banners.
-    let slot = (short * 0.44).rounded(.down)
-    let top = H * 0.1
-    let rect = CGRect(x: (CGFloat(w) - slot) / 2, y: H - top - slot, width: slot, height: slot)
-    let path = CGPath(roundedRect: rect, cornerWidth: slot * 0.2, cornerHeight: slot * 0.2, transform: nil)
-    ctx.saveGState(); ctx.addPath(path); ctx.clip(); gradient(ctx, tileTop, tileBottom, rect)
-    ctx.setStrokeColor(cg(tagOnLight)); ctx.setLineWidth(max(4, slot * 0.04)); ctx.addPath(path); ctx.strokePath(); ctx.restoreGState()
-    let cell = (slot * 0.7 / CGFloat(m.size)).rounded(.down)
-    let art = cell * CGFloat(m.size)
-    drawMark(m, in: ctx, x: ((CGFloat(w) - art) / 2).rounded(.down), y: (top + (slot - art) / 2).rounded(.down), cell: cell, height: h)
-    let nameSize = short * 0.11
-    let nameW = width("LeafJuice", size: nameSize, weight: .bold)
-    // The version line matches the name's width, like the tagline on the banners, up to a sensible size.
-    let lineSize = min(short * 0.07, nameSize * nameW / max(1, width(releaseLine, size: nameSize, weight: .semibold)))
-    let lineW = width(releaseLine, size: lineSize, weight: .semibold)
-    let nameBaseline = top + slot + nameSize * 1.3
-    wordmark(ctx, size: nameSize, dark: false, x: (CGFloat(w) - nameW) / 2, baseline: nameBaseline, height: h)
-    text(ctx, releaseLine, size: lineSize, weight: .semibold, color: tagOnLight, x: (CGFloat(w) - lineW) / 2, baseline: nameBaseline + lineSize * 1.6, height: h)
-    return ctx.makeImage()!
-}
-
 func svg(_ m: Mark, scale: Int) -> String {
     var out = #"<svg xmlns="http://www.w3.org/2000/svg" width="\#(m.size * scale)" height="\#(m.size * scale)" viewBox="0 0 \#(m.size) \#(m.size)" shape-rendering="crispEdges" role="img" aria-label="GilaMonster: a pixel-art Gila monster, red-orange, salmon and amber beads on basalt">"#
     out += "\n<title>GilaMonster</title>\n"
@@ -428,16 +266,16 @@ guard failures.isEmpty else { fail("WCAG check failed, nothing written:\n  " + f
 
 let out = folder.appendingPathComponent("out")
 try? FileManager.default.createDirectory(at: out, withIntermediateDirectories: true)
-// Files the LeafJuice kit wrote that this one doesn't, so nothing stale is left beside the new ones. Named one by one.
+// Files the old LeafJuice kit wrote that this one doesn't, so nothing stale is left beside the new ones. Named one by one.
 for name in ["LeafJuice.ico", "mark-circle-light-1024.png", "mark-circle-light-400.png", "mark-circle-dark-1024.png",
              "mark-circle-dark-400.png", "mark-square-light-1024.png", "mark-square-light-400.png", "mark-square-dark-1024.png",
-             "mark-square-dark-400.png"] + (wordmarkReady ? [] : [
+             "mark-square-dark-400.png",
              "github-social-preview-light-1280x640.png", "github-social-preview-dark-1280x640.png",
              "readme-header-light-1280x320.png", "readme-header-dark-1280x320.png", "x-header-light-1500x500.png",
              "x-header-dark-1500x500.png", "bluesky-banner-light-3000x1000.png", "bluesky-banner-dark-3000x1000.png",
              "linkedin-banner-light-1584x396.png", "linkedin-banner-dark-1584x396.png",
              "linkedin-company-banner-light-1128x191.png", "linkedin-company-banner-dark-1128x191.png",
-             "release-square-1080.png", "release-landscape-1200x675.png"]) {
+             "release-square-1080.png", "release-landscape-1200x675.png"] {
     try? FileManager.default.removeItem(at: out.appendingPathComponent(name))
 }
 try! svg(mark, scale: 64).write(to: out.appendingPathComponent("mark.svg"), atomically: true, encoding: .utf8)
@@ -487,24 +325,6 @@ func menuBarTemplate(scale: Int) -> CGImage {
 }
 save(menuBarTemplate(scale: 1), out.appendingPathComponent("MenuBarTemplate.png"))
 save(menuBarTemplate(scale: 2), out.appendingPathComponent("MenuBarTemplate@2x.png"))
-if wordmarkReady {
-    for dark in [false, true] {
-        let tone = dark ? "dark" : "light"
-        save(banner(mark, w: 1280, h: 640, dark: dark), out.appendingPathComponent("github-social-preview-\(tone)-1280x640.png"))
-        save(banner(mark, w: 1280, h: 320, dark: dark), out.appendingPathComponent("readme-header-\(tone)-1280x320.png"))
-        save(banner(mark, w: 1500, h: 500, dark: dark), out.appendingPathComponent("x-header-\(tone)-1500x500.png"))
-        save(banner(mark, w: 3000, h: 1000, dark: dark), out.appendingPathComponent("bluesky-banner-\(tone)-3000x1000.png"))
-        save(banner(mark, w: 1584, h: 396, dark: dark), out.appendingPathComponent("linkedin-banner-\(tone)-1584x396.png"))
-        save(banner(mark, w: 1128, h: 191, dark: dark, showTagline: false), out.appendingPathComponent("linkedin-company-banner-\(tone)-1128x191.png"))
-    }
-    save(release(mark, w: 1080, h: 1080), out.appendingPathComponent("release-square-1080.png"))
-    save(release(mark, w: 1200, h: 675), out.appendingPathComponent("release-landscape-1200x675.png"))
-    // Bluesky refuses images over 1,000,000 bytes (its lexicon limit), so a banner that grows past it fails the build.
-    for name in ["bluesky-banner-light-3000x1000.png", "bluesky-banner-dark-3000x1000.png"] {
-        let size = (try? FileManager.default.attributesOfItem(atPath: out.appendingPathComponent(name).path)[.size] as? Int) ?? 0
-        if size > 1_000_000 { fail("\(name) is \(size) bytes, over Bluesky's 1,000,000-byte limit.") }
-    }
-}
 // The adopted icon (owner, 2026-11-23, D276) goes where the app build and the README look for it: brand/.
 let brandFolder = folder.deletingLastPathComponent()
 for name in ["AppIcon.icns", "GilaMonster.ico", "icon.svg", "icon-small.svg", "icon-1024.png",

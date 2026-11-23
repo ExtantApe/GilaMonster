@@ -1,9 +1,9 @@
 # GilaMonster palette tokens
 
 The main palette, chosen by the owner on 2026-11-23 (D272), with the icon (D276). These are the text and graphic
-tokens for `Sources/LeafJuiceCore/Palette.swift` when the app is renamed. Every value is held to 4.5:1 against both
+tokens behind `Sources/GilaMonsterCore/Palette.swift`. Every value is held to 4.5:1 against both
 of its backgrounds (cream `#F5EBDD` and white in light; basalt `#2A282C` and deep `#1E1C20` in dark), in typical color
-vision and with protanopia, deuteranopia, tritanopia and achromatopsia simulated, the same way `leafjuice-check` holds
+vision and with protanopia, deuteranopia, tritanopia and achromatopsia simulated, the same way `gilamonster-check` holds
 the current palette. The Increase Contrast values are held to 7:1 the same way.
 
 The round 4 values passed in typical vision but five fell under 4.5:1 with a simulation (the lowest was red-orange on
@@ -32,7 +32,8 @@ against each other), so the shapes and words carry the meaning. Don't show a sta
 For the icon and illustration only, never text: red-orange `#E4572E`, salmon `#F28B82`, amber `#F2A541`, turquoise
 `#1C8C92`, basalt `#2A282C`, cream `#F5EBDD`.
 
-## Not yet done
+## In the app
 
-The rename still has to set these in `Palette.swift`, where `leafjuice-check` will check them in every appearance,
-including control outlines and borders, which aren't chosen yet.
+0.4.0 uses these under role names: turquoise is `accent`, red-orange is `pop` (fill, with `onPop` text) and `popText`,
+and the status colors are `info`, `warning` and `danger`. `gilamonster-check` holds every pair in light, dark and both
+Increase Contrast appearances. The bold and quiet themes planned for 0.4.1 are drafted in the ops design review.
