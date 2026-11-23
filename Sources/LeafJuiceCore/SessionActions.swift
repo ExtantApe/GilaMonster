@@ -231,6 +231,11 @@ extension SessionAccessService {
             return refuse("That isn't a Minecraft player name.")
         }
         if let server {
+            // A long job on this server (a backup, applying changes, a start already under way) makes Start do
+            // nothing and could be cut short by a stop, so these are refused with the reason, before anyone is asked.
+            if [.start, .stop, .restart].contains(action), let busy = server.busyWith {
+                return refuse("\(busy) is in progress on \(server.profile.name), so nothing was changed. Try again when it's done.")
+            }
             switch action {
             case .start where !server.state.canStart: return refuse("\(server.profile.name) is \(server.state.title.lowercased()), so it can't be started.")
             case .stop where server.state != .running, .restart where server.state != .running:
@@ -280,6 +285,9 @@ extension SessionAccessService {
                 }
             }
             if Backups.writing { return refuse("A backup started while waiting, so nothing was changed.") }
+            if [.start, .stop, .restart].contains(action), let busy = server.busyWith {
+                return refuse("\(busy) started on \(server.profile.name) while waiting, so nothing was changed.")
+            }
             if coveredToday, let family {
                 server.appendWrapper("Allowed for today: \(caller) asked to \(action.verb(recipe: recipe.isEmpty ? nil : recipe)) this server, and nobody was online.", level: .info)
                 onAutoAllowed?("\(caller) \(action.verb(recipe: recipe.isEmpty ? nil : recipe)) \(server.profile.name) without asking. You allowed \(family.words) for today.")
