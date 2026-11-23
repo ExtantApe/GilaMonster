@@ -1,9 +1,9 @@
-LeafJuice includes code adapted from third-party projects. Their notices follow.
+GilaMonster includes code adapted from third-party projects. Their notices follow.
 
 --------------------------------------------------------------------------------
 slicer (https://github.com/Mojang/slicer), commit cc3ef7e
 
-Sources/LeafJuiceCore/LegacySprites.swift is a Swift port of slicer's library and its 1.20.2, 1.20.5 and
+Sources/GilaMonsterCore/LegacySprites.swift is a Swift port of slicer's library and its 1.20.2, 1.20.5 and
 26.2 tables (the regions of the old interface sheets and the sprite files they become).
 
 MIT License

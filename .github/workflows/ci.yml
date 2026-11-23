@@ -16,10 +16,10 @@ jobs:
         with:
           distribution: temurin
           java-version: '21'
-      - name: Build every product, including the leafjuice-session client the checks drive
+      - name: Build every product, including the gilamonster-session client the checks drive
         run: swift build
       - name: Tests, including the server lifecycle against a stand-in jar
-        run: swift run leafjuice-check
+        run: swift run gilamonster-check
       - name: The build refuses to delete a bundle something is running from
         run: scripts/test-build-guard.sh
       - name: Release builds stop servers at a Mac shutdown too

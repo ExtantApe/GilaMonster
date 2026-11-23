@@ -3,7 +3,7 @@
 # and goes ahead when nothing is. Uses a made-up bundle in its own temp folder and removes only what it made.
 set -uo pipefail
 cd "$(dirname "$0")/.."
-root=$(mktemp -d "${TMPDIR:-/tmp}/leafjuice-guard.XXXXXX")
+root=$(mktemp -d "${TMPDIR:-/tmp}/gilamonster-guard.XXXXXX")
 pid=""
 cleanup() {
     [ -n "$pid" ] && kill "$pid" 2>/dev/null && wait "$pid" 2>/dev/null
@@ -14,19 +14,19 @@ fail=0
 ok() { echo "ok: $1"; }
 bad() { echo "FAILED: $1"; fail=1; }
 
-macos="$root/out/LeafJuice.app/Contents/MacOS"
+macos="$root/out/GilaMonster.app/Contents/MacOS"
 mkdir -p "$macos"
 printf 'int main(void){for(;;){} }\n' > "$root/spin.c"
-cc -o "$macos/LeafJuice" "$root/spin.c" || { echo "FAILED: no C compiler"; exit 1; }
+cc -o "$macos/GilaMonster" "$root/spin.c" || { echo "FAILED: no C compiler"; exit 1; }
 
 scripts/build-app.sh --out "$root/out" --guard-only >/dev/null 2>&1 && ok "nothing running: the build may go ahead" || bad "nothing running, but the guard refused"
 
-"$macos/LeafJuice" & pid=$!
+"$macos/GilaMonster" & pid=$!
 sleep 0.5
 msg=$(scripts/build-app.sh --out "$root/out/" --guard-only 2>&1); code=$?
 [ "$code" = 3 ] && ok "app running from the bundle: refused (exit 3)" || bad "app running, guard exited $code"
 echo "$msg" | grep -q "is in use" && ok "and says why" || bad "refusal didn't say why: $msg"
-[ -x "$macos/LeafJuice" ] && ok "and the bundle is left alone" || bad "the bundle was touched"
+[ -x "$macos/GilaMonster" ] && ok "and the bundle is left alone" || bad "the bundle was touched"
 
 other="$root/elsewhere"; mkdir -p "$other"
 scripts/build-app.sh --out "$other" --guard-only >/dev/null 2>&1 && ok "another folder: allowed while the app runs" || bad "another folder was refused"

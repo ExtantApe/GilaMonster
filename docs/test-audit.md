@@ -1,24 +1,29 @@
 # Test audit
 
-Each audit lists what LeafJuice promises, which checks prove each promise, and the gaps. Run the checks with `swift run leafjuice-check` (offline, made-up data, about 80 seconds). The `--real-*`, `--lab` and `--sandbox` runs boot real Paper and are listed apart.
+Each audit lists what GilaMonster promises, which checks prove each promise, and the gaps. Run the checks with `swift run gilamonster-check` (offline, made-up data, about 80 seconds). The `--real-*`, `--lab` and `--sandbox` runs boot real Paper and are listed apart.
 
+
+## 2026-11-23: the GilaMonster rename (D271, 0.4.0)
+- Promises: every name the app shows, writes or reads is GilaMonster (bundle id, data folder, per-server folder, own folder beside the servers, Keychain services, environment variables, tools); the palette keeps WCAG AA everywhere; older recipe exports still import; Sheriff accepts the new source word; nothing in the app moves old data by itself.
+- Covered: the full suite (3637 checks) under the new names, including the palette's every pair in four appearances and five vision simulations; the app half's switch by `ops/scripts/rename-d271-rehearse` (24 checks, forward and back on a throwaway copy) and the Keychain helper by `rename-d271-keychain-test` (12 checks, no UI); a search showing no old name in any tracked file.
+- Gaps skipped (and why): the views on screen under the new palette (screenshots before and after the switch, compared by hand); importing a real older recipe export (the check is the kind's ending, covered by the existing export and import check under the new kind).
 
 ## 2026-11-23: Allow for today (K721)
 - Promises: one click on a waiting ask allows that kind of action on every server until local midnight; it covers only the listed kinds (power, pack serving, publish, Packmule handoff, pack addresses) and never removals, naming a player, deletes, restores or world resets; each covered action checks nobody is on that server, asks as usual when someone is, and refuses when that can't be told; each shows a notice, a server log line and a record entry; the menu bar revokes all; grants are memory only, and no file, socket call or request field makes or extends one.
 - Covered: `TodayGrantChecks.swift` (8 groups): the family table and the never-covered list; midnight in a fixed time zone, a second click not extending, revoke, not Codable; the online rule for every server state, plus a real never-started server; unknown session calls and request fields ignored, a click for a request that isn't waiting making nothing; a grant covering a second server and not another kind, a removal offering no Allow for today and a click on it doing nothing; players online asking, unsure refusing with nothing changed; after midnight asking again, a new click the next day, revoke; a fresh service with no grants, record notes, nothing but the record written and no grant file in either server's folder.
 - Gaps added after the security review: a hidden player's login line counted and a chat line shaped like one not; a revoke during the online check asking as usual; a clock set back not covered; midnight on the day the clocks go back; what went ahead listed for the menu bar; a job starting while the owner is asked stopping a session's start; a recipe name with a line break refused.
-- Gaps skipped (and why): the button, notification action, notice and menu item on screen, and the click lock after rows shift (UI wrappers over the checked service; to be seen after the release); start, stop and restart under a grant end to end (needs a real server and the owner's go; the grant path is the same one the pack-address checks prove); a real start or stop through a grant (needs a real server and the owner's go); the management server's live answer (the rule is checked, the call is the one LeafJuice already uses).
+- Gaps skipped (and why): the button, notification action, notice and menu item on screen, and the click lock after rows shift (UI wrappers over the checked service; to be seen after the release); start, stop and restart under a grant end to end (needs a real server and the owner's go; the grant path is the same one the pack-address checks prove); a real start or stop through a grant (needs a real server and the owner's go); the management server's live answer (the rule is checked, the call is the one GilaMonster already uses).
 
 ## 2026-11-23: Overview redesign (K672)
 - Promises: Needs you shows no backup, automatic backups off, a backup drive running low, serious issues, connection problems, plugin updates and a software update, most urgent first, and says "Nothing needs you" otherwise; the Lab shows no backup, drive or connection items; the status line says state, uptime, players and the last backup.
 - Covered: `needsYouChecks` in main.swift (14 checks: each item, order, wording, plural and singular, the cut connection list, the Lab, four status lines).
 - Gaps skipped (and why): the drive warning's sizing reuses BackupCaps.warning and BackupCaps.used, already covered in BackupCapChecks; the buttons only call existing actions (backupNow, page changes). The screen itself wasn't looked at, and neither a real near-full drive nor a broken tunnel was tried.
 
-## 2026-11-22: K692 (servers outliving LeafJuice)
+## 2026-11-22: K692 (servers outliving GilaMonster)
 
 - Promises: a shutdown the server ran itself, with no crash line, is a stop and isn't restarted; any crash marker wins; only exact, non-chat shutdown lines count; signals to the app stop servers with a save; left-over servers are stopped when quitting.
 - Covered: `shutdownSignalChecks` (11 checks) and the stand-in lifecycle's outside-SIGTERM run (no restart after 12 s with restarts on, console note). The existing crash check still sees a crash, now with the stand-in's shutdown hook logging "Stopping server" after it, so crash markers winning is covered on a real process.
-- Gaps skipped (and why): the signal handler and the quit question with a left-over server need the app running, and the app the owner uses mustn't be signalled. Left for his next restart of LeafJuice, or a separate build in another folder.
+- Gaps skipped (and why): the signal handler and the quit question with a left-over server need the app running, and the app the owner uses mustn't be signalled. Left for his next restart of GilaMonster, or a separate build in another folder.
 
 ## 2026-11-22: 31 changes since 2026-11-14
 
@@ -37,7 +42,7 @@ Each audit lists what LeafJuice promises, which checks prove each promise, and t
   within 4 seconds. A second run with the restart reason did the same. The sandbox was deleted afterwards.
 - **An ordinary quit** stopped nothing. That test can't see the question itself, which needs a screen; its code is
   unchanged and is what the owner saw on screen.
-- **What the test found:** in the test copy, AppKit's terminate never reached LeafJuice's check, so the shutdown path
+- **What the test found:** in the test copy, AppKit's terminate never reached GilaMonster's check, so the shutdown path
   doesn't rely on it. It holds macOS's request, saves, answers, asks AppKit to terminate, and exits two seconds later if
   still running.
 - **Not covered:** a real shutdown of this Mac. The quit request is the same one macOS sends, but loginwindow's own
@@ -50,13 +55,13 @@ Real release jars, checked against their published SHA-256, on throwaway Paper 2
 - **Sheriff 0.5.0** (`--real-sheriff`): describe, profiles and apply through the console under the new name.
 - **Sheriff 0.5.0 with WelcomeWagon 0.6.0** (`--real-invites`): an invite made here with a profile, redeemed on
   WelcomeWagon's own page in its new two steps (the code first, then "Yes, that's me"), the profile applied by Sheriff,
-  the invite shown as used, a bot signed in with `/login`, LeafJuice's links page signing them in by WelcomeWagon's
+  the invite shown as used, a bot signed in with `/login`, GilaMonster's links page signing them in by WelcomeWagon's
   cookie, and Sign Out Everywhere ending every session. 0.6.0 counted only live sessions but ended every one; 0.6.1
   counts the same way for both, so the check asks for exactly the number shown, and passes against the real 0.6.1.
 - **WelcomeWagon 0.6.0 sign-in** (`--real-signin`): no permission gives no link, off the whitelist gives no link, then a
   link that signs the page in, and nobody gets a link made for someone else.
 - **Packmule 0.3.0** (`--real-packmule`): `pack set` refused a link nothing serves and kept the old one, as with 0.2.1.
-- **What the runs found:** the in-game command is `/login` (two of LeafJuice's hints still said `/signin`), redeeming
+- **What the runs found:** the in-game command is `/login` (two of GilaMonster's hints still said `/signin`), redeeming
   takes two steps, and WelcomeWagon's features are off until switched on. The checks now use its shipped config.
 
 ## 2026-11-14: publishing packs
@@ -73,9 +78,9 @@ Real release jars, checked against their published SHA-256, on throwaway Paper 2
   Packmule 0.2.0 are each refused in plain words, and the build isn't marked. Six unsafe links are never sent (http, no
   SHA-1 name, a space, a `;`, a line break, a user name).
 - **Cleanup waits for Packmule:** an old build stays while the current one isn't confirmed in use, however long.
-- **The real Packmule 0.2.1** (`--real-packmule`, the release jar) on throwaway Paper 26.3: LeafJuice's `pack set`
+- **The real Packmule 0.2.1** (`--real-packmule`, the release jar) on throwaway Paper 26.3: GilaMonster's `pack set`
   reached the console, Packmule tried the link, refused it with `check-failed` because nothing serves it here, and kept
-  the old link in its config. LeafJuice reported that in plain words and left the build unconfirmed. That proves the two
+  the old link in its config. GilaMonster reported that in plain words and left the build unconfirmed. That proves the two
   speak the same format; a successful switch needs the real https join host.
 - **Not covered:** a real Caddy serving the folder, a real client loading the published link, and Packmule's
   successful switch, which needs the real https join host.
@@ -91,7 +96,7 @@ Real release jars, checked against their published SHA-256, on throwaway Paper 2
 - **The QR code** reads back as the link with macOS's own QR reader. The text version has every step and spells the code
   out.
 - **Not covered:** printing on paper, scanning with a phone, and the sheet with VoiceOver. The layout was checked from a
-  rendered sample (`LEAFJUICE_SAMPLE_TICKET`).
+  rendered sample (`GILAMONSTER_SAMPLE_TICKET`).
 
 ## 2026-11-14: disk safety and smart backups
 
@@ -188,7 +193,7 @@ Gaps skipped: hands-on VoiceOver and keyboard use (no screen control this sessio
 
 ## 2026-11-14: connections (tunnels and services)
 
-The owner's requests of 2026-11-14 (see `docs/PLAN.md`). `leafjuice-check --connections`: 112 passed, also part of the default run.
+The owner's requests of 2026-11-14 (see `docs/PLAN.md`). `gilamonster-check --connections`: 112 passed, also part of the default run.
 
 Covered:
 
@@ -247,7 +252,7 @@ Gaps:
 - Map-access checks running one at a time are covered by reading, not by two simultaneous viewers.
 - Left as task K386: a Modrinth hash match offered as a suggestion, real-size pack extraction, and a setting for the
   Modrinth checksum lookups.
-- Each `leafjuice-check` run leaves a `leafjuice-check-<uuid>` preferences domain behind (about 66 on 2026-11-10).
+- Each `gilamonster-check` run leaves a `gilamonster-check-<uuid>` preferences domain behind (about 66 on 2026-11-10).
 
 ## 2026-11-10: packs served only to players joining
 
@@ -331,7 +336,7 @@ Covered:
   - With Plugin commands off, nothing is asked.
 
   Making the `describe` gate always say yes failed 5 checks.
-- **Web sign-ins, for real.** Real Latchkey 0.3.0 on throwaway Paper 26.3: the bot's one browser is counted, and Sign Out Everywhere deletes the session file and ends LeafJuice's page sign-in. The 0.2.0 run still proves that `whitelist remove` ends a session.
+- **Web sign-ins, for real.** Real Latchkey 0.3.0 on throwaway Paper 26.3: the bot's one browser is counted, and Sign Out Everywhere deletes the session file and ends GilaMonster's page sign-in. The 0.2.0 run still proves that `whitelist remove` ends a session.
 - **The Advisor, against `docs/ADVISOR-SECURITY.md`.** Each threat in its table maps to a section of the run:
 
   | Threat | Section |
@@ -382,7 +387,7 @@ Covered:
   - Invites can be listed and revoked.
   - The code works when typed in lowercase on Latchkey's own page. That whitelists the player, and Usher applies the profile.
   - A bot signs in with `/signin`, after an admin gives `latchkey.signin`, which is op-only by default.
-  - LeafJuice reads the real session file, and its links page signs the player in.
+  - GilaMonster reads the real session file, and its links page signs the player in.
   - `whitelist remove` ends both.
 - **Looked at by hand by this session, against `--demo-invites`.** An invite was made through the real screen: the question showed inline, the code appeared once, and the list updated. One fix came from it: the hint under the profiles no longer moves the button.
 
@@ -390,7 +395,7 @@ Gaps skipped:
 
 - **Keyboard, VoiceOver and wording, by a person.** That's owner test T24.
 - **A real server, a real browser and a real client.** These wait for the owner's go. Latchkey's HTTPS through a tunnel is Latchkey's own gap.
-- **LeafJuice's own sign-in.** It still works alongside Latchkey's. Retiring it is a later change, after T24.
+- **GilaMonster's own sign-in.** It still works alongside Latchkey's. Retiring it is a later change, after T24.
 
 ## 2026-11-10: the Allowlist page goes through Usher
 
@@ -409,9 +414,9 @@ Covered:
   - `grown_sky` asks `confirm-grown-sky`.
   - Adding and removing in one go works.
   - The raw path is refused.
-  - Usher's change log names LeafJuice.
+  - Usher's change log names GilaMonster.
   - Every account is made up and offline.
-- **Usher 0.4.0's `attempts`.** It uses `attempts` and a number for `next`, where the spec says `items` and a string. LeafJuice reads both, and the Plugins Lead has been told.
+- **Usher 0.4.0's `attempts`.** It uses `attempts` and a number for `next`, where the spec says `items` and a string. GilaMonster reads both, and the Plugins Lead has been told.
 
 Gaps skipped:
 
@@ -420,11 +425,11 @@ Gaps skipped:
 
 ## 2026-11-10: optional arguments in describe
 
-Signalbox 0.2.0 marks an argument that may be left out with `"optional": true`, and Usher 0.4.0 uses it. LeafJuice now reads it, and refuses a describe with a required argument after an optional one (fail closed: it couldn't tell which slot a value fills). Two checks added; 2468 passed, 0 failed. Not yet tried against Usher 0.4.0 itself, which isn't released.
+Signalbox 0.2.0 marks an argument that may be left out with `"optional": true`, and Usher 0.4.0 uses it. GilaMonster now reads it, and refuses a describe with a required argument after an optional one (fail closed: it couldn't tell which slot a value fills). Two checks added; 2468 passed, 0 failed. Not yet tried against Usher 0.4.0 itself, which isn't released.
 
 ## 2026-11-09: plugin commands, format 1
 
-LeafJuice's side of the shared plugin command format (ops `briefs/plugin-commands-spec.md`), behind a new module, Plugin commands, that starts off. 2463 passed, 0 failed (111 new).
+GilaMonster's side of the shared plugin command format (ops `briefs/plugin-commands-spec.md`), behind a new module, Plugin commands, that starts off. 2463 passed, 0 failed (111 new).
 
 Covered:
 
@@ -432,10 +437,10 @@ Covered:
 - **Spoofing (fail closed).** An answer counts only when `ea-result ` comes straight after an INFO log header. Thirteen spoof lines are refused: chat, `[Not Secure]` chat, the chat thread, `/say`, `/me`, a logged player command, a Discord bridge, WARN, no header, and junk before the header. Ids are 32 secure random hex characters and never repeat. A second answer, a reused id, an unknown id, a mismatched id inside the JSON, an answer over 8 KB and a refusal with no reason are each refused.
 - **Confirm questions.** Nothing goes ahead until every question id is sent back.
 - **Timeouts.** No answer is "not confirmed", not "failed". A late answer is passed on once, under its id.
-- **Switched off, or not LeafJuice's own console.** Nothing is typed, and the refusal says why.
+- **Switched off, or not GilaMonster's own console.** Nothing is typed, and the refusal says why.
 - **describe.** It is read. Unknown keys are ignored, and unknown types are marked rather than guessed. A newer format is refused. No format, format 0 or a plugin name that's a path is unreadable.
 - **Once-files (fail closed).** A secret is read once and deleted. These are refused, and the file is still deleted: one others could read, one in a folder others could look in, one for another request, and an expired one. A link to another file isn't followed, and its target is kept. A plugin folder that's a link elsewhere isn't read, and nothing is deleted through it. A path or another request's file named in the answer is refused.
-- **End to end.** A fake server in Java with a format-1 plugin runs through LeafJuice's real console. A player's chat answer with the same id comes first, and the real answer is still read. Free text with quotes and backslashes survives. describe comes through. An invite code reaches only the once-file, never the console. A plugin that never answers gives "not confirmed". Switched off, nothing is typed into a running server.
+- **End to end.** A fake server in Java with a format-1 plugin runs through GilaMonster's real console. A player's chat answer with the same id comes first, and the real answer is still read. Free text with quotes and backslashes survives. describe comes through. An invite code reaches only the once-file, never the console. A plugin that never answers gives "not confirmed". Switched off, nothing is typed into a running server.
 - **Proved by breaking it.** Loosening the parser to accept the prefix anywhere in a line failed 11 checks, including the end-to-end one. Then it was put back.
 
 Gaps skipped:
@@ -445,11 +450,11 @@ Gaps skipped:
 
 ## 2026-11-09: BlueMinimap rename
 
-BlueMapHUD became BlueMinimap 0.2.0. LeafJuice never looks for this plugin by name or folder: an exact pack is whatever zip you add, stored under its own SHA-1. So no check changes. Only the README and the Exact Pack hint now name `/blueminimap pack export`. The new export has a new SHA-1, so it needs adding again as a new exact pack. LeafJuice already handles that (a new export gets a new address, old ones keep serving). Built clean; the default run was not repeated, because no code path changed.
+BlueMapHUD became BlueMinimap 0.2.0. GilaMonster never looks for this plugin by name or folder: an exact pack is whatever zip you add, stored under its own SHA-1. So no check changes. Only the README and the Exact Pack hint now name `/blueminimap pack export`. The new export has a new SHA-1, so it needs adding again as a new exact pack. GilaMonster already handles that (a new export gets a new address, old ones keep serving). Built clean; the default run was not repeated, because no code path changed.
 
 ## 2026-11-09: Packmule rename
 
-Resource Pack Butler became Packmule 0.2.0. Serving packs now checks that Packmule is noticed under both names, `Packmule` and `ResourcePackButler` (0.1.x), and that the pack settings are refused under each. Nothing else needed: LeafJuice reads only the plugin's name, never its folder, so the window where both `plugins/ResourcePackButler/` and `plugins/Packmule/` exist doesn't matter here. 1829 passed, 0 failed.
+Resource Pack Butler became Packmule 0.2.0. Serving packs now checks that Packmule is noticed under both names, `Packmule` and `ResourcePackButler` (0.1.x), and that the pack settings are refused under each. Nothing else needed: GilaMonster reads only the plugin's name, never its folder, so the window where both `plugins/ResourcePackButler/` and `plugins/Packmule/` exist doesn't matter here. 1829 passed, 0 failed.
 
 ## 2026-11-08: first audit
 

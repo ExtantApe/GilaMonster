@@ -1,0 +1,115 @@
+import Foundation
+
+// The Overview's "Needs you" list (K672, from the 2026-11-16 mockup): what to do next, first. Pure, so the check
+// harness can prove which situations show which items. Restart-needed, planned restarts, the allowlist note and
+// upgrade banners keep their own callouts above it.
+
+public struct NeedsYouItem: Equatable, Sendable, Identifiable {
+    public enum Kind: String, Sendable { case noBackup, autoBackupsOff, backupDrive, issues, connection, pluginUpdates, softwareUpdate }
+    public enum Tone: Sendable { case warning, info }
+    public enum Action: Equatable, Sendable { case backUpNow, turnOnAutoBackups, openBackups, openIssues, openPlugins, openSoftware }
+
+    public var kind: Kind
+    public var tone: Tone
+    public var title: String
+    public var detail: String
+    /// nil when the details are already on the Overview (connections have their own card there).
+    public var action: Action?
+    public var actionTitle: String?
+    public var id: String { kind.rawValue }
+}
+
+public struct NeedsYouFacts: Equatable, Sendable {
+    public var hasBackup = false
+    public var autoBackups = false
+    /// One sentence about a backup drive running low, when one is.
+    public var driveWarning: String?
+    /// Open issues of error severity or worse.
+    public var seriousIssues = 0
+    /// "Service: summary" for each connection that needs a look or isn't ready.
+    public var connectionProblems: [String] = []
+    /// Plugin names with an update that fits this server.
+    public var pluginUpdates: [String] = []
+    /// A newer build of the server software, as words ("build 254").
+    public var softwareUpdate: String?
+    /// The Lab is a throwaway test server: it has no backups or connections to look after.
+    public var isLab = false
+    public init() {}
+}
+
+public enum NeedsYou {
+    /// Most urgent first: losing worlds, then broken things, then updates.
+    public static func items(_ f: NeedsYouFacts) -> [NeedsYouItem] {
+        var out: [NeedsYouItem] = []
+        if !f.isLab {
+            if !f.hasBackup {
+                out.append(.init(kind: .noBackup, tone: .warning, title: "No backup yet",
+                                 detail: "Nothing to restore if something goes wrong. A backup works while the server runs.",
+                                 action: .backUpNow, actionTitle: "Back Up Now"))
+            }
+            if !f.autoBackups {
+                out.append(.init(kind: .autoBackupsOff, tone: .warning, title: "Automatic backups are off",
+                                 detail: "Turn them on and GilaMonster backs up after people play.",
+                                 action: .turnOnAutoBackups, actionTitle: "Turn On"))
+            }
+            if let w = f.driveWarning {
+                out.append(.init(kind: .backupDrive, tone: .warning, title: "A backup drive is running low", detail: w,
+                                 action: .openBackups, actionTitle: "Open Backups"))
+            }
+        }
+        if f.seriousIssues > 0 {
+            out.append(.init(kind: .issues, tone: .warning, title: f.seriousIssues == 1 ? "1 issue needs attention" : "\(f.seriousIssues) issues need attention",
+                             detail: "The server logged errors that may stop players or lose changes.",
+                             action: .openIssues, actionTitle: "Review"))
+        }
+        if !f.isLab, !f.connectionProblems.isEmpty {
+            out.append(.init(kind: .connection, tone: .warning, title: "Friends may not be able to connect",
+                             detail: f.connectionProblems.prefix(2).joined(separator: " ") + (f.connectionProblems.count > 2 ? " And \(f.connectionProblems.count - 2) more." : "") + " Details are in Connections below.",
+                             action: nil, actionTitle: nil))
+        }
+        if !f.pluginUpdates.isEmpty {
+            let n = f.pluginUpdates.count
+            let names = f.pluginUpdates.prefix(2).joined(separator: " and ") + (n > 2 ? " and \(n - 2) more" : "")
+            out.append(.init(kind: .pluginUpdates, tone: .info, title: n == 1 ? "1 plugin update" : "\(n) plugin updates",
+                             detail: "\(names) \(n == 1 ? "has an update that fits" : "have updates that fit") this Minecraft version.",
+                             action: .openPlugins, actionTitle: "Review"))
+        }
+        if let s = f.softwareUpdate {
+            out.append(.init(kind: .softwareUpdate, tone: .info, title: "Server software update",
+                             detail: "A newer \(s) is available.", action: .openSoftware, actionTitle: "Open Software"))
+        }
+        return out
+    }
+
+    /// The one-line status under the server's name: state first, then what matters most.
+    public static func statusLine(running: Bool, starting: Bool, since: Date?, players: Int, software: String,
+                                  lastBackup: Date?, isLab: Bool, now: Date = Date()) -> String {
+        var parts: [String] = []
+        if starting {
+            parts.append("Starting.")
+        } else if running {
+            if let since {
+                let f = DateComponentsFormatter()
+                f.unitsStyle = .full; f.maximumUnitCount = 1; f.allowedUnits = [.day, .hour, .minute]
+                let span = max(60, now.timeIntervalSince(since))
+                parts.append("Running for \(f.string(from: span) ?? "a while").")
+            } else {
+                parts.append("Running.")
+            }
+            parts.append(players == 0 ? "Nobody on." : players == 1 ? "1 player on." : "\(players) players on.")
+        } else {
+            parts.append("Stopped.")
+            parts.append("\(software).")
+        }
+        if !isLab {
+            if let lastBackup {
+                let rel = RelativeDateTimeFormatter()
+                rel.unitsStyle = .full
+                parts.append("Last backup \(rel.localizedString(for: lastBackup, relativeTo: now)).")
+            } else {
+                parts.append("No backup yet.")
+            }
+        }
+        return parts.joined(separator: " ")
+    }
+}

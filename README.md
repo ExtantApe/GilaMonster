@@ -1,9 +1,6 @@
-<picture>
-  <source media="(prefers-color-scheme: dark)" srcset="brand/readme-header-dark-1280x320.png">
-  <img src="brand/readme-header-light-1280x320.png" width="640" alt="LeafJuice: a pixel-art glass of green juice with a leaf and a grapefruit wedge. A little pulp goes a long way.">
-</picture>
+<img src="brand/icon-1024.png" width="128" alt="GilaMonster's icon: a pixel-art Gila monster.">
 
-# LeafJuice
+# GilaMonster
 
 A free, native Mac app for running a Minecraft Java server. It's the easy step up from
 `java -jar paper.jar`: about 40 MB and no measurable CPU at idle, with no web panel, daemon or container.
@@ -18,12 +15,12 @@ Not affiliated with Mojang or Microsoft.
 - **Runs your server**: start, stop, a real console with history, CPU and memory, automatic restart after a
   crash (with a limit, so it can't loop), and keeps your Mac awake while running. Quitting asks first. When the Mac
   shuts down, restarts or logs out, it doesn't ask: it stops every server with a save and lets the Mac carry on.
-  Opening LeafJuice starts nothing, even a server that was running when it quit, unless that server's **Start when
-  LeafJuice opens** box (Launch page) is on. It's off for every server until you turn it on.
+  Opening GilaMonster starts nothing, even a server that was running when it quit, unless that server's **Start when
+  GilaMonster opens** box (Launch page) is on. It's off for every server until you turn it on.
 - **Keeps servers together**: on first launch it offers to create `~/Minecraft`, or to use another or an existing
   folder (changeable in Settings). Add Server lists what's there, and new servers are created there.
 - **Uses your existing server**: pick one from the list, or point it at a folder. It detects the software, version, and the memory and
-  flags in your start script. Everything it adds goes in `.leafjuice/`; your files aren't touched. Delete that
+  flags in your start script. Everything it adds goes in `.gilamonster/`; your files aren't touched. Delete that
   folder and you have a normal server again. Works with servers from before Minecraft 26 and after.
 - **Keeps server software current**: Paper (recommended), Folia, Purpur, Vanilla, or your own jar. Hashes are
   checked, and it uses the Java version and flags Paper recommends for that exact Minecraft version.
@@ -41,7 +38,7 @@ Not affiliated with Mojang or Microsoft.
   minutes; during a session longer than six hours; and at most once a day when it changes with nobody on. Never two
   within an hour. It keeps everything from the last day, then one a day for a week, then one a week for eight weeks,
   and never deletes a pinned backup or the server's first one. Each routine backup goes to the first storage on your
-  list that's connected and has room, then to the server's own folder (`LeafJuice/backups/<server>/` beside your servers, or one you choose), and every
+  list that's connected and has room, then to the server's own folder (`GilaMonster/backups/<server>/` beside your servers, or one you choose), and every
   backup shows where it lives.
   Backups and test restores never fill a disk: each one first checks it would leave 20 GB free. A drive you share with other things can have a **backup cap** (Backups, Space on each drive). Before a backup would pass it, the oldest backups there are removed first, never a pinned one, the newest, the first or another server's. If that isn't enough, the backup goes elsewhere or is skipped, and you're told. It warns at 85%. A backup cut short by a quit leaves no partial file behind. With the backup folder on an external drive, **Back up only to** that drive skips each backup while it's unplugged or full, with a warning, and never writes to another drive or the Mac's disk instead. Servers set up before this keep their old schedule until you switch. Saving is paused while it runs, and
   a whole-folder restore comes back exactly as it was and ready to start, even offline.
@@ -52,8 +49,8 @@ Not affiliated with Mojang or Microsoft.
   pinned SHA-256; it needs Java 25, and works for Paper only). Check with Preflight copies the server with saving paused, and the tool
   boots the copy on the new version. It lists the plugins that didn't load, didn't start or failed a critical check, plus everything
   that needs them. Warnings, and plugins that couldn't be checked in the copy, are only listed. Never-off rules and things to check by hand live in
-  `plugins/Preflight/upgrade/rules.json`, the tool's own file, so they work without LeafJuice too. If a never-off plugin would have to go,
-  the plan says to wait. Switching off happens only after you confirm, only while the server is stopped, and only after LeafJuice's
+  `plugins/Preflight/upgrade/rules.json`, the tool's own file, so they work without GilaMonster too. If a never-off plugin would have to go,
+  the plan says to wait. Switching off happens only after you confirm, only while the server is stopped, and only after GilaMonster's
   verified whole-server restore point; the tool keeps its own copy of the jars too. Each plugin can be switched back on from the
   Software page. A pass means a plugin starts, not that it works.
 - **Rotates server icons**: keep icons in the server's `server-icons` folder and pick one from the Overview's ••• menu (Server Icon…). It's copied over `server-icon.png`, which Minecraft reads at the next start. Added images must be square, and are scaled to 64×64 with nearest-neighbour so pixel art stays sharp. Nothing in the folder is moved or deleted, and an icon in use that isn't in the folder yet is saved there first.
@@ -68,8 +65,8 @@ Not affiliated with Mojang or Microsoft.
 
 ## Your server stays yours
 
-**No telemetry, no analytics, no accounts.** Everything LeafJuice measures stays on your Mac. It only goes online to
-do something you can see: checking for server, plugin and Java updates, and looking for a new LeafJuice release (which you can turn off in Settings).
+**No telemetry, no analytics, no accounts.** Everything GilaMonster measures stays on your Mac. It only goes online to
+do something you can see: checking for server, plugin and Java updates, and looking for a new GilaMonster release (which you can turn off in Settings).
 A few things happen only when you click them, such as the connection check and web searches for an error, and they say what they share.
 
 ## Upgrades can't quietly break your server
@@ -79,7 +76,7 @@ newer version won't open on an older one. So any version change or software swit
 
 1. **Restore point.** The whole server is archived, then read back to prove every world is inside. This isn't
    optional. If it fails, the upgrade doesn't happen and nothing changes.
-2. **You try it.** LeafJuice asks whether to keep the upgrade, and holds on to the restore point until you say.
+2. **You try it.** GilaMonster asks whether to keep the upgrade, and holds on to the restore point until you say.
 3. **Roll back in one step**, if you need to: server, plugins, settings and jar all return to how they were.
 4. **The upgraded state isn't thrown away.** It moves to the **Shelf**, which is separate from backups:
    retention leaves it alone, and you can resume that upgrade later, for example once a plugin has caught up.
@@ -91,8 +88,8 @@ Before upgrading, **Check Plugins** on the Software page shows which plugins hav
 The Lab tests your plugins and rehearses upgrades on a practice server called `lab`, in `~/Minecraft/lab`,
 with its own worlds and bot players that really join and hold items. It only listens on your Mac. Each run builds the lab
 from scratch and deletes it when the run ends, whether it passed, failed or was stopped (decided 2026-11-16). The results and
-the report stay. A lab left behind by a quit or crash is deleted the next time LeafJuice opens, but only if it's LeafJuice's
-own lab folder and it isn't running. A folder called `lab` that LeafJuice didn't make is never touched.
+the report stay. A lab left behind by a quit or crash is deleted the next time GilaMonster opens, but only if it's GilaMonster's
+own lab folder and it isn't running. A folder called `lab` that GilaMonster didn't make is never touched.
 
 Each server has a **Lab** page, under Server in the sidebar. Tick the checks you want, pick a version to upgrade to, and
 click **Run Checks**. They run in order, and a green light unlocks the check below it. A check that's still locked when its
@@ -127,11 +124,11 @@ running. A pass means these checks passed, and the board lists what they don't c
 
 Worlds and Multiverse, Players, History, Cleanup, Test copies, Backup drills, the Lab, Resource packs and Plugin links are all switches in **Settings**, and all
 on by default. Off hides the feature and stops its background work. Nothing it saved is deleted, and turning it back on picks up where it left off.
-These are built in: LeafJuice doesn't load third-party code.
+These are built in: GilaMonster doesn't load third-party code.
 
 ## Advisor (optional, uses AI)
 
-Off until you turn it on in **Settings**, unlike everything above, because it sends data outside your Mac. It reads what LeafJuice has noticed about a server you choose and suggests, in plain words, what's wrong and what to do first. It uses your own Claude account through [Claude Code](https://claude.com/claude-code), and in testing a check took about half a minute and about 8 cents if you pay per use.
+Off until you turn it on in **Settings**, unlike everything above, because it sends data outside your Mac. It reads what GilaMonster has noticed about a server you choose and suggests, in plain words, what's wrong and what to do first. It uses your own Claude account through [Claude Code](https://claude.com/claude-code), and in testing a check took about half a minute and about 8 cents if you pay per use.
 
 It can't change anything. Chat, log messages, passwords, player names and addresses aren't shared, and **See Exactly What Would Be Shared** shows the real text before you decide. [ADVISOR-SECURITY.md](docs/ADVISOR-SECURITY.md) explains what this does and doesn't protect against.
 
@@ -151,35 +148,35 @@ Each build keeps a lock file of every copy of every file, so an update can show 
 
 **Getting a pack to players:** their games download it from the web, so a build needs an address. There are two ways:
 
-- **Serve it from LeafJuice.** Off until you start it. Each recipe gets its own address with a long random path, so different worlds can have different packs. LeafJuice only listens on this Mac, so something like Caddy has to carry it through your tunnel, on a different hostname from any sign-in page. **Only players joining** is on by default: a pack goes only to a request carrying the game's own `X-Minecraft-Username`, `X-Minecraft-UUID` and `X-Minecraft-Version` headers, for a player listed in the server's whitelist whom the server's log shows connecting in the last 5 minutes, or online now. Everyone else, a browser included, gets the same 404 as a wrong address. Headers can be faked, so this stops casual downloads and shared links, not someone who knows a whitelisted player's name and UUID and asks while that player is joining. The address's long random path still hides it too. It runs only while LeafJuice is open, uses your upload speed, and keeps no record of who downloads. Serving a combined pack gives players a copy of other people's work, so LeafJuice shows each pack's license first.
+- **Serve it from GilaMonster.** Off until you start it. Each recipe gets its own address with a long random path, so different worlds can have different packs. GilaMonster only listens on this Mac, so something like Caddy has to carry it through your tunnel, on a different hostname from any sign-in page. **Only players joining** is on by default: a pack goes only to a request carrying the game's own `X-Minecraft-Username`, `X-Minecraft-UUID` and `X-Minecraft-Version` headers, for a player listed in the server's whitelist whom the server's log shows connecting in the last 5 minutes, or online now. Everyone else, a browser included, gets the same 404 as a wrong address. Headers can be faked, so this stops casual downloads and shared links, not someone who knows a whitelisted player's name and UUID and asks while that player is joining. The address's long random path still hides it too. It runs only while GilaMonster is open, uses your upload speed, and keeps no record of who downloads. Serving a combined pack gives players a copy of other people's work, so GilaMonster shows each pack's license first.
 
-  The address can be a whole hostname or one short folder of one, such as `https://join.example.net/zz`, for a web server that forwards just that folder here. LeafJuice answers with the folder in the path or without it.
+  The address can be a whole hostname or one short folder of one, such as `https://join.example.net/zz`, for a web server that forwards just that folder here. GilaMonster answers with the folder in the path or without it.
 
-  **Packmule's link check** isn't a player, so with only players joining on it would be refused. Starting the pack server makes a token for it in `~/Library/Application Support/Leaf Juice/pack-check/<server id>.token` (the folder keeps its older name, with a space): 64 hex characters, mode 600, outside the server folder so backups and copies never carry it. The hosting card shows the path to put in Packmule's `token-file` setting. Packmule sends it as `X-Pack-Check-Token` straight to this Mac. Give Packmule a build's own address, `<address>/<recipe token>/<sha1>.zip`: `pack.zip` serves only the build the server is using, and answers 404 for a recipe it isn't using yet. LeafJuice accepts it only on GET and HEAD for a pack address, reads the file fresh each time, and refuses it if the file is a link, readable by anyone else, or malformed, or if the request came through a proxy (`X-Forwarded-For`, `Forwarded` or `Via`). So it can't work from outside even if the web server doesn't strip the header, though it should. The token is never logged; the server's console notes, at most once a minute, that the link check got in. To change it, delete the file and start serving again. Any program running as you on this Mac could read the file, as it could most of your files.
+  **Packmule's link check** isn't a player, so with only players joining on it would be refused. Starting the pack server makes a token for it in `~/Library/Application Support/GilaMonster/pack-check/<server id>.token` (the folder keeps its older name, with a space): 64 hex characters, mode 600, outside the server folder so backups and copies never carry it. The hosting card shows the path to put in Packmule's `token-file` setting. Packmule sends it as `X-Pack-Check-Token` straight to this Mac. Give Packmule a build's own address, `<address>/<recipe token>/<sha1>.zip`: `pack.zip` serves only the build the server is using, and answers 404 for a recipe it isn't using yet. GilaMonster accepts it only on GET and HEAD for a pack address, reads the file fresh each time, and refuses it if the file is a link, readable by anyone else, or malformed, or if the request came through a proxy (`X-Forwarded-For`, `Forwarded` or `Via`). So it can't work from outside even if the web server doesn't strip the header, though it should. The token is never logged; the server's console notes, at most once a minute, that the link check got in. To change it, delete the file and start serving again. Any program running as you on this Mac could read the file, as it could most of your files.
 - **Host it elsewhere,** such as mc-packs.net, and enter the address.
-- **Serve an exact file,** such as BlueMapMini's pack, `plugins/BlueMapMini/pack/bluemapmini-pack.zip`. Add an Exact Pack stores the zip unchanged under its own SHA-1, with nothing unzipped, rebuilt or added. Each version gets its own address, and there's also an address with `{sha1}` left in for a plugin that fills in the hash itself. Adding a new export gives it a new address, and old ones keep serving their own file. Two risks, both shown in the app: players can't get the pack while LeafJuice is closed, so a required pack stops them joining, and New Address breaks a plugin's `public-url` until you paste in the new one.
+- **Serve an exact file,** such as BlueMapMini's pack, `plugins/BlueMapMini/pack/bluemapmini-pack.zip`. Add an Exact Pack stores the zip unchanged under its own SHA-1, with nothing unzipped, rebuilt or added. Each version gets its own address, and there's also an address with `{sha1}` left in for a plugin that fills in the hash itself. Adding a new export gives it a new address, and old ones keep serving their own file. Two risks, both shown in the app: players can't get the pack while GilaMonster is closed, so a required pack stops them joining, and New Address breaks a plugin's `public-url` until you paste in the new one.
 - **Leave out a song.** A pack can list its songs in `songs.json` at its top: `{"format": 1, "songs": [{"id": "calm", "title": "Calm", "credit": "…", "files": [{"path": "assets/minecraft/sounds/music/game/calm1.ogg", "replaces": "music/game/calm1", "bytes": 123}]}]}`. Under Songs, untick one and that recipe's builds leave its files out, so Minecraft's own track plays. Each choice makes a new build, with its own SHA-1 and address. If the list has a problem, such as a file claimed twice or one the pack doesn't have, every song stays in and the build says why. Songs are credited in `CREDITS.txt`.
 
-**Check** downloads from the address as a game would and compares the SHA-1. It carries a one-time pass that only LeafJuice's own pack server issues, valid for one download within two minutes, so it works with only players joining on. Setting another host's address on a server runs this first, and you can still go ahead if it fails, say if you haven't uploaded yet.
+**Check** downloads from the address as a game would and compares the SHA-1. It carries a one-time pass that only GilaMonster's own pack server issues, valid for one download within two minutes, so it works with only players joining on. Setting another host's address on a server runs this first, and you can still go ahead if it fails, say if you haven't uploaded yet.
 
-LeafJuice sets the address on your server through the usual Change Queue. A change staged for the next restart keeps the running server's file and hash together until that restart, then switches both. If Packmule or WorldResourcepacks is on the server, LeafJuice won't write its pack settings. You copy each build's own address and SHA-1 into that plugin's config instead. That address only ever gives that build, so the hash can't go stale. This has only been tested with stand-in jars of those names.
+GilaMonster sets the address on your server through the usual Change Queue. A change staged for the next restart keeps the running server's file and hash together until that restart, then switches both. If Packmule or WorldResourcepacks is on the server, GilaMonster won't write its pack settings. You copy each build's own address and SHA-1 into that plugin's config instead. That address only ever gives that build, so the hash can't go stale. This has only been tested with stand-in jars of those names.
 
 A real game client hasn't loaded a served pack yet. Bots have shown a real Paper 26.3 server offering the address and hash, and that a download from it matches. With only players joining on, a download sent with the game's headers for a whitelisted bot that just joined succeeded, without them or for an unlisted UUID it got 404, and the bot stayed on. That the 26.x game sends those headers is taken from how the game has worked since 1.20.3, and hasn't been seen yet. If it doesn't, every player would be refused the pack, and kept out if it's required. The 250 MB warning hasn't been checked against a real client either.
 
 ### Publishing to your web server
 
-If a web server such as Caddy serves a folder on this Mac, LeafJuice can publish each build there: choose the folder
+If a web server such as Caddy serves a folder on this Mac, GilaMonster can publish each build there: choose the folder
 and its https address on the Resource Packs page, then **Publish the Newest Build**. Each build goes in under a new
 random 64-character folder, named by its SHA-1, so Packmule reads the hash straight from the link. The copy is checked
 against the build before it's used. The build before stays until everyone who was online at the switch has left, and
-at least 10 minutes have passed, then LeafJuice removes it. It only ever removes folders it made, holding nothing but
+at least 10 minutes have passed, then GilaMonster removes it. It only ever removes folders it made, holding nothing but
 that build, so anything else in the served folder is left alone. Its record of what it published stays in the
-server's `.leafjuice` folder, never in the served folder.
+server's `.gilamonster` folder, never in the served folder.
 
-With **Packmule 0.2.1** or later and **Plugin commands** on, LeafJuice tells Packmule each new link itself, by typing
+With **Packmule 0.2.1** or later and **Plugin commands** on, GilaMonster tells Packmule each new link itself, by typing
 `packmule pack set <pack> <link>` into the console of a server it runs. Set the pack's name from Packmule's
 `config.yml` beside each recipe. Packmule downloads the file and checks its SHA-1 before it switches; if that fails, it
-keeps the old link and LeafJuice says why. Without that, copy the link into Packmule's config, run `/packmule reload`
+keeps the old link and GilaMonster says why. Without that, copy the link into Packmule's config, run `/packmule reload`
 and press **Updated by Hand**. Either way, the old build is kept until Packmule uses the new link.
 
 ## Connections: tunnels and services
@@ -198,9 +195,9 @@ in plain words: Ready, Needs a look, Not ready, Not checked, or Off.
 player would: a status ping for players, an HTTP request for web addresses, and a lookup for names. It only runs when
 you click it. When a piece is missing, the check says which one and shows the service as not ready.
 
-The settings are in the server's `.leafjuice/connections.json`. Secrets are never saved there. A service's secret
+The settings are in the server's `.gilamonster/connections.json`. Secrets are never saved there. A service's secret
 either goes in your login Keychain (Edit Connections, paste it into the secure field), or stays in the service's own
-file, which LeafJuice only checks is there and readable by you alone, or is kept by the provider's own agent. If a
+file, which GilaMonster only checks is there and readable by you alone, or is kept by the provider's own agent. If a
 field that looks like a secret turns up in the file, it's ignored and named on the card. The fields, with made-up
 values:
 
@@ -262,27 +259,27 @@ Anything else is refused: commands off the list, extra words after a listed comm
 break, unknown calls, a wrong token. Every call, allowed or refused, is listed in Settings with who said they were
 calling and when, and a command a session runs shows in the console too.
 
-How it's reached: a Unix socket at `~/Library/Application Support/Leaf Juice/session.sock`, private to your macOS
-account, plus a random token in your login Keychain. The first time something other than LeafJuice reads the token,
+How it's reached: a Unix socket at `~/Library/Application Support/GilaMonster/session.sock`, private to your macOS
+account, plus a random token in your login Keychain. The first time something other than GilaMonster reads the token,
 macOS asks you. **Make a New Token** cuts off anything holding the old one. Anything running as your account could
 use it once allowed, so keep the list to commands you'd be happy for any of them to run.
 
 The client is inside the app:
 
 ```bash
-"/Applications/LeafJuice.app/Contents/MacOS/leafjuice-session" --as "Server lead" status
+"/Applications/GilaMonster.app/Contents/MacOS/gilamonster-session" --as "Server lead" status
 ```
 
 ```bash
-"/Applications/LeafJuice.app/Contents/MacOS/leafjuice-session" --as "Server lead" log --lines 50 --server "Made-up Server"
+"/Applications/GilaMonster.app/Contents/MacOS/gilamonster-session" --as "Server lead" log --lines 50 --server "Made-up Server"
 ```
 
 ```bash
-"/Applications/LeafJuice.app/Contents/MacOS/leafjuice-session" --as "Server lead" run "save-all"
+"/Applications/GilaMonster.app/Contents/MacOS/gilamonster-session" --as "Server lead" run "save-all"
 ```
 
-It prints LeafJuice's answer as JSON and exits 0 when it was allowed, 1 when refused, and 2 when LeafJuice can't be
-reached. A command only runs on a server LeafJuice started; output is what the server printed in the next second and a
+It prints GilaMonster's answer as JSON and exits 0 when it was allowed, 1 when refused, and 2 when GilaMonster can't be
+reached. A command only runs on a server GilaMonster started; output is what the server printed in the next second and a
 half. `--as` is what the caller says about itself; it's recorded, not checked.
 
 ### Starting, stopping and packs
@@ -295,9 +292,9 @@ A session can also do these. Some go ahead, and some wait for you:
   updated, start or stop pack serving, give a recipe a pack address or take it away, and ask whether a named player
   would get a pack right now. That last one says whether they're joining, so it asks too.
 
-Each ask opens a small LeafJuice window, such as "Server lead wants to stop Made-up Server", with **Allow** and
+Each ask opens a small GilaMonster window, such as "Server lead wants to stop Made-up Server", with **Allow** and
 **Deny**. It stays in front of other windows without taking the keyboard, and the menu bar leaf shows how many asks are
-waiting. A Mac notification with the same buttons goes out too, when macOS lets LeafJuice show one; the window is there
+waiting. A Mac notification with the same buttons goes out too, when macOS lets GilaMonster show one; the window is there
 because notifications can be off or hidden by a Focus. The request also waits in Settings > Session access. No answer
 in 2 minutes is a no.
 Nothing that asks runs while a backup is being written, and anything that can't happen anyway (stopping a stopped
@@ -306,7 +303,7 @@ server, publishing a recipe with no build) is refused before you're bothered.
 **Children may play here** is on for every server until you clear it in Settings, with a confirm. A server with the
 mark can't be given standing permission, so every change there asks. Clear the mark only for a server no child plays
 on. Then you can let sessions do these without asking. Marking it again takes that away. Both live in a small file in the
-server's LeafJuice folder. If that file can't be read, the mark counts as on. leafjuice-session has no way to change
+server's GilaMonster folder. If that file can't be read, the mark counts as on. gilamonster-session has no way to change
 either, but any program running as your macOS account could edit the file, as it could most of your files. The guard
 against that is the Allow prompt everywhere else, plus a line in the server's log each time the mark changes.
 
@@ -315,21 +312,21 @@ Packmule updated, pack serving on and off, and giving a pack address. One click 
 server until midnight, Mac time: allowing a stop covers starts, stops and restarts everywhere today, and nothing else.
 It never covers removing a pack address, asking about a named player, or anything that deletes, restores or resets a
 world. Each one that goes ahead this way still checks that nobody is on that server first. With someone online it asks
-as usual, and when LeafJuice can't tell (the server is starting or stopping, runs outside LeafJuice, or its management
+as usual, and when GilaMonster can't tell (the server is starting or stopping, runs outside GilaMonster, or its management
 server doesn't answer) it's refused. Who's online counts the server's own login lines as well as join messages, so a player hidden by a vanish plugin still
 counts. Each shows a notice, a line in the server's log, an entry in the record and a line under the menu bar leaf.
-**Revoke Today's Allows** in the menu bar leaf ends them all, and quitting LeafJuice does too. A revoke while an
+**Revoke Today's Allows** in the menu bar leaf ends them all, and quitting GilaMonster does too. A revoke while an
 action is being checked stops it, and setting the Mac's clock back can only end a grant early. The grants are kept only
 in memory: nothing writes them to a file, and no session call can make or extend one.
 
 ```bash
-leafjuice-session --as "Server lead" pack add ~/Downloads/made-up-pack.zip
-leafjuice-session --as "Server lead" recipe set made-up --packs made-up-pack,other-pack
-leafjuice-session --as "Server lead" recipe build made-up
-leafjuice-session --as "Server lead" publish made-up --server "Made-up Server"
-leafjuice-session --as "Server lead" hosting status
-leafjuice-session --as "Server lead" gate check https://packs.example.net/<path>/pack.zip --player MadeUpPlayer
-leafjuice-session --as "Server lead" restart --server "Made-up Server"
+gilamonster-session --as "Server lead" pack add ~/Downloads/made-up-pack.zip
+gilamonster-session --as "Server lead" recipe set made-up --packs made-up-pack,other-pack
+gilamonster-session --as "Server lead" recipe build made-up
+gilamonster-session --as "Server lead" publish made-up --server "Made-up Server"
+gilamonster-session --as "Server lead" hosting status
+gilamonster-session --as "Server lead" gate check https://packs.example.net/<path>/pack.zip --player MadeUpPlayer
+gilamonster-session --as "Server lead" restart --server "Made-up Server"
 ```
 
 **Tested:** every refusal, Allow, Deny, no answer, nobody to ask, the backup refusal and standing permission, with
@@ -340,11 +337,11 @@ real start or restart through a session, a real publish, and the Allow for today
 
 ## Staying safe when you're not looking
 
-Every backup can also be copied to a **second location**, ideally another drive, with each copy checked against the original. If the main backups are lost, they can be copied back. LeafJuice also sends a **Mac notification** for crashes, failed backups and low disk space, and you can turn that off in Settings.
+Every backup can also be copied to a **second location**, ideally another drive, with each copy checked against the original. If the main backups are lost, they can be copied back. GilaMonster also sends a **Mac notification** for crashes, failed backups and low disk space, and you can turn that off in Settings.
 
 ## Allowlist
 
-Add someone before they've ever joined. Type their name in any capitals and LeafJuice asks Mojang for the real account, then shows you its spelling and ID. If there's no such account, or Mojang can't be reached, nothing is added. Java accounts only, and it needs `online-mode=true`.
+Add someone before they've ever joined. Type their name in any capitals and GilaMonster asks Mojang for the real account, then shows you its spelling and ID. If there's no such account, or Mojang can't be reached, nothing is added. Java accounts only, and it needs `online-mode=true`.
 
 With LuckPerms you can choose their groups too. Groups go on first, then the allowlist, and both are read back, so nobody can join with only the default access while it's half done. While the server is stopped the whole thing waits, shows under **Not finished**, and happens when the server is running. Each server is its own list.
 
@@ -356,14 +353,14 @@ Taking someone off the allowlist leaves their groups alone. Changing someone's g
 
 ### With Sheriff and WelcomeWagon
 
-These need **Plugin commands**, which is off by default, and the server running in LeafJuice, because LeafJuice types the plugins' commands into its console and reads their answers.
+These need **Plugin commands**, which is off by default, and the server running in GilaMonster, because GilaMonster types the plugins' commands into its console and reads their answers.
 
-- **Sheriff:** when it's installed, approving someone goes through Sheriff's profiles, its questions show on the page and each needs a tick, and changes land in Sheriff's own log. LeafJuice then never changes groups or the whitelist around Sheriff. If it can't reach Sheriff, the page refuses rather than doing it another way. People the whitelist turned away are listed, with an Approve button.
-- **Invites (WelcomeWagon):** an invite is a six-character code for one Minecraft name, lasting 1 to 30 days, with the Sheriff profiles you pick. The code is shown once and LeafJuice keeps no copy. It never goes through the console or the server log. Invites can be listed and revoked, and the card shows whether WelcomeWagon's lobby is on.
+- **Sheriff:** when it's installed, approving someone goes through Sheriff's profiles, its questions show on the page and each needs a tick, and changes land in Sheriff's own log. GilaMonster then never changes groups or the whitelist around Sheriff. If it can't reach Sheriff, the page refuses rather than doing it another way. People the whitelist turned away are listed, with an Approve button.
+- **Invites (WelcomeWagon):** an invite is a six-character code for one Minecraft name, lasting 1 to 30 days, with the Sheriff profiles you pick. The code is shown once and GilaMonster keeps no copy. It never goes through the console or the server log. Invites can be listed and revoked, and the card shows whether WelcomeWagon's lobby is on.
 - **Printed tickets:** **Print Ticket…** makes a card with the server's name, where to go, the code
   in groups of three, when it runs out, and a QR code that opens the page with the code filled in. The code sits after
   `#` in that link, so it never reaches a web server's logs. It prints black on white, saves as a PDF, or copies as
-  plain text, and VoiceOver reads it as a list of steps. LeafJuice keeps no copy. If WelcomeWagon's ticket looks wrong,
+  plain text, and VoiceOver reads it as a list of steps. GilaMonster keeps no copy. If WelcomeWagon's ticket looks wrong,
   such as a link to another site or one that isn't https, there's no ticket and the code is shown as usual.
 - **Web sign-ins:** where WelcomeWagon offers it (0.3 and later), each player's sheet shows how many browsers they're signed in on, with **Sign Out Everywhere**. Their allowlist place and profiles stay.
 
@@ -381,12 +378,12 @@ Off by default. Turn it on and the same list is served as a web page that only p
 
 **Who gets in:** a player types `/login` in game and clicks the one-time link they're sent, so there's no password. That takes the WelcomeWagon plugin, the `welcomewagon.signin` permission (ops have it by default), a place on the allowlist, and `online-mode=true`. A server behind a proxy has `online-mode` off, so it isn't supported yet.
 
-- LeafJuice also accepts WelcomeWagon's own browser sessions, reading WelcomeWagon's session file on every request, so they last as long as WelcomeWagon says and survive LeafJuice quitting. LeafJuice's older sign-in still works alongside it for now: a session lasts 12 hours and lives in memory, so quitting LeafJuice ends it. Losing the permission takes effect at the next sign-in. Leaving the allowlist or being banned ends access at once.
+- GilaMonster also accepts WelcomeWagon's own browser sessions, reading WelcomeWagon's session file on every request, so they last as long as WelcomeWagon says and survive GilaMonster quitting. GilaMonster's older sign-in still works alongside it for now: a session lasts 12 hours and lives in memory, so quitting GilaMonster ends it. Losing the permission takes effect at the next sign-in. Leaving the allowlist or being banned ends access at once.
 - Nothing has an age or account type of its own: children's accounts follow the same permission.
-- The app shows who's signed in, and can sign anyone out. It keeps the account, the time and what happened for 30 days, in `.leafjuice/sign-in-log.json`, with no addresses, browsers or pages visited.
-- The page only exists while LeafJuice is open.
+- The app shows who's signed in, and can sign anyone out. It keeps the account, the time and what happened for 30 days, in `.gilamonster/sign-in-log.json`, with no addresses, browsers or pages visited.
+- The page only exists while GilaMonster is open.
 
-**Reaching it from outside:** LeafJuice only listens on this Mac, over plain HTTP, and only answers to the address you enter. HTTPS has to end on this Mac too, or whoever carries the traffic could read sign-in links and cookies. The plan is [Caddy](https://caddyserver.com) behind a [playit.gg](https://playit.gg) HTTPS tunnel, which playit says needs Premium and which it doesn't decrypt. Any public certificate puts its hostname in public logs, so pick a name that doesn't say who the server is for.
+**Reaching it from outside:** GilaMonster only listens on this Mac, over plain HTTP, and only answers to the address you enter. HTTPS has to end on this Mac too, or whoever carries the traffic could read sign-in links and cookies. The plan is [Caddy](https://caddyserver.com) behind a [playit.gg](https://playit.gg) HTTPS tunnel, which playit says needs Premium and which it doesn't decrypt. Any public certificate puts its hostname in public logs, so pick a name that doesn't say who the server is for.
 
 ```
 links.example.com {
@@ -405,21 +402,21 @@ links.example.com {
 - An op who isn't given the permission through LuckPerms sees fewer maps than they can enter, because op status isn't part of the check.
 - Teleports from the console or by another plugin can move someone into a world they don't have access to. The map follows the permission, not where they happen to be.
 
-BlueMap's own web server must stop answering anyone else, or the sign-in can be skipped. Set `ip: "127.0.0.1"` in `plugins/BlueMap/webserver.conf`. By default it's every network interface, and the app warns until it's changed. LeafJuice reads BlueMap's port and web folder from the same file.
+BlueMap's own web server must stop answering anyone else, or the sign-in can be skipped. Set `ip: "127.0.0.1"` in `plugins/BlueMap/webserver.conf`. By default it's every network interface, and the app warns until it's changed. GilaMonster reads BlueMap's port and web folder from the same file.
 
-**Map tested:** real BlueMap 5.16, Multiverse-Core 5.8.2 and LuckPerms 5.5.71 on a throwaway Paper 1.21.11 server with bots and made-up worlds. A real tile came through byte for byte, each player saw only their own worlds, and taking the permission away took the map away. On Minecraft 26, where Paper moves every world inside the level folder, BlueMap's map settings name the level folder and a dimension instead. LeafJuice reads which world that is from the dimension. That form comes from a 26.2 trial with BlueMap 5.29 and is only covered by tests on made-up files.
+**Map tested:** real BlueMap 5.16, Multiverse-Core 5.8.2 and LuckPerms 5.5.71 on a throwaway Paper 1.21.11 server with bots and made-up worlds. A real tile came through byte for byte, each player saw only their own worlds, and taking the permission away took the map away. On Minecraft 26, where Paper moves every world inside the level folder, BlueMap's map settings name the level folder and a dimension instead. GilaMonster reads which world that is from the dimension. That form comes from a 26.2 trial with BlueMap 5.29 and is only covered by tests on made-up files.
 
 **Not tested:** a real browser drawing the map through the gate, a real tunnel, Caddy, or BlueMap's live updates over time.
 
 ## Install
 
-1. Download the `.dmg` from [Releases](https://github.com/ExtantApe/LeafJuice/releases) and drag LeafJuice to Applications.
-2. LeafJuice is free and unsigned (Apple charges for signing), so macOS blocks the first launch. Allow it one of two ways:
+1. Download the `.dmg` from [Releases](https://github.com/ExtantApe/GilaMonster/releases) and drag GilaMonster to Applications.
+2. GilaMonster is free and unsigned (Apple charges for signing), so macOS blocks the first launch. Allow it one of two ways:
 
    **Terminal (quickest):**
 
    ```bash
-   xattr -dr com.apple.quarantine "/Applications/LeafJuice.app"
+   xattr -dr com.apple.quarantine "/Applications/GilaMonster.app"
    ```
 
    **Or System Settings:** try to open the app once, then go to **System Settings → Privacy &
@@ -431,17 +428,17 @@ You only need to do this once per download. Requires macOS 14 or later, on Apple
 Unsure about running an unsigned app? It's reasonable to be. You can read the code and build it yourself:
 
 ```bash
-git clone https://github.com/ExtantApe/LeafJuice.git
+git clone https://github.com/ExtantApe/GilaMonster.git
 ```
 
 ```bash
-cd LeafJuice && scripts/build-app.sh
+cd GilaMonster && scripts/build-app.sh
 ```
 
 That needs only Apple's Command Line Tools (`xcode-select --install`), and the app appears in `dist/`.
 
 Each build gets an ad hoc signature, so macOS treats every rebuild as a new app and asks again for Keychain access
-and notifications. If you rebuild often, make a self-signed code-signing certificate named `LeafJuice Local Signing`
+and notifications. If you rebuild often, make a self-signed code-signing certificate named `GilaMonster Local Signing`
 in your login keychain. The script then signs with it, rebuilds keep one identity, and macOS asks only once. Release
 builds (`--dmg`) and CI builds always stay ad hoc.
 
@@ -449,13 +446,13 @@ builds (`--dmg`) and CI builds always stay ad hoc.
 
 - **Accepting the EULA is yours to do.** A new server asks you to read Minecraft's EULA and accept it yourself.
 - **Java** is found automatically (`java_home`, Homebrew, SDKMAN). If you don't have the version a server needs,
-  LeafJuice offers to download Eclipse Temurin into its own folder, leaving your system's Java alone.
+  GilaMonster offers to download Eclipse Temurin into its own folder, leaving your system's Java alone.
 - **Scheduled backups and restarts only happen while the app is open.** Closing the window is fine: it stays
   in the menu bar. Quitting stops your servers cleanly first, after asking.
-- **Premium SpigotMC plugins** can't be downloaded automatically, so LeafJuice can only tell you an update exists.
+- **Premium SpigotMC plugins** can't be downloaded automatically, so GilaMonster can only tell you an update exists.
 - **SpigotMC's version tags** are set per plugin rather than per release and are maintained by hand, so
-  LeafJuice calls them "likely" at best. Modrinth and Hangar list versions per release, so those are exact.
-- **Other people on the internet** need your router to forward the server's port. LeafJuice doesn't do this for you.
+  GilaMonster calls them "likely" at best. Modrinth and Hangar list versions per release, so those are exact.
+- **Other people on the internet** need your router to forward the server's port. GilaMonster doesn't do this for you.
 
 ## Adding your own issue rules
 
@@ -479,14 +476,14 @@ group `(?<subject>…)` separates issues by subject and fills `{subject}` in the
 `overview`, `console`, `worlds`, `plugins`, `software`, `configs`, `launch`, `backups` or `changes`.
 
 Better still, send built-in rules as a pull request: they live in
-[`BuiltInRules.swift`](Sources/LeafJuiceCore/BuiltInRules.swift). Add `samples`, real log lines the tests check it against.
+[`BuiltInRules.swift`](Sources/GilaMonsterCore/BuiltInRules.swift). Add `samples`, real log lines the tests check it against.
 
 ## Development
 
-SwiftUI and Swift Package Manager, with no dependencies. `LeafJuiceCore` holds all the logic and `LeafJuice` is the interface.
+SwiftUI and Swift Package Manager, with no dependencies. `GilaMonsterCore` holds all the logic and `GilaMonster` is the interface.
 
 ```bash
-swift run leafjuice-check
+swift run gilamonster-check
 ```
 
 Runs the tests, including a server's full lifecycle against a small stand-in jar. Add `--live` to also call the real
@@ -503,7 +500,7 @@ The design is explained in [docs/PLAN.md](docs/PLAN.md) and [brand/README.md](br
 
 ## Releasing
 
-Set the version in `Sources/LeafJuiceCore/Support.swift`, then push a tag such as `v0.1.0`. GitHub Actions tests it,
+Set the version in `Sources/GilaMonsterCore/Support.swift`, then push a tag such as `v0.1.0`. GitHub Actions tests it,
 builds a universal app and publishes the `.dmg` and `.zip`.
 
 ## License

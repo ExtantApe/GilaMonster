@@ -266,8 +266,8 @@ guard failures.isEmpty else { fail("WCAG check failed, nothing written:\n  " + f
 
 let out = folder.appendingPathComponent("out")
 try? FileManager.default.createDirectory(at: out, withIntermediateDirectories: true)
-// Files the old LeafJuice kit wrote that this one doesn't, so nothing stale is left beside the new ones. Named one by one.
-for name in ["LeafJuice.ico", "mark-circle-light-1024.png", "mark-circle-light-400.png", "mark-circle-dark-1024.png",
+// Files the earlier kit wrote that this one doesn't, so nothing stale is left beside the new ones. Named one by one.
+for name in ["mark-circle-light-1024.png", "mark-circle-light-400.png", "mark-circle-dark-1024.png",
              "mark-circle-dark-400.png", "mark-square-light-1024.png", "mark-square-light-400.png", "mark-square-dark-1024.png",
              "mark-square-dark-400.png",
              "github-social-preview-light-1280x640.png", "github-social-preview-dark-1280x640.png",

@@ -1,9 +1,9 @@
-# LeafJuice: plan
+# GilaMonster: plan
 
 A free, unsigned, native Mac wrapper for Minecraft Java servers. It should be the obvious step
 up from `java -jar paper.jar`, and cost about as little to run.
 
-Open work isn't tracked here. Every open item is a task in the ops task log (D22, D26): K61 to K73 as of 2026-11-10, listed by `~/Code/ops/scripts/task.py list --owner "Minecraft: LeafJuice App"`. This file keeps the design and the decisions.
+Open work isn't tracked here. Every open item is a task in the ops task log (D22, D26): K61 to K73 as of 2026-11-10, listed by `~/Code/ops/scripts/task.py list --owner "Minecraft: GilaMonster App"`. This file keeps the design and the decisions.
 
 ## What's out there, and where this fits
 
@@ -16,7 +16,7 @@ Open work isn't tracked here. Every open item is a task in the ops task log (D22
 | A `start.sh` | One line of shell | Lean; no backups, no updates, no safety |
 
 The panels solve *remote multi-tenant hosting*. None is a native Mac app, and none makes
-plugin compatibility its central concern. LeafJuice takes those two gaps as its job. It stays
+plugin compatibility its central concern. GilaMonster takes those two gaps as its job. It stays
 a single local app with no web server, no daemon and no container.
 
 ## Decisions
@@ -25,7 +25,7 @@ a single local app with no web server, no daemon and no container.
 |---|---|
 | **SwiftUI + SwiftPM, zero dependencies** | Truly native and accessible; idle cost near zero; builds with just the Command Line Tools. A Tauri stack would add Rust and a web view for no gain here. |
 | **macOS 14+** | `@Observable`, `.inspector`, `Table` are all solid there. |
-| **The server folder stays yours** | Everything we add lives in `<server>/.leafjuice/`. Deleting it (or LeafJuice) leaves a normal server. Importing changes nothing else. |
+| **The server folder stays yours** | Everything we add lives in `<server>/.gilamonster/`. Deleting it (or GilaMonster) leaves a normal server. Importing changes nothing else. |
 | **The Change Queue is the core idea** | Nothing that needs a restart touches disk while the server runs. See below. |
 | **No AI at runtime** | Rules are a data table with a tested sample per rule. Anything unmatched is still catalogued and grouped. "Copy report" lets a person paste it wherever they like. |
 | **Unsigned, GitHub Releases only** | Ad-hoc signed; the README explains first launch. In-app "update available" notice links to the release; no self-updater. |
@@ -37,72 +37,72 @@ Settled by the owner. Follow them without asking again.
 
 | Date | Decision |
 |---|---|
-| 2026-11-07 | The repo lives at `ExtantApe/leaf-juice` (renamed `ExtantApe/LeafJuice` on 2026-11-14, D185), MIT, "Copyright (c) 2026 EXTANT APE". The bundle identifier stays as it was. |
+| 2026-11-07 | The repo lives at `ExtantApe/GilaMonster` (one word, D185; the app was renamed GilaMonster on 2026-11-23, D271 and D272), MIT, "Copyright (c) 2026 EXTANT APE". The bundle identifier stays as it was. |
 | 2026-11-07 | v0.1.0 is the plugin links work only. Everything else was merged into `main` after it. |
 | 2026-11-07 | Three commit messages pushed by mistake (`cb44c87`, `afd4ce8`, `b345332`) stay. No history rewrite, no force-push. A pre-push hook checks messages from now on. |
 | 2026-11-07 | Plugins target Paper 26.1 and later only, so the real tests boot 26.x. 1.21.11 is only for tests that upgrade from it. |
 | 2026-11-07 | One test server per session at a time, stopped when the run ends, with no copies left between runs. |
 | Before 2026-11-07 | A player sees a world's map only if they can enter that world. If that can't be read reliably, they see no maps. |
 | Before 2026-11-07 | The map stays open directly until the gateway ships on a real server. That server's BlueMap change is made separately. |
-| Before 2026-11-07 | An exact pack can be served unchanged under its own SHA-1. The screen states both risks: it's offline while LeafJuice is closed, and New Address breaks the address. |
-| Before 2026-11-07 | Real servers wait for the owner's go. The allowlist screen stays off real servers for children's and adults' groups until Stationmaster exists and LeafJuice calls it. Children's safety and privacy come first. |
+| Before 2026-11-07 | An exact pack can be served unchanged under its own SHA-1. The screen states both risks: it's offline while GilaMonster is closed, and New Address breaks the address. |
+| Before 2026-11-07 | Real servers wait for the owner's go. The allowlist screen stays off real servers for children's and adults' groups until Stationmaster exists and GilaMonster calls it. Children's safety and privacy come first. |
 | 2026-11-08 | Per-song toggles: a pack can list its songs in `songs.json`, and each recipe can leave any song out so Minecraft's own track plays. Each choice is a new build with its own SHA-1 and per-build address. A private pack that uses this stays unserved until the owner's in-game test. |
 | 2026-11-08 | Plugins on upgrade: build it, after the per-song toggles. It shows the plan and asks for a yes, works only on a stopped server with a backup, and every step can be undone. Which plugins don't fit comes from Preflight's report on a throwaway copy booted on the target version, not from version metadata. Tested on throwaway copies only. |
-| 2026-11-08 | The upgrade helper's logic moves into Preflight, as a command-line tool in its jar (plan, apply, restore, with JSON output), so people without LeafJuice can use it. LeafJuice keeps the screens and the test-copy boot, and calls the tool once Preflight 0.3.0 is out. Its own planning code is then removed, and the real 26.3 run happens against the tool. Done with Preflight 0.3.0 the same day. |
+| 2026-11-08 | The upgrade helper's logic moves into Preflight, as a command-line tool in its jar (plan, apply, restore, with JSON output), so people without GilaMonster can use it. GilaMonster keeps the screens and the test-copy boot, and calls the tool once Preflight 0.3.0 is out. Its own planning code is then removed, and the real 26.3 run happens against the tool. Done with Preflight 0.3.0 the same day. |
 | 2026-11-08 | Server icons can be rotated: choices live in `<server>/server-icons/`, picking one copies it over `server-icon.png`, and nothing in the folder is ever moved or deleted. The one in use is found by its contents. Added images must be square, and are scaled to 64×64 with nearest-neighbour. A change shows after the next restart. |
-| 2026-11-09 | Player browser sessions belong to Latchkey, not LeafJuice, so servers without LeafJuice get them too. When Latchkey's side is built, the links page and map gateway check sessions through its local admin API, and LeafJuice keeps no player sessions of its own. Session length is a setting from 1 to 30 days, default 1. Anything LeafJuice shows or sets stays in that range. |
-| 2026-11-09 | Commands are the API. Plugins work without LeafJuice in any combination. LeafJuice sends the same commands through the console of a server it started (`<plugin> <subcommand> … --json <id>`, answered by one `ea-result <id> <json>` line), and no secret ever goes through the console: it comes in a one-time file the plugin writes and LeafJuice deletes. Screens are decided per feature. |
-| 2026-11-09 | The Players page invite flow is built by hand and filled from each plugin's `describe`. It says plainly that invites from the app only work while LeafJuice is running that server. |
+| 2026-11-09 | Player browser sessions belong to Latchkey, not GilaMonster, so servers without GilaMonster get them too. When Latchkey's side is built, the links page and map gateway check sessions through its local admin API, and GilaMonster keeps no player sessions of its own. Session length is a setting from 1 to 30 days, default 1. Anything GilaMonster shows or sets stays in that range. |
+| 2026-11-09 | Commands are the API. Plugins work without GilaMonster in any combination. GilaMonster sends the same commands through the console of a server it started (`<plugin> <subcommand> … --json <id>`, answered by one `ea-result <id> <json>` line), and no secret ever goes through the console: it comes in a one-time file the plugin writes and GilaMonster deletes. Screens are decided per feature. |
+| 2026-11-09 | The Players page invite flow is built by hand and filled from each plugin's `describe`. It says plainly that invites from the app only work while GilaMonster is running that server. |
 | 2026-11-09 | The links page and map gateway check a player's session through a file per session that Latchkey keeps, named by the cookie's hash and deleted on revoke. |
 | 2026-11-07 | On a server with Usher, the Allowlist page goes through Usher (profiles, questions, change log) and never around it with raw LuckPerms or `whitelist add`; if Usher can't be reached, it refuses. Built 2026-11-10 behind Plugin commands, off by default. |
-| 2026-11-10 | Built: invites through Latchkey 0.2.0 on the Allowlist page (code shown once, from Latchkey's once-file), and the links page and map gateway accepting Latchkey's session file alongside LeafJuice's own sign-in, which goes once the owner has checked the screens (T24). |
-| 2026-11-09 | A session lasts one day and is extended by a day while its player is playing: at most 7 days in a row, and never past 30 days from sign-in. Latchkey's session file gains `since`, the sign-in time, and rewrites `expires` atomically when it extends. LeafJuice rereads the file rather than keeping `expires`, and refuses a file whose `expires` isn't after `since` or is more than 30 days after it. |
+| 2026-11-10 | Built: invites through Latchkey 0.2.0 on the Allowlist page (code shown once, from Latchkey's once-file), and the links page and map gateway accepting Latchkey's session file alongside GilaMonster's own sign-in, which goes once the owner has checked the screens (T24). |
+| 2026-11-09 | A session lasts one day and is extended by a day while its player is playing: at most 7 days in a row, and never past 30 days from sign-in. Latchkey's session file gains `since`, the sign-in time, and rewrites `expires` atomically when it extends. GilaMonster rereads the file rather than keeping `expires`, and refuses a file whose `expires` isn't after `since` or is more than 30 days after it. |
 | 2026-11-09 | The Advisor is merged into `main` now, off by default, after one more independent review against `docs/ADVISOR-SECURITY.md`, instead of waiting for the real-data trial. The trial (Check Now on the overhauled server after its first boot) and encrypting the key file come later. |
-| 2026-11-10 | The Advisor's token list is sealed with a key in the Keychain. Owner's words, through Helm: "Use Keychain because I'm going to buy the Apple Developer stuff soon and then it will be signed". Built the same day (`b9a1f87`): `key.sealed` (AES-GCM, a 256-bit key in the login Keychain), the helper never prompts and fails closed, and Allow Keychain Access on the Advisor page lets macOS ask. While LeafJuice is unsigned, macOS asks again after each rebuild. Those prompts go away once the app is signed with an Apple Developer ID (Apple Developer Program, ops N21). Switching to signing is a later step, after the owner enrolls. |
+| 2026-11-10 | The Advisor's token list is sealed with a key in the Keychain. Owner's words, through Helm: "Use Keychain because I'm going to buy the Apple Developer stuff soon and then it will be signed". Built the same day (`b9a1f87`): `key.sealed` (AES-GCM, a 256-bit key in the login Keychain), the helper never prompts and fails closed, and Allow Keychain Access on the Advisor page lets macOS ask. While GilaMonster is unsigned, macOS asks again after each rebuild. Those prompts go away once the app is signed with an Apple Developer ID (Apple Developer Program, ops N21). Switching to signing is a later step, after the owner enrolls. |
 | 2026-11-10 | Served packs go only to players joining. Owner's words, through Helm: "I'm fine if an authorized player just uses the standard pack URL. It's more than I don't want a random person to hit pack and be able to download it". One address stays. A request needs the game's X-Minecraft-Username, -UUID and -Version headers, for a whitelisted player the server's own log shows connecting in the last 5 minutes or online now. Anyone else gets the same 404 as a wrong address. On by default, with a switch. The docs say headers can be faked. The app's own Check uses a one-time pass. No plugin hook was needed: Paper logs "UUID of player" on its login thread in both online and offline mode. Before this is used on Sonoran Realms, a real 26.x client has to load a pack through it (owner test T28). |
-| 2026-11-14 | LeafJuice holds the config for the server's tunnels and services, agnostic where possible. Owner's words, through Helm: "Make sure Leaf Juice has config for the playit and any other services we had (if possible make them agnostic, but a playitt thing is fine too)." Built the same day: `.leafjuice/connections.json` with a provider (`playit`, `tailscale`, `other`), what it carries (`game`, `web`, `dns`, `access`), an on or off switch, addresses, and where its secret lives. Real addresses and secrets stay on this Mac, in that file or the Keychain, never in the repo. A missing secret shows the service as not ready. The Server lead enters the real values. |
-| 2026-11-14 | The connections file also holds the web map and the website sign-in page. Owner's words, through Helm: "Does Leaf Juice need to know the server map URL or the main login URL? Or... wait... yeah, because it helps issue the code in the UI after we do the account lookup". Each gets a check and a plain status. The invite code screen shows the sign-in page beside the code; with none set it says so and still shows the code. Real domains stay in local config; the README and checks use example.test. |
-| 2026-11-14 | A full UX audit with a WCAG color evaluation, enforced in code. Owner's words, through Helm: "Please have them do a full UX audit while they're under the hood. ... WCAG color evaluation." Done the same day: `docs/ux-audit.md`. The palette moved to LeafJuiceCore, where `leafjuice-check` holds every pair to AA in four appearances and five kinds of color vision. |
+| 2026-11-14 | GilaMonster holds the config for the server's tunnels and services, agnostic where possible. Owner's words, through Helm: "Make sure GilaMonster has config for the playit and any other services we had (if possible make them agnostic, but a playitt thing is fine too)." Built the same day: `.gilamonster/connections.json` with a provider (`playit`, `tailscale`, `other`), what it carries (`game`, `web`, `dns`, `access`), an on or off switch, addresses, and where its secret lives. Real addresses and secrets stay on this Mac, in that file or the Keychain, never in the repo. A missing secret shows the service as not ready. The Server lead enters the real values. |
+| 2026-11-14 | The connections file also holds the web map and the website sign-in page. Owner's words, through Helm: "Does GilaMonster need to know the server map URL or the main login URL? Or... wait... yeah, because it helps issue the code in the UI after we do the account lookup". Each gets a check and a plain status. The invite code screen shows the sign-in page beside the code; with none set it says so and still shows the code. Real domains stay in local config; the README and checks use example.test. |
+| 2026-11-14 | A full UX audit with a WCAG color evaluation, enforced in code. Owner's words, through Helm: "Please have them do a full UX audit while they're under the hood. ... WCAG color evaluation." Done the same day: `docs/ux-audit.md`. The palette moved to GilaMonsterCore, where `gilamonster-check` holds every pair to AA in four appearances and five kinds of color vision. |
 | 2026-11-14 | Safe console access for sessions, ASAP. Owner's words, through Helm: "That should be done ASAP so they can talk and get meaningful status updates without compromising security." Built the same day: a private Unix socket plus a Keychain token, off by default; status and a redacted log; only commands on the owner's list, starting with `latchkey reload`, `save-all` and `list`; every call recorded and shown in Settings. Status gives a count of players, never names, and the log drops chat and replaces names, UUIDs and addresses, because children play on these servers. |
 | 2026-11-14 | Group the sidebar. Owner's words, through Helm: "Menu are good on the left but it's such a long list. Let's make a hierarchy and group "like" things together, and then alphabetize them within the groupings." Built: Overview, then Server, Content, People, Upkeep, alphabetical within each, collapsible and remembered, badges rolled up. The Advisor sits in Upkeep. |
 | 2026-11-14 | No Tailscale for the game (owner, through Helm: "We're getting rid of Tailscale for the game, not adding it"). The connections config builds playit only, plus the map and sign-in addresses, and stays open to another tunnel type later. The Tailscale check was removed the same day. |
-| 2026-11-21 | Backups to MCBackups only (D250, replaces D213's WDSSD cap). Owner's words, through Simon: "Copy to MCBackups -- everything should be using that and not WDSSD or the internal Mac drive", then "MCBackups (Recommended)". Cap on MCBackups: "800 GB" (Simon chat dialog, 2026-11-21, after hearing the three play backups take about 190 GB there). Built: drive-only backups never fall back; a missing, full or capped drive skips and reports; the 20 GB free floor and the in-flight watch stop a write and remove its partial file if the drive fills, whoever filled it. LeafJuice prunes only its own backups. |
-| 2026-11-15 | Backup caps (D213). Owner's words, through Simon: "Probably good for Leaf Juice to keep track of backup folder size so that it can dynamically compensate. We need to set an upper limit on the amount it can store because that drive is shared", and for WDSSD, "150 GB (Recommended)". Approved rule: a cap per drive, set on the Backups page; before a backup that would pass it, prune the oldest first within D186's tiers; always keep the newest good backup and never delete the only copy; warn before the cap; if it can't make room safely, skip and say so. Also: count a `.partial` in progress, and clean up a partial left by a quit. Built in `BackupCaps.swift`, with checks in `BackupCapChecks.swift`. Pinned backups are never removed to fit a cap. |
+| 2026-11-21 | Backups to MCBackups only (D250, replaces D213's WDSSD cap). Owner's words, through Simon: "Copy to MCBackups -- everything should be using that and not WDSSD or the internal Mac drive", then "MCBackups (Recommended)". Cap on MCBackups: "800 GB" (Simon chat dialog, 2026-11-21, after hearing the three play backups take about 190 GB there). Built: drive-only backups never fall back; a missing, full or capped drive skips and reports; the 20 GB free floor and the in-flight watch stop a write and remove its partial file if the drive fills, whoever filled it. GilaMonster prunes only its own backups. |
+| 2026-11-15 | Backup caps (D213). Owner's words, through Simon: "Probably good for GilaMonster to keep track of backup folder size so that it can dynamically compensate. We need to set an upper limit on the amount it can store because that drive is shared", and for WDSSD, "150 GB (Recommended)". Approved rule: a cap per drive, set on the Backups page; before a backup that would pass it, prune the oldest first within D186's tiers; always keep the newest good backup and never delete the only copy; warn before the cap; if it can't make room safely, skip and say so. Also: count a `.partial` in progress, and clean up a partial left by a quit. Built in `BackupCaps.swift`, with checks in `BackupCapChecks.swift`. Pinned backups are never removed to fit a cap. |
 | 2026-11-14 | Smart backups (D186). Owner's words, through Helm: "a dynamic backup system that only backs up when things actually change" and "It should be able to use multiple storage devices, so long as they're there. If they aren't it'll default to another, or try it's its local folder. Rsync might be worth considering ... Try to compress as much as you can ... worth trying and then doing a quick scratch server to see." Built: after-play timing with a minimum gap, tiered keeping, ordered storage targets with a fallback and per-server folders, and a disk guard after a drill nearly filled a disk. Stronger compression and rsync copies were tried on a throwaway server (`--trial-backups`, `docs/backup-trial.md`) and aren't adopted until the owner decides. Existing servers keep their schedule until switched. |
 | 2026-11-14 | Printed invite tickets (D187): the server name, join address, code, expiry and a QR code whose link carries the code after #, printable and accessible, from Latchkey 0.5's ticket. No secrets beyond the invite's own code. Built the same day; a ticket whose join address isn't plain https, or whose link adds anything, is dropped and the code shown as before. |
-| 2026-11-14 | LeafJuice publishes each pack build to the folder Caddy serves on the join host, under a long random path that changes with every build, and gives Packmule the new link and SHA-1; old builds are cleaned up once players are on the new one (D189). Built the same day. Telling Packmule came with Packmule 0.2.1's `pack set` (the Plugins lead built it on request, since commands are the API, 2026-11-09). An old build is only removed once Packmule is known to use the new link: its answer confirms the SHA-1, or the owner marks it updated by hand. |
+| 2026-11-14 | GilaMonster publishes each pack build to the folder Caddy serves on the join host, under a long random path that changes with every build, and gives Packmule the new link and SHA-1; old builds are cleaned up once players are on the new one (D189). Built the same day. Telling Packmule came with Packmule 0.2.1's `pack set` (the Plugins lead built it on request, since commands are the API, 2026-11-09). An old build is only removed once Packmule is known to use the new link: its answer confirms the SHA-1, or the owner marks it updated by hand. |
 | 2026-11-14 | Only open-licence fonts in brand work, always. Owner's words: "please only should me open license fonts. Like in general, always". SF Pro's licence only allows interface mock-ups, and the licences of other fonts bundled with macOS couldn't be confirmed. Fonts live in `brand/fonts/<family>/` with their licence text, and builders load fonts only from there. The app's own interface still uses the system font through Apple's APIs. |
 | 2026-11-14 | Brand kit adopted (K628). Owner's words, through Helm: "Adopt it". Then, in this repo's chat: the tagline "A little pulp goes a long way.", Lilita One for the name and Fredoka for the tagline, a two-tone wordmark, the mark on a pistachio square on banners, the square's ring in the tagline's colour, and the tagline set to the wordmark's exact width. Every colour pair is WCAG-checked by `scripts/brand-kit.swift`. |
-| 2026-11-14 | At a Mac shutdown, restart or log out, skip the quit question, stop every server with a save, and let the Mac carry on (K650). Owner's words, through Helm: "Yes, please add that to the LJ app". Built the same day: LeafJuice reads the reason on macOS's quit request ('shut', 'rest', 'rlgo', 'logo') and its power-off notice. An ordinary quit still asks. |
+| 2026-11-14 | At a Mac shutdown, restart or log out, skip the quit question, stop every server with a save, and let the Mac carry on (K650). Owner's words, through Helm: "Yes, please add that to the LJ app". Built the same day: GilaMonster reads the reason on macOS's quit request ('shut', 'rest', 'rlgo', 'logo') and its power-off notice. An ordinary quit still asks. |
 
 ### From the ops decision feed
 
-Settled decisions reach this repo through `~/Code/ops/decisions/all.md` and `decisions/leaf-juice.md`, read at startup and after a context summary. Acknowledged through D29 on 2026-11-10. D7 to D21 are in other areas' feeds, none in this one.
+Settled decisions reach this repo through `~/Code/ops/decisions/all.md` and `decisions/gilamonster.md`, read at startup and after a context summary. Acknowledged through D29 on 2026-11-10. D7 to D21 are in other areas' feeds, none in this one.
 
 | ID | Decision | What it means here |
 |---|---|---|
 | D1 | Decision feeds for every area (2026-11-10) | Settled entries are acted on, not re-argued. One may be raised once, with evidence, only under `ops/rules/decision-feeds.md`. |
-| D2 | Agnostic plugins, best architecture first (2026-11-10) | LeafJuice talks to plugins (Usher, Latchkey, Preflight and the rest) only through their own commands and files, never as a hard dependency, and each works without it. New capabilities are built on the right structure from the start, cutting scope rather than structure. |
+| D2 | Agnostic plugins, best architecture first (2026-11-10) | GilaMonster talks to plugins (Usher, Latchkey, Preflight and the rest) only through their own commands and files, never as a hard dependency, and each works without it. New capabilities are built on the right structure from the start, cutting scope rather than structure. |
 | D3 | Owner steps and tests go through `ops/inbox` (2026-11-10) | New owner items go to `~/Code/ops/inbox/<ID>-<slug>.md` with a one-line note to Helm, never straight into `needs-you.md` or `tests.md`. T24, T25 and T28 went in before this. |
-| D4 | Priority order (2026-11-10) | The owner set an order across all his projects. LeafJuice work serves the Minecraft server and follows that order. |
+| D4 | Priority order (2026-11-10) | The owner set an order across all his projects. GilaMonster work serves the Minecraft server and follows that order. |
 | D5 | No private repos because of CI minutes (2026-11-10) | This repo stays public. CI follows `ops/rules/actions-minutes.md`. |
-| D6 | Plugin names need the owner's approval (2026-11-10) | LeafJuice uses only plugin names in `ops/plugin-names.md`. It creates no plugins of its own. Any new one would go to the owner through Helm first. |
-| D22 | One task log for every open task (2026-11-10) | LeafJuice's open work is K61 to K73 in `ops/tasks/log.jsonl`, written only through `task.py`. Nothing is deleted. Moves need an ack, and closes need a reference. |
-| D23 | Leads own their helpers (2026-11-10) | LeafJuice is a helper under the Minecraft Server lead and reports to it. |
+| D6 | Plugin names need the owner's approval (2026-11-10) | GilaMonster uses only plugin names in `ops/plugin-names.md`. It creates no plugins of its own. Any new one would go to the owner through Helm first. |
+| D22 | One task log for every open task (2026-11-10) | GilaMonster's open work is K61 to K73 in `ops/tasks/log.jsonl`, written only through `task.py`. Nothing is deleted. Moves need an ack, and closes need a reference. |
+| D23 | Leads own their helpers (2026-11-10) | GilaMonster is a helper under the Minecraft Server lead and reports to it. |
 | D24 | Helpers are subagents first (2026-11-10) | Helper work here runs in subagents of this session. A separate session only for long parallel work on its own branch. |
-| D25 | Retire finished sessions only after handover (2026-11-10) | The LeafJuice AI Advisor, Wiki and Mac server wrapper sessions retire once their tasks are moved here and acked. |
+| D25 | Retire finished sessions only after handover (2026-11-10) | The GilaMonster AI Advisor, Wiki and Mac server wrapper sessions retire once their tasks are moved here and acked. |
 | D26 | No separate backlogs (2026-11-10) | No "next" or "later" lists live in this repo. Each is a task with a priority and a category, and this file points at the task log. |
-| D27 | Three "now" tasks at a time (2026-11-10) | Whoever works LeafJuice keeps at most three tasks in "now", takes the next when one is done, and blocks a stuck one while working the others. |
-| D28 | Pause after the current task for a brief (2026-11-10) | This helper finished K47's check (no change needed: LeafJuice already speaks Usher 0.4, and passes against 0.4.1) and took nothing new. |
-| D185 | LeafJuice everywhere (2026-11-14) | The product is spelled LeafJuice in the app, docs and release notes. The repo becomes LeafJuice with or after the ExtantApe transfer, which has happened. The bundle identifier and the data folder on disk keep their old names, so permissions and settings carry over. |
-| D29 | Helpers hand over and bow out (2026-11-10) | The LeafJuice App helper handed everything to the Minecraft Server lead (its handoff file is in the ops repo), and every task moved. That lead now owns LeafJuice. |
+| D27 | Three "now" tasks at a time (2026-11-10) | Whoever works GilaMonster keeps at most three tasks in "now", takes the next when one is done, and blocks a stuck one while working the others. |
+| D28 | Pause after the current task for a brief (2026-11-10) | This helper finished K47's check (no change needed: GilaMonster already speaks Usher 0.4, and passes against 0.4.1) and took nothing new. |
+| D185 | GilaMonster everywhere (2026-11-14) | The product is spelled GilaMonster in the app, docs and release notes. The repo becomes GilaMonster with or after the ExtantApe transfer, which has happened. The bundle identifier and the data folder on disk keep their old names, so permissions and settings carry over. |
+| D29 | Helpers hand over and bow out (2026-11-10) | The GilaMonster App helper handed everything to the Minecraft Server lead (its handoff file is in the ops repo), and every task moved. That lead now owns GilaMonster. |
 
 ## The Change Queue
 
 Every change falls into one of two cases, decided by whether the server is running:
 
 - **Stopped:** applied immediately (with a config history copy).
-- **Running:** staged in `.leafjuice/staged/` and listed as a pending change. They are applied in the
+- **Running:** staged in `.gilamonster/staged/` and listed as a pending change. They are applied in the
   gap between stop and start, by a restart the user picks: *now*, *when the last player leaves*, or
   *at a set time*, with in-game countdown warnings. A daily restart can be scheduled too.
 
@@ -144,7 +144,7 @@ downloaded directly).
 Year-based versions (`26.3`) and old ones (`1.21.11`) compare correctly.
 
 **Java:** detects installed runtimes (`java_home`, Homebrew, SDKMAN), picks one that meets the
-requirement, and can download Temurin into LeafJuice's own folder with a checksum check.
+requirement, and can download Temurin into GilaMonster's own folder with a checksum check.
 
 ## Plugins
 
@@ -214,8 +214,8 @@ Deleting any other world takes a backup first and requires typing its name.
 - Compressed `.tar.gz` with a sidecar JSON (version, build, trigger, scope, pinned).
 - While running: `save-off` → `save-all flush` → wait for confirmation → archive → `save-on`, always.
 - Interval schedule, retention (keep last N, and anything newer than D days), pinning, free-space check.
-- Default scope is the whole server folder, jars, libraries and caches included, so a restore can start straight away, even offline. Only `.leafjuice` stays out. Restoring removes anything added since, and returns the jar and launch settings.
-- Default location is beside the servers: `<servers folder>/LeafJuice/backups/<server name>/`. The path is stored when
+- Default scope is the whole server folder, jars, libraries and caches included, so a restore can start straight away, even offline. Only `.gilamonster` stays out. Restoring removes anything added since, and returns the jar and launch settings.
+- Default location is beside the servers: `<servers folder>/GilaMonster/backups/<server name>/`. The path is stored when
   first used, so changing the servers folder can't lose track of backups. Renaming a server moves its folder, and servers with the same
   name get separate ones. Any other folder or external drive can be chosen instead.
 - Restore: stopped only, takes a safety backup first, extracts to a temp folder, then swaps.
@@ -245,7 +245,7 @@ A rule engine over console output and `logs/latest.log`:
 
 See [brand/README.md](../brand/README.md). Rounded tiles and controls (8 and 10 point radii), an icon with every
 label, shape as well as colour for state, and 3:1 outlines, in its own pastel palette:
-cream and sage surfaces, juice green for structure, pink grapefruit as the single pop of color.
+cream and basalt surfaces, turquoise for structure, red-orange as the single bold pop of color (GilaMonster, D272 and D277).
 
 ## Deep changes
 
@@ -281,7 +281,7 @@ to `CleanedUp` beside the backups and can be brought back.
 
 ## History and analytics
 
-Only what leads to a decision, kept in `.leafjuice` as small append-only files, and **never sent anywhere**. Five-minute rows of TPS, MSPT, memory, CPU, players and the
+Only what leads to a decision, kept in `.gilamonster` as small append-only files, and **never sent anywhere**. Five-minute rows of TPS, MSPT, memory, CPU, players and the
 longest Java pause; one row a day of world, backup and free disk sizes; a timeline of starts, crashes, updates, config changes, backups, restores, renames and lag.
 
 **Backup drill:** unpacks a backup to a throwaway folder and boots it. Weekly when nobody's on, skipped if a plugin uses an outside database.
@@ -290,7 +290,7 @@ longest Java pause; one row a day of world, backup and free disk sizes; a timeli
 
 ## The Lab
 
-`~/Minecraft/lab`, marked `isLab` in its profile. Wiping needs both that mark, read from disk, and that exact folder, so a server merely named `lab` is moved aside rather than deleted. The seed is a script, not bundled files: any version, nothing of Mojang's shipped. Offline mode lets bots in, so it binds to `127.0.0.1`. Saves live in `LeafJuice/rehearsals/`.
+`~/Minecraft/lab`, marked `isLab` in its profile. Wiping needs both that mark, read from disk, and that exact folder, so a server merely named `lab` is moved aside rather than deleted. The seed is a script, not bundled files: any version, nothing of Mojang's shipped. Offline mode lets bots in, so it binds to `127.0.0.1`. Saves live in `GilaMonster/rehearsals/`.
 
 The screen is a status board: one switch and light per station, in order, each green unlocking the next. Runs are fingerprinted by version and plugin hashes, so a light goes out of date when they change. Stations: plugins (exact jars in themed groups, fresh settings), settings (optional), upgrade, fresh, new version with settings (optional). The upgrade and fresh lights are independent of each other's result, because the pair is the diagnosis.
 
@@ -310,20 +310,20 @@ Ideas for later modules: scheduled announcements, a player whitelist manager, a 
 
 ## Resource packs
 
-`LeafJuice/resource-packs/`: `library/<pack>/<version>.zip` with a `pack.json`, `recipes/`, `my-changes/` and `combined/<recipe>/<sha1>.zip` with its lock file. Packs have stable ids, and recipes pin a version by hash, so an update is always a choice and never loses your ranking.
+`GilaMonster/resource-packs/`: `library/<pack>/<version>.zip` with a `pack.json`, `recipes/`, `my-changes/` and `combined/<recipe>/<sha1>.zip` with its lock file. Packs have stable ids, and recipes pin a version by hash, so an update is always a choice and never loses your ranking.
 
 Most specific wins: My changes, then a pick for one file, then a pack for a category, then rank. Builds fix file times, order and permissions so identical inputs give an identical SHA-1. A git submodule was considered and left out: many packs aren't in git, binaries don't diff, and every user would need git. Lock files give the history that was wanted, and a GitHub source covers packs that are in git.
 
 Zip work uses the system's `unzip` and `zip`, so there are still no dependencies. 
-Serving is a separate read-only listener on loopback, with settings per server in `.leafjuice/pack-hosting.json`, not in the recipe, so an exported recipe never carries an address. It answers `GET` and `HEAD` for `/<token>/pack.zip` and `/<token>/pack.zip.sha1`, and 404 for everything else. It streams in 256 KiB pieces, allows 32 connections, drops a connection that sends nothing for 10 seconds or stalls for 60, and doesn't log addresses. It works out the build per request: `resource-pack-sha1` if `server.properties` points at this address and Packmule isn't installed, otherwise the build chosen with Serve This Build. A tunnel and Caddy aren't part of LeafJuice and haven't been tested.
+Serving is a separate read-only listener on loopback, with settings per server in `.gilamonster/pack-hosting.json`, not in the recipe, so an exported recipe never carries an address. It answers `GET` and `HEAD` for `/<token>/pack.zip` and `/<token>/pack.zip.sha1`, and 404 for everything else. It streams in 256 KiB pieces, allows 32 connections, drops a connection that sends nothing for 10 seconds or stalls for 60, and doesn't log addresses. It works out the build per request: `resource-pack-sha1` if `server.properties` points at this address and Packmule isn't installed, otherwise the build chosen with Serve This Build. A tunnel and Caddy aren't part of GilaMonster and haven't been tested.
 
 ### Handoff to per-world pack plugins
 
-Packmule (called Resource Pack Butler before 0.2.0, 2026-11-09) and WorldResourcepacks are treated the same way. What LeafJuice offers either one:
+Packmule (called Resource Pack Butler before 0.2.0, 2026-11-09) and WorldResourcepacks are treated the same way. What GilaMonster offers either one:
 
 - **An address per build,** `/<token>/<sha1>.zip`, which only ever gives that build. A config holding that address and its SHA-1 can't fall out of step, because publishing a new build doesn't change what the old address gives. Old builds stay reachable while their file is kept. This is what the Hosting card shows when one of these plugins is installed.
 - **A stable address,** `/<token>/pack.zip`, plus `pack.zip.sha1`, a plain text file with the current hash. This one switches when you press Serve This Build, so a plugin using it has to re-read the hash.
-- With a plugin named `Packmule`, `ResourcePackButler` (Packmule 0.1.x) or `WorldResourcepacks` present, enabled or not, LeafJuice refuses to write the pack settings, and warns if `server.properties` still sets a pack.
+- With a plugin named `Packmule`, `ResourcePackButler` (Packmule 0.1.x) or `WorldResourcepacks` present, enabled or not, GilaMonster refuses to write the pack settings, and warns if `server.properties` still sets a pack.
 
 For Packmule: per-build addresses are the suggested format. A new build then means changing the address and the hash in Butler's config together.
 

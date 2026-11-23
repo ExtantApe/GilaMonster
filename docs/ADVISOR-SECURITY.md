@@ -1,6 +1,6 @@
 # Advisor: security rules
 
-`leafjuice-mcp` lets an AI client look at a server and leave suggestions. It's a separate read-only program. In the app, the
+`gilamonster-mcp` lets an AI client look at a server and leave suggestions. It's a separate read-only program. In the app, the
 optional **Advisor** page runs it with Claude Code. That page is off until you turn it on in Settings, each server has to be
 shared separately, and nothing is sent until you press Check Now and confirm. Automatic checks need their own yes per server,
 and only start after you've sent a first check yourself. Turning the Advisor off stops a check that's running. With it off,
@@ -43,12 +43,12 @@ differ from a real check's.
 | Player names, UUIDs and IPs reach the AI | Tokens in fixed shapes. In code-shaped text, a known player's name becomes a token wherever it sits, except for common code words such as `server`, which say nothing about anyone. An address, UUID, email or known key format drops the line in its usual spellings. See "Odd spellings" below for ones that get through. Jars and frames with sentence words are dropped too, though that only catches wording it knows. World and settings file names are sent only if they're standard |
 | Secrets reach the AI | No free text is sent, and plugin configs aren't readable. `server.properties` is an allowlist of keys and values |
 | Chat forges an identity or changes a filter | Names come only from the server's own player files and from exact line shapes on the right thread. Only the authenticator thread and `usercache.json` can tie a name to a UUID. A plugin can forge that thread: see below |
-| The AI changes or breaks the server | There's no tool for it, and the program doesn't link `LeafJuiceCore` or use network or process APIs. A test checks the source |
+| The AI changes or breaks the server | There's no tool for it, and the program doesn't link `GilaMonsterCore` or use network or process APIs. A test checks the source |
 | The AI reads files it shouldn't | No tool takes a path. Only servers named at launch are visible, and a symlink anywhere inside a server folder, or a hard link, is refused. The folder you name may itself be reached through a link |
 | The AI recovers a real name from a token | No tool translates tokens. Only `--suggestions` does, for a person at a terminal |
 | Tokens are reversed by guessing | They're random, not derived from the value |
 | A long line hangs the program | Over-long lines are withheld before any pattern runs, and suggestions are refused or cut to a fixed length first. A flood of new players can still make an answer take many seconds |
-| The token list is read from disk | It's sealed with a key in the Keychain. The helper never lets macOS ask for it: a locked Keychain, a refusal or a missing key stops every answer with a plain reason, and nothing is written. A missing key never replaces a sealed file. Allow Keychain Access on the Advisor page is the only place macOS may ask, and it says why first. Until LeafJuice is signed, macOS asks again after each update |
+| The token list is read from disk | It's sealed with a key in the Keychain. The helper never lets macOS ask for it: a locked Keychain, a refusal or a missing key stops every answer with a plain reason, and nothing is written. A missing key never replaces a sealed file. Allow Keychain Access on the Advisor page is the only place macOS may ask, and it says why first. Until GilaMonster is signed, macOS asks again after each update |
 | A safeguard fails silently | A damaged, oversized or linked key stops every answer. So does a damaged, oversized or linked player or issues file when that answer reads it, and a server folder that's gone. A key deleted while running is treated as a fresh start, so players get new tokens |
 
 ## What it does not protect against
@@ -56,7 +56,7 @@ differ from a real check's.
 - **An agent that also has shell or file access.** This is the big one. Claude Code running as you can read `~/Minecraft`
   directly, and could ask the Keychain for the Advisor's key, which macOS would show you. Nothing in this program can stop that. **Without the restriction shown below, the privacy
   layer is not a security boundary.**
-- **Other programs running as you.** The token list is sealed with a key in your Keychain, and macOS only hands that key to LeafJuice and its helper, or to a program you allow. A program running as you can still ask for it, and macOS shows you that request. Something that can read your memory or your unlocked Keychain can read it too.
+- **Other programs running as you.** The token list is sealed with a key in your Keychain, and macOS only hands that key to GilaMonster and its helper, or to a program you allow. A program running as you can still ask for it, and macOS shows you that request. Something that can read your memory or your unlocked Keychain can read it too.
 - **A malicious or careless plugin.** Plugin code runs inside your server, so it's already trusted with far more than this.
   It can write fake frames up to the limits, and quite long phrases fit in hyphenated or dotted identifiers such as
   `Ignore.previous.rules.now`. A name it splices into a word, or that isn't a known player's, wouldn't be recognised. It can
@@ -82,7 +82,7 @@ differ from a real check's.
 1. **Fail closed.** If something can't be read or checked, return an error and no data.
 2. **Allowlist only.** Any new field must have a strict format. Never send free text and try to clean it.
 3. **No tool takes a path, a command or a real name.**
-4. **Nothing that writes to the server,** and no network or process code. This target must never depend on `LeafJuiceCore`.
+4. **Nothing that writes to the server,** and no network or process code. This target must never depend on `GilaMonsterCore`.
 5. **The token list only ever holds identifiers, never secrets,** is always sealed, never kept in plain text, and stays outside server folders. The program refuses to
    start if it's inside one it was given.
 6. **Errors say nothing specific.** They reach the AI too.
@@ -92,11 +92,11 @@ differ from a real check's.
 
 ## Where things live
 
-`~/Library/Application Support/Leaf Juice/advisor/`, in a folder only you can open, excluded from Time Machine where the
+`~/Library/Application Support/GilaMonster/advisor/`, in a folder only you can open, excluded from Time Machine where the
 system allows it:
 
 - `key.sealed`: the token map, sealed with AES-GCM. A token is only created for a value in an answer, for the server when it's checked, or for a known player named in a suggestion. The file starts with `LJAK1`, followed by the nonce, the sealed JSON and its tag.
-- The key that seals it is in your login Keychain, as "LeafJuice Advisor key" (its service is the app's bundle identifier followed by `.advisor`). A key LeafJuice makes trusts LeafJuice and its helper, `leafjuice-mcp`.
+- The key that seals it is in your login Keychain, as "GilaMonster Advisor key" (its service is the app's bundle identifier followed by `.advisor`). A key GilaMonster makes trusts GilaMonster and its helper, `gilamonster-mcp`.
 - An older plain `key.json` is sealed the first time the key can be reached, then deleted. Until then it isn't used.
 - `suggestions/`: suggestions as written, with tokens still in them.
 
@@ -109,13 +109,13 @@ The Advisor page does all of this for you. These steps are for using another cli
 Name each server you want to share. Nothing else is visible.
 
 ```bash
-swift build -c release --product leafjuice-mcp
+swift build -c release --product gilamonster-mcp
 ```
 
-Save this as `advisor.json`, with your own paths. The name must stay `leafjuice`, to match the tool names below:
+Save this as `advisor.json`, with your own paths. The name must stay `gilamonster`, to match the tool names below:
 
 ```json
-{"mcpServers": {"leafjuice": {"command": "/full/path/to/.build/release/leafjuice-mcp", "args": ["--server", "/full/path/to/your/server"]}}}
+{"mcpServers": {"gilamonster": {"command": "/full/path/to/.build/release/gilamonster-mcp", "args": ["--server", "/full/path/to/your/server"]}}}
 ```
 
 For a quiet check, run it from an empty folder and remove every other tool. Here, `--tools ""` is what takes away shell and
@@ -124,13 +124,13 @@ restrict anything by itself, so don't remove the others. This command was tested
 tools and couldn't read a planted file. (`--bare` also skips hooks, but it reported "Not logged in" when tested.)
 
 ```bash
-claude -p "Check for problems worth raising, and use suggest for each one." --settings '{"disableAllHooks":true}' --mcp-config advisor.json --strict-mcp-config --tools "" --allowedTools "mcp__leafjuice__list_servers,mcp__leafjuice__server_summary,mcp__leafjuice__open_issues,mcp__leafjuice__recent_problems,mcp__leafjuice__suggest"
+claude -p "Check for problems worth raising, and use suggest for each one." --settings '{"disableAllHooks":true}' --mcp-config advisor.json --strict-mcp-config --tools "" --allowedTools "mcp__gilamonster__list_servers,mcp__gilamonster__server_summary,mcp__gilamonster__open_issues,mcp__gilamonster__recent_problems,mcp__gilamonster__suggest"
 ```
 
 To read suggestions with real names, in your own terminal:
 
 ```bash
-.build/release/leafjuice-mcp --suggestions
+.build/release/gilamonster-mcp --suggestions
 ```
 
 `--clear-suggestions` empties the inbox, which holds 200 at most. Both refuse to run when their output isn't a terminal.

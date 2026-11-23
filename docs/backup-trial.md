@@ -1,11 +1,11 @@
 # Backup trial: stronger compression and incremental copies
 
 2026-11-14. The owner asked to try both on a throwaway server before adopting either (D186). Nothing here is
-adopted yet: LeafJuice still makes a gzip tar of each backup.
+adopted yet: GilaMonster still makes a gzip tar of each backup.
 
 ## How it was run
 
-`leafjuice-check --trial-backups --i-accept-the-minecraft-eula` started a real Paper 26.3 server on 127.0.0.1, made
+`gilamonster-check --trial-backups --i-accept-the-minecraft-eula` started a real Paper 26.3 server on 127.0.0.1, made
 up a world by force-loading six areas of 256 × 256 blocks, and stopped it. It then archived the world six ways, and
 deleted the server and every copy afterwards. The world came to 35.2 MB.
 

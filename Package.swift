@@ -2,20 +2,20 @@
 import PackageDescription
 
 let package = Package(
-    name: "LeafJuice",
+    name: "GilaMonster",
     platforms: [.macOS(.v14)],
-    products: [.executable(name: "LeafJuice", targets: ["LeafJuice"])],
+    products: [.executable(name: "GilaMonster", targets: ["GilaMonster"])],
     targets: [
         // Everything testable: no SwiftUI, no AppKit.
-        .target(name: "LeafJuiceCore"),
+        .target(name: "GilaMonsterCore"),
         // The Mac app.
-        .executableTarget(name: "LeafJuice", dependencies: ["LeafJuiceCore", "LeafJuiceAdvisor"]),
+        .executableTarget(name: "GilaMonster", dependencies: ["GilaMonsterCore", "GilaMonsterAdvisor"]),
         // Self-tests as a plain executable, so they run without Xcode (XCTest needs it).
-        .executableTarget(name: "leafjuice-check", dependencies: ["LeafJuiceCore", "LeafJuiceAdvisor", "leafjuice-mcp"]),
-        // Privacy layer for the optional advisor. It must never depend on LeafJuiceCore: see docs/ADVISOR-SECURITY.md.
-        .target(name: "LeafJuiceAdvisor"),
-        .executableTarget(name: "leafjuice-mcp", dependencies: ["LeafJuiceAdvisor"]),
-        // How assistant sessions talk to a running LeafJuice: status, logs and the owner's list of commands.
-        .executableTarget(name: "leafjuice-session"),
+        .executableTarget(name: "gilamonster-check", dependencies: ["GilaMonsterCore", "GilaMonsterAdvisor", "gilamonster-mcp"]),
+        // Privacy layer for the optional advisor. It must never depend on GilaMonsterCore: see docs/ADVISOR-SECURITY.md.
+        .target(name: "GilaMonsterAdvisor"),
+        .executableTarget(name: "gilamonster-mcp", dependencies: ["GilaMonsterAdvisor"]),
+        // How assistant sessions talk to a running GilaMonster: status, logs and the owner's list of commands.
+        .executableTarget(name: "gilamonster-session"),
     ]
 )
