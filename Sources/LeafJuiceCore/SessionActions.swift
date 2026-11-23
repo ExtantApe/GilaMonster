@@ -218,6 +218,9 @@ extension SessionAccessService {
 
         // Everything a request names is checked before the owner is bothered.
         let recipe = request.recipe?.trimmingCharacters(in: .whitespaces) ?? ""
+        if recipe.unicodeScalars.contains(where: { CharacterSet.controlCharacters.contains($0) || CharacterSet.newlines.contains($0) }) {
+            return refuse("A recipe name can't contain line breaks or control characters.")
+        }
         let recipeKey = ResourcePacks.slug(recipe)
         let needsRecipe: Set<SessionAction> = [.publish, .handoff, .hostingAdd, .hostingRemove, .recipeSet, .recipeBuild]
         if needsRecipe.contains(action) {
@@ -261,6 +264,8 @@ extension SessionAccessService {
                 let who: Online
                 if let online { who = await online(server) } else { who = await server.whoIsOnline() }
                 switch who {
+                case .nobody where !today.covers(family, now: now()):
+                    break   // revoked, or midnight passed, while checking: ask as usual
                 case .nobody:
                     coveredToday = true
                     note = "Allowed for today by the owner; nobody online"
@@ -288,7 +293,14 @@ extension SessionAccessService {
             if [.start, .stop, .restart].contains(action), let busy = server.busyWith {
                 return refuse("\(busy) started on \(server.profile.name) while waiting, so nothing was changed.")
             }
+            switch action {
+            case .start where !server.canStartNow, .stop where server.state != .running, .restart where server.state != .running:
+                return refuse("\(server.profile.name) became \(server.state.title.lowercased()) while waiting, so nothing was changed.")
+            default: break
+            }
             if coveredToday, let family {
+                wentAhead.insert((now(), "\(caller): \(action.verb(recipe: recipe.isEmpty ? nil : recipe)) \(server.profile.name)"), at: 0)
+                if wentAhead.count > 20 { wentAhead.removeLast(wentAhead.count - 20) }
                 server.appendWrapper("Allowed for today: \(caller) asked to \(action.verb(recipe: recipe.isEmpty ? nil : recipe)) this server, and nobody was online.", level: .info)
                 onAutoAllowed?("\(caller) \(action.verb(recipe: recipe.isEmpty ? nil : recipe)) \(server.profile.name) without asking. You allowed \(family.words) for today.")
             }

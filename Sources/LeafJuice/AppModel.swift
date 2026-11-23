@@ -611,6 +611,13 @@ struct StatusMenu: View {
         if !today.isEmpty {
             Text("Allowed for today: \(today.map(\.family.words).joined(separator: "; "))")
             Button("Revoke Today's Allows") { SessionAccessService.shared.revokeToday() }
+            let went = SessionAccessService.shared.wentAhead.prefix(5)
+            if !went.isEmpty {
+                Text("Went ahead without asking:")
+                ForEach(Array(went.enumerated()), id: \.offset) { _, w in
+                    Text("\(w.at.formatted(date: .omitted, time: .shortened)) \(w.text)")
+                }
+            }
             Divider()
         }
         ForEach(model.listed) { server in

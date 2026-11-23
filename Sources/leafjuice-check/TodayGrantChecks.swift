@@ -27,11 +27,28 @@ import Security
     check(first.until == midnight && again.until == midnight && again.granted == first.granted, "a second click the same day ends at the same midnight, never later")
     check(g.covers(.power, now: midnight.addingTimeInterval(-1)) && !g.covers(.power, now: midnight), "covered up to midnight, not at it")
     check(!g.covers(.serving, now: late), "and only the kind of action it was given for")
+    check(!g.covers(.power, now: first.granted.addingTimeInterval(-60)), "a clock set back before the click isn't covered, so the clock can't stretch a grant")
+    var la = Calendar(identifier: .gregorian)
+    la.timeZone = TimeZone(identifier: "America/Los_Angeles")!
+    let fallBack = la.date(from: DateComponents(year: 2026, month: 11, day: 1, hour: 10))!
+    let laMidnight = TodayGrants.midnight(after: fallBack, calendar: la)
+    equal(la.dateComponents([.year, .month, .day, .hour, .minute], from: laMidnight), DateComponents(year: 2026, month: 11, day: 2, hour: 0, minute: 0), "on the day the clocks go back it still ends at local midnight")
     g.revokeAll()
     check(!g.covers(.power, now: late) && g.active(now: late).isEmpty, "revoking ends everything")
     check(!(TodayGrants() as Any is Encodable) && !(TodayGrants() as Any is Decodable), "grants can't be written to or read from a file")
 
     section("Allow for today: who's online")
+    let watch = folder("today-watch")
+    write("server-port=25596\nserver-ip=127.0.0.1\nmotd=made up\n", watch.appendingPathComponent("server.properties"))
+    if let w = try? await ServerController.adopt(root: watch, name: "Made-up Today Watch") {
+        w.noteConnection("MadeUpHidden[/127.0.0.1:50000] logged in with entity id 7 at ([world]0.5, 64.0, 0.5)")
+        check(w.connected == ["MadeUpHidden"] && w.players.isEmpty, "a login with no join message (a vanish plugin) is still counted")
+        check(Online.decide(state: .running, management: false, managementPlayers: nil, consolePlayers: max(w.players.count, w.connected.count)) == .someone(1), "so a hidden player means someone is on")
+        w.noteConnection("<MadeUpChatter> MadeUpFake[/1.2.3.4:1] logged in with entity id 1")
+        check(w.connected == ["MadeUpHidden"], "a chat line shaped like a login doesn't count")
+        w.noteConnection("MadeUpHidden lost connection: Disconnected")
+        check(w.connected.isEmpty, "and the disconnect line takes them off")
+    } else { check(false, "couldn't adopt the watch server") }
     check(Online.decide(state: .stopped, management: false, managementPlayers: nil, consolePlayers: 0) == .nobody, "a stopped server has nobody on it")
     check(Online.decide(state: .running, management: true, managementPlayers: 0, consolePlayers: 3) == .nobody, "the management server's answer wins over the console")
     check(Online.decide(state: .running, management: true, managementPlayers: 2, consolePlayers: 0) == .someone(2), "two online, from the management server")
@@ -109,6 +126,7 @@ import Security
     r = await call("hosting-add", "Made-up Today A", ["recipe": "today-two"])
     check(r["ok"] as? Bool == true && asked.count == 1, "and another on the first server")
     equal(notices.count, 2, "each one that went ahead without asking showed a notice")
+    check(service.wentAhead.count == 2 && service.wentAhead[0].text.contains("Made-up Today A"), "and is listed for the menu bar, newest first")
     check(notices.first?.contains("Made-up Today B") == true && notices.first?.contains("for today") == true, "naming the server: \(notices.first ?? "")")
     check(b.console.contains { $0.text.contains("Allowed for today") }, "and wrote it to that server's log")
     r = await call("hosting-start", "Made-up Today B")
@@ -129,10 +147,20 @@ import Security
     check(a.packHostSettings.recipes["today-two"] == nil, "and nothing changed")
     service.online = nil
 
+    service.online = { _ in service.revokeToday(); return .nobody }
+    try? a.removeHostedRecipe("today-two")
+    r = await call("hosting-add", "Made-up Today A", ["recipe": "today-two"])
+    check(r["ok"] as? Bool == false && asked.count == 5 && a.packHostSettings.recipes["today-two"] == nil, "a revoke while the online check runs means it asks as usual")
+    service.online = nil
+    answer = { q in service.resolveForToday(q.id) }
+    _ = await call("hosting-add", "Made-up Today A", ["recipe": "today-two"])
+    answer = nil
+    try? a.removeHostedRecipe("today-two")
+
     section("Allow for today: midnight and revoke")
     clock = cal.date(from: DateComponents(year: 2026, month: 11, day: 24, hour: 0, minute: 0, second: 1))!
     r = await call("hosting-add", "Made-up Today A", ["recipe": "today-two"])
-    check(r["ok"] as? Bool == false && asked.count == 5, "after midnight it asks again")
+    check(r["ok"] as? Bool == false && asked.count == 7, "after midnight it asks again")
     answer = { q in service.resolveForToday(q.id) }
     r = await call("hosting-add", "Made-up Today A", ["recipe": "today-two"])
     check(r["ok"] as? Bool == true && service.today.covers(.address, now: clock), "a new click the next day covers that day")
@@ -140,7 +168,7 @@ import Security
     service.revokeToday()
     try? a.removeHostedRecipe("today-two")
     r = await call("hosting-add", "Made-up Today A", ["recipe": "today-two"])
-    check(r["ok"] as? Bool == false && asked.count == 7, "after the menu bar's revoke it asks again")
+    check(r["ok"] as? Bool == false && asked.count == 9, "after the menu bar's revoke it asks again")
 
     section("Allow for today: nothing kept")
     check(SessionAccessService().today.active(now: clock).isEmpty, "a new LeafJuice starts with no grants, so quitting clears them")

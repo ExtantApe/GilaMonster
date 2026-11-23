@@ -316,8 +316,10 @@ server until midnight, Mac time: allowing a stop covers starts, stops and restar
 It never covers removing a pack address, asking about a named player, or anything that deletes, restores or resets a
 world. Each one that goes ahead this way still checks that nobody is on that server first. With someone online it asks
 as usual, and when LeafJuice can't tell (the server is starting or stopping, runs outside LeafJuice, or its management
-server doesn't answer) it's refused. Each shows a notice, a line in the server's log and an entry in the record.
-**Revoke Today's Allows** in the menu bar leaf ends them all, and quitting LeafJuice does too. The grants are kept only
+server doesn't answer) it's refused. Who's online counts the server's own login lines as well as join messages, so a player hidden by a vanish plugin still
+counts. Each shows a notice, a line in the server's log, an entry in the record and a line under the menu bar leaf.
+**Revoke Today's Allows** in the menu bar leaf ends them all, and quitting LeafJuice does too. A revoke while an
+action is being checked stops it, and setting the Mac's clock back can only end a grant early. The grants are kept only
 in memory: nothing writes them to a file, and no session call can make or extend one.
 
 ```bash

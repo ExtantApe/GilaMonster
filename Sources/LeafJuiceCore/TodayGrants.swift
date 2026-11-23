@@ -66,18 +66,22 @@ public struct TodayGrants: Sendable, Equatable {
     /// Adds or renews a grant. It always ends at the midnight after `now`, so a second click the same day ends at the
     /// same moment and never later.
     mutating func add(_ family: GrantFamily, now: Date, calendar: Calendar) -> Grant {
-        let g = Grant(family: family, granted: grants[family]?.granted ?? now, until: Self.midnight(after: now, calendar: calendar))
+        let until = Self.midnight(after: now, calendar: calendar)
+        let earlier = grants[family].flatMap { $0.until == until && $0.granted <= now ? $0.granted : nil }
+        let g = Grant(family: family, granted: earlier ?? now, until: until)
         grants[family] = g
         return g
     }
 
+    /// Covered from the click to midnight. A clock set back before the click counts as not covered, so moving the
+    /// clock can only end a grant early, never stretch it.
     public func covers(_ family: GrantFamily, now: Date) -> Bool {
         guard let g = grants[family] else { return false }
-        return now < g.until
+        return now >= g.granted && now < g.until
     }
 
     public func active(now: Date) -> [Grant] {
-        grants.values.filter { now < $0.until }.sorted { $0.family.rawValue < $1.family.rawValue }
+        grants.values.filter { covers($0.family, now: now) }.sorted { $0.family.rawValue < $1.family.rawValue }
     }
 
     public mutating func revokeAll() { grants.removeAll() }
@@ -117,6 +121,6 @@ extension ServerController {
         if state == .running, let link {
             count = ManagementText.players(await link.call("minecraft:players", timeout: .seconds(3)))?.count
         }
-        return Online.decide(state: self.state == state ? state : .starting, management: link != nil, managementPlayers: count, consolePlayers: players.count)
+        return Online.decide(state: self.state == state ? state : .starting, management: link != nil, managementPlayers: count, consolePlayers: max(players.count, connected.count))
     }
 }

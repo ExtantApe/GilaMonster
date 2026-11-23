@@ -44,6 +44,9 @@ public final class ServerController: Identifiable {
     public private(set) var state: ServerState = .stopped
     public private(set) var startedAt: Date?
     public private(set) var players: Set<String> = []
+    /// Who is connected, from the server's own login and disconnect lines. Plugins that hide or rewrite the join
+    /// message (vanish, custom welcomes) don't touch these, so Allow for today counts them too (K721 review).
+    public internal(set) var connected: Set<String> = []
     public private(set) var metrics: ProcessMetrics?
     public private(set) var console: [ConsoleLine] = []
     public private(set) var issues: [IssueRecord] = []
@@ -476,6 +479,7 @@ public final class ServerController: Identifiable {
         launchedCommand = arguments
         startedAt = Date()
         players = []
+        connected = []
         expectingStop = false
         sawShutdown = false
         sawCrash = false
@@ -534,6 +538,7 @@ public final class ServerController: Identifiable {
         metrics = nil
         startedAt = nil
         players = []
+        connected = []
         launchedCommand = nil
         if let sleepAssertion { ProcessInfo.processInfo.endActivity(sleepAssertion) }
         sleepAssertion = nil
@@ -717,6 +722,18 @@ public final class ServerController: Identifiable {
     private static let donePattern = regex(#"^Done \(\d+[.,]\d+s\)!"#)
     private static let uuidPattern = regex(#"^UUID of player (\.?[A-Za-z0-9_]{1,16}) is ([0-9a-fA-F-]{36})$"#)
     private static let joinPattern = regex(#"^(\.?[A-Za-z0-9_]{1,16}) (joined|left) the game"#)
+    static let loginPattern = regex(#"^(\.?[A-Za-z0-9_]{1,16})\[[^\]]*\] logged in with entity id"#)
+    static let lostPattern = regex(#"^(\.?[A-Za-z0-9_]{1,16}) lost connection:"#)
+
+    /// Keeps `connected` from one console line. Separate so the checks can feed it lines.
+    func noteConnection(_ message: String) {
+        let whole = NSRange(message.startIndex..., in: message)
+        if let m = Self.loginPattern.firstMatch(in: message, range: whole), let r = Range(m.range(at: 1), in: message) {
+            connected.insert(String(message[r]))
+        } else if let m = Self.lostPattern.firstMatch(in: message, range: whole), let r = Range(m.range(at: 1), in: message) {
+            connected.remove(String(message[r]))
+        }
+    }
 
     private func observe(_ line: ParsedLogLine) {
         // A player can type anything, so chat never finishes a wait or teaches the app a uuid.
@@ -752,6 +769,7 @@ public final class ServerController: Identifiable {
             let name = String(line.message[nameRange])
             if line.message[verbRange] == "joined" { playerJoined(name) } else { playerLeft(name) }
         }
+        noteConnection(line.message)
         if let m = Self.uuidPattern.firstMatch(in: line.message), m.numberOfRanges == 3,
            let n = Range(m.range(at: 1), in: line.message), let u = Range(m.range(at: 2), in: line.message) {
             playerUUIDs[String(line.message[n])] = String(line.message[u])

@@ -68,7 +68,8 @@ final class SessionPrompts: NSObject, UNUserNotificationCenterDelegate, @uncheck
         }
         let content = UNMutableNotificationContent()
         content.title = approval.sentence
-        content.body = "Asked through leafjuice-session. The name is the session's own. No answer in \(Int(approval.deadline.timeIntervalSince(approval.asked) / 60)) minutes means no."
+        let reach = approval.action.todayFamily.map { " Allow for Today covers \($0.words) on every server until midnight." } ?? ""
+        content.body = "Asked through leafjuice-session. The name is the session's own. No answer in \(Int(approval.deadline.timeIntervalSince(approval.asked) / 60)) minutes means no.\(reach)"
         content.sound = .default
         content.categoryIdentifier = approval.canAllowForToday ? categoryToday : category
         content.interruptionLevel = .timeSensitive
@@ -84,7 +85,9 @@ final class SessionPrompts: NSObject, UNUserNotificationCenterDelegate, @uncheck
         content.title = "Allowed for today"
         content.body = text
         content.sound = .default
-        UNUserNotificationCenter.current().add(UNNotificationRequest(identifier: UUID().uuidString, content: content, trigger: nil))
+        UNUserNotificationCenter.current().add(UNNotificationRequest(identifier: UUID().uuidString, content: content, trigger: nil)) { error in
+            if let error { log.error("Allowed-for-today notice not shown: \(error.localizedDescription, privacy: .public)") }
+        }
     }
 
     func userNotificationCenter(_ center: UNUserNotificationCenter, willPresent notification: UNNotification) async -> UNNotificationPresentationOptions {
@@ -179,6 +182,11 @@ final class SessionPrompts: NSObject, UNUserNotificationCenterDelegate, @uncheck
 /// Each waiting ask with Deny and Allow. Used by the ask window and by Settings.
 struct SessionAskList: View {
     let service: SessionAccessService
+    /// When the rows last changed. A click in the moment after is ignored, so a row that lapses and lets the next one
+    /// move up under the pointer can't take a click meant for it (K721 review).
+    @State private var changed = Date.distantPast
+
+    private func settled() -> Bool { Date().timeIntervalSince(changed) > 0.8 }
 
     var body: some View {
         VStack(alignment: .leading, spacing: 10) {
@@ -189,6 +197,10 @@ struct SessionAskList: View {
                 HStack(alignment: .firstTextBaseline) {
                     VStack(alignment: .leading, spacing: 2) {
                         Text(ask.sentence).foregroundStyle(Juice.ink).fixedSize(horizontal: false, vertical: true)
+                        if let family = ask.action.todayFamily {
+                            Text("Allow for Today covers \(family.words) on every server until midnight.")
+                                .font(.caption).foregroundStyle(Juice.muted).fixedSize(horizontal: false, vertical: true)
+                        }
                         TimelineView(.periodic(from: .now, by: 1)) { context in
                             let left = max(0, Int(ask.deadline.timeIntervalSince(context.date).rounded(.up)))
                             Text("The name is the session's own. No answer in \(left / 60):\(String(format: "%02d", left % 60)) means no.")
@@ -197,17 +209,18 @@ struct SessionAskList: View {
                         }
                     }
                     Spacer(minLength: 12)
-                    Button("Deny") { service.resolve(ask.id, allow: false) }.buttonStyle(.juice)
+                    Button("Deny") { if settled() { service.resolve(ask.id, allow: false) } }.buttonStyle(.juice)
                         .accessibilityLabel("Deny: \(ask.sentence)")
+                    Button("Allow") { if settled() { service.resolve(ask.id, allow: true) } }.buttonStyle(.juicePrimary)
+                        .accessibilityLabel("Allow: \(ask.sentence)")
                     if let family = ask.action.todayFamily {
-                        Button("Allow for Today") { service.resolveForToday(ask.id) }.buttonStyle(.juice)
+                        Button("Allow for Today") { if settled() { service.resolveForToday(ask.id) } }.buttonStyle(.juice)
                             .help("Allows \(family.words) on every server without asking again until midnight. Each one still checks nobody is online.")
                             .accessibilityLabel("Allow for today: \(ask.sentence). Covers \(family.words) on every server until midnight.")
                     }
-                    Button("Allow") { service.resolve(ask.id, allow: true) }.buttonStyle(.juicePrimary)
-                        .accessibilityLabel("Allow: \(ask.sentence)")
                 }
             }
         }
+        .onChange(of: service.waiting.map(\.id)) { changed = Date() }
     }
 }

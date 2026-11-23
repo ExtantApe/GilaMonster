@@ -389,7 +389,10 @@ public final class SessionAccessService {
     @ObservationIgnored public var onAutoAllowed: (@MainActor (String) -> Void)?
     /// For checks: the clock, the calendar midnight is worked out in, and who's online. The app leaves them as they are.
     @ObservationIgnored var now: () -> Date = { Date() }
-    @ObservationIgnored var calendar = Calendar.current
+    @ObservationIgnored var calendar = Calendar.autoupdatingCurrent
+    /// What went ahead under Allow for today, newest first, for the menu bar (the notice that doesn't depend on
+    /// notifications being shown).
+    public internal(set) var wentAhead: [(at: Date, text: String)] = []
     @ObservationIgnored var online: ((ServerController) async -> Online)?
 
     public init() {}

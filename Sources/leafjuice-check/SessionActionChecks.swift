@@ -129,6 +129,14 @@ import Security
     r = await call("start")
     check(r["ok"] as? Bool == false && error(r).contains("A made-up backup is in progress"), "start while the server is busy is refused with the reason, not a quiet ok: \(error(r))")
     server.endBusy()
+    let earlierAsk = service.onAsk
+    service.onAsk = { a in try? server.beginBusy("A made-up backup"); service.resolve(a.id, allow: true) }
+    r = await call("start")
+    check(r["ok"] as? Bool == false && error(r).contains("started on Made-up Actions while waiting"), "a job that starts while the owner is asked stops it too: \(error(r))")
+    server.endBusy()
+    service.onAsk = earlierAsk
+    r = await call("publish", ["recipe": "made-up\n[!!] fake line"])
+    check(r["ok"] as? Bool == false && error(r).contains("line breaks"), "a recipe name with a line break is refused")
     r = await call("not-a-call")
     check(r["ok"] as? Bool == false && error(r).contains("isn't a call"), "an unknown call")
     check(asked.isEmpty, "none of those bothered the owner")
