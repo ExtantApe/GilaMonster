@@ -1,10 +1,12 @@
 #!/usr/bin/env swift
-// Builds the LeafJuice brand kit from one master file: a pixel-art mark in `mark.txt`.
+// Builds the GilaMonster brand kit from one master file: a pixel-art mark in `mark.txt` (D276).
 //   swift scripts/brand-kit.swift brand/kit
-// Writes into <folder>/out: the mark as SVG, circle and square profile marks in light and dark, the app icon at
-// 1024 and 32, the GitHub social preview, README headers, and X, Bluesky and LinkedIn banners.
-// Every text and outline pair is checked against WCAG first (D149): large text 3:1, small text 4.5:1, outlines
-// 3:1. If any pair fails, nothing is written and the script exits 1.
+// Writes into <folder>/out: the mark as SVG, circle and square profile marks, the app icon at every size (.icns,
+// .ico, 1024 and 32), and the menu-bar template at 1x and 2x. The banners, README headers and release images
+// wait for the name's wordmark and tagline (`wordmarkReady`).
+// Every text and outline pair is checked against WCAG first (D149), in typical color vision and with protanopia,
+// deuteranopia, tritanopia and achromatopsia simulated: large text 3:1, small text 4.5:1, outlines 3:1. If any
+// pair fails, nothing is written and the script exits 1.
 import AppKit
 
 // MARK: The master
@@ -45,10 +47,16 @@ func fail(_ message: String) -> Never {
 
 // MARK: Colors and WCAG
 
-let ink: UInt32 = 0x2A3520, cream: UInt32 = 0xF8F6E9, surface: UInt32 = 0xFFFEF8, muted: UInt32 = 0x55614A
-let darkBack: UInt32 = 0x2A3225, darkInk: UInt32 = 0xF4F6E9, darkMuted: UInt32 = 0xCBD4BC
-let tileTop: UInt32 = 0xEDF5D6, tileBottom: UInt32 = 0xCDE3A5, darkTileTop: UInt32 = 0x414D39, darkTileBottom: UInt32 = 0x343E2E
-let grapefruit: UInt32 = 0xF4846B
+// The main palette, chosen 2026-11-23 (D272/D276): basalt, cream, mid grey, and the deep dark background.
+let ink: UInt32 = 0x2A282C, cream: UInt32 = 0xF5EBDD, surface: UInt32 = 0xFFFFFF, muted: UInt32 = 0x4B474F
+let darkBack: UInt32 = 0x1E1C20, darkInk: UInt32 = 0xF5EBDD, darkMuted: UInt32 = 0xB9B5BE
+// The tile is flat cream in every appearance. The mark's outline is basalt, so it only reads on a light tile: there
+// is no dark tile, and the profile marks come in one version.
+let tileTop: UInt32 = 0xF5EBDD, tileBottom: UInt32 = 0xF5EBDD
+/// The banners, README headers and release images need the name's wordmark and tagline, not chosen yet.
+let wordmarkReady = false
+/// The art red-orange, for the trim along the bottom of banners and release images.
+let brandOrange: UInt32 = 0xE4572E
 
 func linear(_ c: UInt32) -> Double { let v = Double(c) / 255; return v <= 0.04045 ? v / 12.92 : pow((v + 0.055) / 1.055, 2.4) }
 func luminance(_ h: UInt32) -> Double { 0.2126 * linear(h >> 16 & 0xFF) + 0.7152 * linear(h >> 8 & 0xFF) + 0.0722 * linear(h & 0xFF) }
@@ -56,10 +64,35 @@ func contrast(_ a: UInt32, _ b: UInt32) -> Double { let x = luminance(a), y = lu
 
 struct Pair { let what: String; let fg: UInt32; let bg: UInt32; let minimum: Double }
 
+// Color vision: Machado, Oliveira and Fernandes (2009) at full strength, and achromatopsia as luminance only. The
+// same matrices as LeafJuiceCore's Palette.simulate.
+enum Vision: String, CaseIterable { case typical, protanopia, deuteranopia, tritanopia, achromatopsia }
+let visionMatrices: [Vision: [[Double]]] = [
+    .protanopia: [[0.152286, 1.052583, -0.204868], [0.114503, 0.786281, 0.099216], [-0.003882, -0.048116, 1.051998]],
+    .deuteranopia: [[0.367322, 0.860646, -0.227968], [0.280085, 0.672501, 0.047413], [-0.011820, 0.042940, 0.968881]],
+    .tritanopia: [[1.255528, -0.076749, -0.178779], [-0.078411, 0.930809, 0.147602], [0.004733, 0.691367, 0.303900]],
+]
+func simulate(_ hex: UInt32, _ vision: Vision) -> UInt32 {
+    if vision == .typical { return hex }
+    let c = [linear(hex >> 16 & 0xFF), linear(hex >> 8 & 0xFF), linear(hex & 0xFF)]
+    let out: [Double]
+    if vision == .achromatopsia { let y = 0.2126 * c[0] + 0.7152 * c[1] + 0.0722 * c[2]; out = [y, y, y] }
+    else { let m = visionMatrices[vision]!; out = (0..<3).map { i in m[i][0] * c[0] + m[i][1] * c[1] + m[i][2] * c[2] } }
+    func encode(_ v: Double) -> UInt32 {
+        let x = min(max(v, 0), 1)
+        return UInt32(((x <= 0.0031308 ? x * 12.92 : 1.055 * pow(x, 1 / 2.4) - 0.055) * 255).rounded())
+    }
+    return encode(out[0]) << 16 | encode(out[1]) << 8 | encode(out[2])
+}
+/// The lowest ratio for a pair across every kind of color vision, and which one it was.
+func lowest(_ p: Pair) -> (Double, Vision) {
+    Vision.allCases.map { (contrast(simulate(p.fg, $0), simulate(p.bg, $0)), $0) }.min { $0.0 < $1.0 }!
+}
+
 func checkPairs(_ pairs: [Pair]) -> [String] {
     pairs.compactMap { p in
-        let r = contrast(p.fg, p.bg)
-        return r < p.minimum ? "\(p.what): \(String(format: "%.2f", r)):1, needs \(p.minimum):1" : nil
+        let (r, v) = lowest(p)
+        return r < p.minimum ? "\(p.what): \(String(format: "%.2f", r)):1 (\(v.rawValue)), needs \(p.minimum):1" : nil
     }
 }
 
@@ -104,7 +137,7 @@ func profile(_ m: Mark, size: Int, circle: Bool, dark: Bool) -> CGImage {
     let shape = circle ? CGPath(ellipseIn: CGRect(x: 0, y: 0, width: s, height: s), transform: nil)
                        : CGPath(roundedRect: CGRect(x: 0, y: 0, width: s, height: s), cornerWidth: s * 0.2, cornerHeight: s * 0.2, transform: nil)
     ctx.addPath(shape); ctx.clip()
-    gradient(ctx, dark ? darkTileTop : tileTop, dark ? darkTileBottom : tileBottom, CGRect(x: 0, y: 0, width: s, height: s))
+    gradient(ctx, dark ? darkBack : tileTop, dark ? darkBack : tileBottom, CGRect(x: 0, y: 0, width: s, height: s))
     // A circle needs more clear space than a square for the corners of the art to stay inside.
     let cell = (s * (circle ? 0.62 : 0.72) / CGFloat(m.size)).rounded(.down)
     let art = cell * CGFloat(m.size)
@@ -149,8 +182,8 @@ func iconSVG(_ m: Mark, small: Bool) -> String {
     let cell = small ? Double(32 / m.size) : (tile * 0.78 / Double(m.size)).rounded(.down)
     let origin = ((side - cell * Double(m.size)) / 2).rounded(.down)
     func hex(_ v: UInt32) -> String { "#" + String(format: "%06X", v) }
-    var out = "<svg xmlns=\"http://www.w3.org/2000/svg\" width=\"\(Int(side))\" height=\"\(Int(side))\" viewBox=\"0 0 \(Int(side)) \(Int(side))\" shape-rendering=\"crispEdges\" role=\"img\" aria-label=\"LeafJuice\">\n"
-    out += "<title>LeafJuice</title>\n<defs><linearGradient id=\"t\" x1=\"0\" y1=\"0\" x2=\"0\" y2=\"1\"><stop offset=\"0\" stop-color=\"\(hex(tileTop))\"/><stop offset=\"1\" stop-color=\"\(hex(tileBottom))\"/></linearGradient></defs>\n"
+    var out = "<svg xmlns=\"http://www.w3.org/2000/svg\" width=\"\(Int(side))\" height=\"\(Int(side))\" viewBox=\"0 0 \(Int(side)) \(Int(side))\" shape-rendering=\"crispEdges\" role=\"img\" aria-label=\"GilaMonster\">\n"
+    out += "<title>GilaMonster</title>\n<defs><linearGradient id=\"t\" x1=\"0\" y1=\"0\" x2=\"0\" y2=\"1\"><stop offset=\"0\" stop-color=\"\(hex(tileTop))\"/><stop offset=\"1\" stop-color=\"\(hex(tileBottom))\"/></linearGradient></defs>\n"
     out += "<rect x=\"\(inset)\" y=\"\(inset)\" width=\"\(tile)\" height=\"\(tile)\" rx=\"\(radius)\" fill=\"url(#t)\" shape-rendering=\"geometricPrecision\"/>\n"
     for (y, row) in m.cells.enumerated() {
         var x = 0
@@ -259,7 +292,7 @@ enum Accent: String, CaseIterable {
         case .pistachioRing: dark ? nil : 0x76845F
         case .grapefruitWash: dark ? nil : 0xA33C25
         case .taglineRing: dark ? tagOnDark : tagOnLight
-        case .trimRing: grapefruit
+        case .trimRing: brandOrange
         }
     }
 }
@@ -274,8 +307,8 @@ func banner(_ m: Mark, w: Int, h: Int, dark: Bool, showTagline: Bool = true, hol
             accent: Accent = .taglineRing, markRight: Bool = false, name: String = "banner") -> CGImage {
     let ctx = canvas(w, h)
     ctx.setFillColor(cg(dark ? darkBack : cream)); ctx.fill(CGRect(x: 0, y: 0, width: w, height: h))
-    // A band of grapefruit along the bottom: the one pop of colour, as in the app.
-    ctx.setFillColor(cg(grapefruit)); ctx.fill(CGRect(x: 0, y: 0, width: CGFloat(w), height: max(4, CGFloat(h) * 0.025)))
+    // A band of the brand red-orange along the bottom.
+    ctx.setFillColor(cg(brandOrange)); ctx.fill(CGRect(x: 0, y: 0, width: CGFloat(w), height: max(4, CGFloat(h) * 0.025)))
     let W = CGFloat(w), H = CGFloat(h)
     let room = W * (1 - bannerMargin * 2)
     var scale: CGFloat = 1
@@ -330,7 +363,7 @@ let releaseLine = CommandLine.arguments.count >= 3 ? CommandLine.arguments[2] : 
 func release(_ m: Mark, w: Int, h: Int) -> CGImage {
     let ctx = canvas(w, h)
     ctx.setFillColor(cg(cream)); ctx.fill(CGRect(x: 0, y: 0, width: w, height: h))
-    ctx.setFillColor(cg(grapefruit)); ctx.fill(CGRect(x: 0, y: 0, width: CGFloat(w), height: CGFloat(h) * 0.03))
+    ctx.setFillColor(cg(brandOrange)); ctx.fill(CGRect(x: 0, y: 0, width: CGFloat(w), height: CGFloat(h) * 0.03))
     let short = CGFloat(min(w, h)), H = CGFloat(h)
     // The mark on its square with the tagline-coloured ring, as on the banners.
     let slot = (short * 0.44).rounded(.down)
@@ -354,8 +387,8 @@ func release(_ m: Mark, w: Int, h: Int) -> CGImage {
 }
 
 func svg(_ m: Mark, scale: Int) -> String {
-    var out = #"<svg xmlns="http://www.w3.org/2000/svg" width="\#(m.size * scale)" height="\#(m.size * scale)" viewBox="0 0 \#(m.size) \#(m.size)" shape-rendering="crispEdges" role="img" aria-label="LeafJuice: a glass of green juice with a leaf and a grapefruit slice">"#
-    out += "\n<title>LeafJuice</title>\n"
+    var out = #"<svg xmlns="http://www.w3.org/2000/svg" width="\#(m.size * scale)" height="\#(m.size * scale)" viewBox="0 0 \#(m.size) \#(m.size)" shape-rendering="crispEdges" role="img" aria-label="GilaMonster: a pixel-art Gila monster, red-orange, salmon and amber beads on basalt">"#
+    out += "\n<title>GilaMonster</title>\n"
     for (y, row) in m.cells.enumerated() {
         var x = 0
         while x < row.count {
@@ -382,48 +415,36 @@ guard CommandLine.arguments.count >= 2 else { fail("Usage: swift scripts/brand-k
 let folder = URL(fileURLWithPath: CommandLine.arguments[1])
 let mark = readMark(folder.appendingPathComponent("mark.txt"))
 
-// Checked first, and fails closed: nothing is written if any pair is short.
-var pairs: [Pair] = [
-    Pair(what: "name on cream (large text)", fg: ink, bg: cream, minimum: 3),
-    Pair(what: "name on dark (large text)", fg: darkInk, bg: darkBack, minimum: 3),
-    Pair(what: "Leaf in the name on cream (large text)", fg: leafOnLight, bg: cream, minimum: 3),
-    Pair(what: "Leaf in the name on dark (large text)", fg: leafOnDark, bg: darkBack, minimum: 3),
-    Pair(what: "tagline on cream (held to small text)", fg: tagOnLight, bg: cream, minimum: 4.5),
-    Pair(what: "tagline on dark (held to small text)", fg: tagOnDark, bg: darkBack, minimum: 4.5),
-    Pair(what: "square's ring (tagline colour) on cream", fg: tagOnLight, bg: cream, minimum: 3),
-    Pair(what: "square's ring (tagline colour) on dark", fg: tagOnDark, bg: darkBack, minimum: 3),
-]
-// The mark's outline has to stand off every background it's put on, so its shape reads.
+// Checked first, and fails closed: nothing is written if any pair is short, in any kind of color vision.
+var pairs: [Pair] = []
+// The mark's outline carries the shape on the cream tile, so it has to stand off it.
 let outline = mark.palette["o"] ?? ink
-for (name, bg) in [("light tile top", tileTop), ("light tile bottom", tileBottom), ("cream", cream)] {
-    pairs.append(Pair(what: "mark outline on \(name)", fg: outline, bg: bg, minimum: 3))
-}
-// On the dark tile the outline is dark too, so the glass and juice carry the shape there: they must stand off it.
-for (key, name) in [(Character("g"), "glass"), (Character("j"), "juice")] {
-    if let hex = mark.palette[key] {
-        pairs.append(Pair(what: "mark \(name) on the dark tile", fg: hex, bg: darkTileBottom, minimum: 3))
-        pairs.append(Pair(what: "mark \(name) on dark", fg: hex, bg: darkBack, minimum: 3))
-    }
-}
+pairs.append(Pair(what: "mark outline on the cream tile", fg: outline, bg: tileTop, minimum: 3))
+pairs.append(Pair(what: "mark outline on white", fg: outline, bg: surface, minimum: 3))
+// The beads sit inside the outline, so they decorate rather than carry the shape. Their ratios are listed, not held.
+let beads: [(Character, String)] = [("R", "red-orange"), ("S", "salmon"), ("A", "amber"), ("T", "turquoise")]
 let failures = checkPairs(pairs)
 guard failures.isEmpty else { fail("WCAG check failed, nothing written:\n  " + failures.joined(separator: "\n  ")) }
 
 let out = folder.appendingPathComponent("out")
 try? FileManager.default.createDirectory(at: out, withIntermediateDirectories: true)
+// Files the LeafJuice kit wrote that this one doesn't, so nothing stale is left beside the new ones. Named one by one.
+for name in ["LeafJuice.ico", "mark-circle-light-1024.png", "mark-circle-light-400.png", "mark-circle-dark-1024.png",
+             "mark-circle-dark-400.png", "mark-square-light-1024.png", "mark-square-light-400.png", "mark-square-dark-1024.png",
+             "mark-square-dark-400.png"] + (wordmarkReady ? [] : [
+             "github-social-preview-light-1280x640.png", "github-social-preview-dark-1280x640.png",
+             "readme-header-light-1280x320.png", "readme-header-dark-1280x320.png", "x-header-light-1500x500.png",
+             "x-header-dark-1500x500.png", "bluesky-banner-light-3000x1000.png", "bluesky-banner-dark-3000x1000.png",
+             "linkedin-banner-light-1584x396.png", "linkedin-banner-dark-1584x396.png",
+             "linkedin-company-banner-light-1128x191.png", "linkedin-company-banner-dark-1128x191.png",
+             "release-square-1080.png", "release-landscape-1200x675.png"]) {
+    try? FileManager.default.removeItem(at: out.appendingPathComponent(name))
+}
 try! svg(mark, scale: 64).write(to: out.appendingPathComponent("mark.svg"), atomically: true, encoding: .utf8)
-try? FileManager.default.removeItem(at: out.appendingPathComponent("variants"))  // Left from the comparison rounds.
-for dark in [false, true] {
-    let tone = dark ? "dark" : "light"
-    for circle in [true, false] {
-        save(profile(mark, size: 1024, circle: circle, dark: dark), out.appendingPathComponent("mark-\(circle ? "circle" : "square")-\(tone)-1024.png"))
-        save(profile(mark, size: 400, circle: circle, dark: dark), out.appendingPathComponent("mark-\(circle ? "circle" : "square")-\(tone)-400.png"))
+for circle in [true, false] {
+    for size in [1024, 400] {
+        save(profile(mark, size: size, circle: circle, dark: false), out.appendingPathComponent("mark-\(circle ? "circle" : "square")-\(size).png"))
     }
-    save(banner(mark, w: 1280, h: 640, dark: dark), out.appendingPathComponent("github-social-preview-\(tone)-1280x640.png"))
-    save(banner(mark, w: 1280, h: 320, dark: dark), out.appendingPathComponent("readme-header-\(tone)-1280x320.png"))
-    save(banner(mark, w: 1500, h: 500, dark: dark), out.appendingPathComponent("x-header-\(tone)-1500x500.png"))
-    save(banner(mark, w: 3000, h: 1000, dark: dark), out.appendingPathComponent("bluesky-banner-\(tone)-3000x1000.png"))
-    save(banner(mark, w: 1584, h: 396, dark: dark), out.appendingPathComponent("linkedin-banner-\(tone)-1584x396.png"))
-    save(banner(mark, w: 1128, h: 191, dark: dark, showTagline: false), out.appendingPathComponent("linkedin-company-banner-\(tone)-1128x191.png"))
 }
 // The app icon from one master: icon.svg (and icon-small.svg for 16 to 32 px), drawn here as PNGs at every size.
 try! iconSVG(mark, small: false).write(to: out.appendingPathComponent("icon.svg"), atomically: true, encoding: .utf8)
@@ -448,23 +469,51 @@ try? FileManager.default.removeItem(at: iconset)
 // Windows: the sizes Explorer and the taskbar ask for.
 let icoSizesWanted = [16, 24, 32, 48, 64, 128, 256]
 let icoData = ico(icoSizesWanted.map { ($0, png(icon($0))) })
-try! icoData.write(to: out.appendingPathComponent("LeafJuice.ico"))
+try! icoData.write(to: out.appendingPathComponent("GilaMonster.ico"))
 guard icoSizes(icoData) == icoSizesWanted else { fail("The .ico didn't read back with every size.") }
-// Release post templates, square and landscape (D150's set): the name and a version line to fill in.
-save(release(mark, w: 1080, h: 1080), out.appendingPathComponent("release-square-1080.png"))
-save(release(mark, w: 1200, h: 675), out.appendingPathComponent("release-landscape-1200x675.png"))
-// Bluesky refuses images over 1,000,000 bytes (its lexicon limit), so a banner that grows past it fails the build.
-for name in ["bluesky-banner-light-3000x1000.png", "bluesky-banner-dark-3000x1000.png"] {
-    let size = (try? FileManager.default.attributesOfItem(atPath: out.appendingPathComponent(name).path)[.size] as? Int) ?? 0
-    if size > 1_000_000 { fail("\(name) is \(size) bytes, over Bluesky's 1,000,000-byte limit.") }
+// The menu-bar template: every drawn pixel of the mark in black on clear, one art pixel per point. macOS tints a
+// template itself, for light and dark menu bars and for Increase Contrast, so it carries no color of its own.
+func menuBarTemplate(scale: Int) -> CGImage {
+    let size = mark.size * scale
+    let ctx = canvas(size, size)
+    ctx.setShouldAntialias(false)
+    ctx.setFillColor(cg(0x000000))
+    for (row, cells) in mark.cells.enumerated() {
+        for (col, hex) in cells.enumerated() where hex != nil {
+            ctx.fill(CGRect(x: col * scale, y: size - (row + 1) * scale, width: scale, height: scale))
+        }
+    }
+    return ctx.makeImage()!
 }
-// The adopted app icon (owner, 2026-11-14) goes where the app build and the README look for it: brand/.
+save(menuBarTemplate(scale: 1), out.appendingPathComponent("MenuBarTemplate.png"))
+save(menuBarTemplate(scale: 2), out.appendingPathComponent("MenuBarTemplate@2x.png"))
+if wordmarkReady {
+    for dark in [false, true] {
+        let tone = dark ? "dark" : "light"
+        save(banner(mark, w: 1280, h: 640, dark: dark), out.appendingPathComponent("github-social-preview-\(tone)-1280x640.png"))
+        save(banner(mark, w: 1280, h: 320, dark: dark), out.appendingPathComponent("readme-header-\(tone)-1280x320.png"))
+        save(banner(mark, w: 1500, h: 500, dark: dark), out.appendingPathComponent("x-header-\(tone)-1500x500.png"))
+        save(banner(mark, w: 3000, h: 1000, dark: dark), out.appendingPathComponent("bluesky-banner-\(tone)-3000x1000.png"))
+        save(banner(mark, w: 1584, h: 396, dark: dark), out.appendingPathComponent("linkedin-banner-\(tone)-1584x396.png"))
+        save(banner(mark, w: 1128, h: 191, dark: dark, showTagline: false), out.appendingPathComponent("linkedin-company-banner-\(tone)-1128x191.png"))
+    }
+    save(release(mark, w: 1080, h: 1080), out.appendingPathComponent("release-square-1080.png"))
+    save(release(mark, w: 1200, h: 675), out.appendingPathComponent("release-landscape-1200x675.png"))
+    // Bluesky refuses images over 1,000,000 bytes (its lexicon limit), so a banner that grows past it fails the build.
+    for name in ["bluesky-banner-light-3000x1000.png", "bluesky-banner-dark-3000x1000.png"] {
+        let size = (try? FileManager.default.attributesOfItem(atPath: out.appendingPathComponent(name).path)[.size] as? Int) ?? 0
+        if size > 1_000_000 { fail("\(name) is \(size) bytes, over Bluesky's 1,000,000-byte limit.") }
+    }
+}
+// The adopted icon (owner, 2026-11-23, D276) goes where the app build and the README look for it: brand/.
 let brandFolder = folder.deletingLastPathComponent()
-for name in ["AppIcon.icns", "LeafJuice.ico", "icon.svg", "icon-small.svg", "icon-1024.png",
-             "readme-header-light-1280x320.png", "readme-header-dark-1280x320.png"] {
+for name in ["AppIcon.icns", "GilaMonster.ico", "icon.svg", "icon-small.svg", "icon-1024.png",
+             "MenuBarTemplate.png", "MenuBarTemplate@2x.png"] {
     let target = brandFolder.appendingPathComponent(name)
     try? FileManager.default.removeItem(at: target)
     try! FileManager.default.copyItem(at: out.appendingPathComponent(name), to: target)
 }
-print("Wrote the kit to \(out.path). WCAG: \(pairs.count) pairs passed.")
-for p in pairs { print("  \(p.what): \(String(format: "%.2f", contrast(p.fg, p.bg))):1") }
+print("Wrote the kit to \(out.path). WCAG: \(pairs.count) pairs passed in every kind of color vision.")
+for p in pairs { let (r, v) = lowest(p); print("  \(p.what): \(String(format: "%.2f", contrast(p.fg, p.bg))):1, lowest \(String(format: "%.2f", r)):1 (\(v.rawValue))") }
+print("Beads on the basalt body (decoration, not held):")
+for (key, name) in beads { if let hex = mark.palette[key] { let (r, v) = lowest(Pair(what: name, fg: hex, bg: outline, minimum: 0)); print("  \(name): \(String(format: "%.2f", contrast(hex, outline))):1, lowest \(String(format: "%.2f", r)):1 (\(v.rawValue))") } }

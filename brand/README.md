@@ -7,25 +7,29 @@ work, with one bright note of pink grapefruit, like the slice on the rim of the 
 
 ## Icon
 
-A 16 × 16 pixel-art glass of green juice with a leaf, and a grapefruit wedge on the rim as the one pop of colour.
-Adopted by the owner on 2026-11-14. The only drawn file is [`kit/mark.txt`](kit/mark.txt), a grid with its palette.
-Everything else is built from it, so change that and rebuild rather than editing the outputs:
+A 16 × 16 pixel-art Gila monster seen from above: a basalt body with red-orange beads mixed with salmon and amber, a
+blunt beaded head and turquoise eyes, on a flat cream tile. Chosen by the owner on 2026-11-23 (D276, "C1, warm mix").
+The only drawn file is [`kit/mark.txt`](kit/mark.txt), a grid with its palette. Everything else is built from it, so
+change that and rebuild rather than editing the outputs:
 
 ```bash
 swift scripts/brand-kit.swift brand/kit
 ```
 
-That checks every text and outline pair against WCAG first, and writes nothing if one fails. It puts the app icon
-here in `brand/`, where the app build and the README look for it:
+That checks the outline against the tile in typical color vision and with protanopia, deuteranopia, tritanopia and
+achromatopsia simulated, and writes nothing if it falls under 3:1. The lowest is 12.2:1. It puts these here in
+`brand/`, where the app build and the README look for them:
 
 - `icon.svg`: the master. `icon-small.svg`: the master for 16 to 32 px, where the tile runs to the edge and each art
   pixel is a whole screen pixel.
 - `icon-1024.png`: drawn from the master.
-- `AppIcon.icns`: macOS, every size at 1× and 2×. `LeafJuice.ico`: Windows, 16 to 256.
-- Pale pistachio tile, `#EDF5D6` to `#CDE3A5`, top to bottom.
+- `AppIcon.icns`: macOS, every size at 1× and 2×. `GilaMonster.ico`: Windows, 16 to 256.
+- `MenuBarTemplate.png` and `MenuBarTemplate@2x.png`: the menu-bar icon, every drawn pixel in black on clear. macOS
+  tints a template itself for light and dark menu bars and for Increase Contrast.
+- Flat cream tile, `#F5EBDD`. The outline is basalt, so the mark only goes on light backgrounds. There's no dark tile.
 
-Profile marks, banners, release images and the README header are built into `kit/out/`. [`kit/README.md`](kit/README.md)
-lists them, with the platform sizes and where they came from.
+Profile marks are built into `kit/out/`. [`kit/README.md`](kit/README.md) lists them. The banners, release images and
+README header wait for the wordmark and tagline.
 
 ## Tagline
 
