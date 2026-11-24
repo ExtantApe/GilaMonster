@@ -76,3 +76,26 @@ Not covered: disabled controls are drawn at half opacity. WCAG exempts them, but
 3. **Layout at small window sizes.** Cards use an adaptive grid from 250 points, which should reflow, but narrow
    windows and large text haven't been looked at.
 4. **The repo name.** Done 2026-11-14: the repo is `ExtantApe/GilaMonster` (D185), and the old address redirects.
+
+## 2026-11-24 (0.5.0)
+
+Changes from a review of the code, not from using the app with assistive technology.
+
+### Decision: Need More Time is capped at three minutes
+
+An ask that nobody answers is a no. Need More Time delays that no by a minute and allows nothing, so it can only make
+an ask more likely to be answered by a person, never answered by default. The cap is three extensions on purpose: the
+asks are security-sensitive (they stop and start servers, publish packs, hand off work), a fourth button press is a
+sign nobody is there, and an ask that could be kept open for ever would be a standing prompt that someone could
+eventually click through without reading. After the third, the button is disabled and the panel says why. The cap is
+`SessionAccessService.maxExtensions` and is held by `sessionActionChecks`. Changing it needs the owner's word.
+
+### Hand tests still to do
+
+- **VoiceOver, Voice Control and Switch Control against the click guard.** The 0.8 second guard ignores a pointer
+  click made just after the list changes. A dropped click now dims the buttons for that moment and announces why. Whether
+  that is understood with VoiceOver, Voice Control ("click Deny") and Switch Control, whose clicks come from the
+  pointer path, hasn't been tried.
+- The ask panel taking focus, Return meaning Deny, Escape denying, the Window menu item, and the announcements.
+- Every announcement and chart descriptor from this release.
+- Theme change: the page content is rebuilt, so its transient state (typed text, an open disclosure) resets.

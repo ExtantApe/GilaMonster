@@ -195,6 +195,7 @@ extension SessionAccessService {
     func finish(_ id: UUID, _ answer: Answer) {
         guard let c = answers.removeValue(forKey: id) else { return }
         extraWait[id] = nil
+        if let ask = waiting.first(where: { $0.id == id }) { onOutcome?(ask, answer) }
         waiting.removeAll { $0.id == id }
         onAnswered?(id)
         c.resume(returning: answer == .allowed)

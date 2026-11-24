@@ -16,8 +16,8 @@ struct ConsolePage: View {
     var body: some View {
         VStack(spacing: 0) {
             FlowRow(spacing: 10) {
-                TextField("Filter", text: $filter, prompt: Text("Filter lines"))
-                    .textFieldStyle(.roundedBorder).frame(width: 200, height: Theme.controlHeight)
+                TextField("Filter", text: $filter, prompt: ThemedPrompt("Filter lines"))
+                    .textFieldStyle(.themed).frame(width: 200, height: Theme.controlHeight)
                 Picker("Show", selection: $minimumLevel) {
                     Text("All").tag(LogLevel.debug)
                     Text("Warnings").tag(LogLevel.warn)

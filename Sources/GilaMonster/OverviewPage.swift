@@ -350,7 +350,7 @@ struct ServerIconCard: View {
         .disabled(icon.inUse || !icon.fits)
         .accessibilityLabel("\(icon.name)\(icon.inUse ? ", in use" : "")\(icon.fits ? "" : ", \(icon.width) by \(icon.height), not usable")")
         .accessibilityHint(icon.inUse || !icon.fits ? "" : "Makes this the server icon")
-        .helped(icon.fits ? (icon.inUse ? "In use" : "Use this icon") : "Minecraft needs 64×64. Add it again to have it scaled.")
+        .help(icon.fits ? (icon.inUse ? "In use" : "Use this icon") : "Minecraft needs 64×64. Add it again to have it scaled.")
     }
 
     private func add() {

@@ -385,6 +385,8 @@ public final class SessionAccessService {
     @ObservationIgnored public var onAsk: (@MainActor (SessionApproval) -> Void)?
     /// Set by the app: takes a notification away once its request is answered or lapses.
     @ObservationIgnored public var onAnswered: (@MainActor (UUID) -> Void)?
+    /// Called once for each ask with how it ended, for announcing it.
+    @ObservationIgnored public var onOutcome: (@MainActor (SessionApproval, Answer) -> Void)?
 
     /// Allow for today (K721): in memory only, added only by `resolveForToday`, cleared when GilaMonster quits.
     public internal(set) var today = TodayGrants()

@@ -157,3 +157,15 @@ import GilaMonsterCore
     check(text.contains("stop.keyEquivalent = \"\"") && text.contains("guard alert.runModal() == .alertSecondButtonReturn"), "only a click on Stop quits")
     check(!text.contains("Stop running servers and quit?"), "the old one-keypress question is gone")
 }
+
+/// Link buttons (Show Details, Show More, Show All, Need More Time) are ink with an underline and a symbol, so the color
+/// pair is ink on each background they sit on: the page and cards, the profile cards, and the four callout washes.
+@MainActor func linkButtonColorChecks() {
+    section("Colors: link buttons (ink) on every background they sit on")
+    for bg in ["background", "surface", "raised", "accentWash", "warningWash", "dangerWash", "infoWash"] {
+        let pair = Palette.pairs.first { $0.foreground == "ink" && $0.background == bg && $0.use == .text }
+        check(pair != nil, "ink on \(bg) is held to 4.5:1 in the palette checks")
+        let weak = Palette.failures().filter { $0.pair.foreground == "ink" && $0.pair.background == bg }
+        check(weak.isEmpty, "ink on \(bg) passes in every appearance and every color vision")
+    }
+}

@@ -790,7 +790,7 @@ struct PackBrowser: View {
                             .background(Theme.raised, in: RoundedRectangle(cornerRadius: 6))
                         Text((item.path as NSString).lastPathComponent).font(.caption2).foregroundStyle(Theme.muted).lineLimit(1).truncationMode(.middle)
                     }
-                    .helped(item.path)
+                    .help(item.path)
                     .accessibilityElement(children: .ignore)
                     .accessibilityLabel(item.path)
                 }

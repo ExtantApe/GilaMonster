@@ -70,7 +70,7 @@ struct AllowlistPage: View {
             Hint("Java accounts only. Capitals don't matter, but the name has to belong to a real account. Looking it up sends the name to Mojang.")
             HStack {
                 Text("Username").foregroundStyle(Theme.ink).accessibilityHidden(true)
-                TextField("Minecraft username", text: $typed).labelsHidden().textFieldStyle(.roundedBorder).frame(maxWidth: 260)
+                TextField("Minecraft username", text: $typed, prompt: ThemedPrompt("Minecraft username")).labelsHidden().textFieldStyle(.themed).frame(maxWidth: 260)
                     .onChange(of: typed) { outcome = nil; pendingWarnings = [] }
                     .onSubmit(lookUp)
                 Button(looking ? "Looking…" : "Look Up", action: lookUp).buttonStyle(.themed)
@@ -158,7 +158,7 @@ struct AllowlistPage: View {
         return Card(title: "On the allowlist (\(entries.count))", systemImage: "list.bullet") {
             if entries.isEmpty { Hint("Nobody yet.") }
             if searching {
-                TextField("Search names", text: $search).textFieldStyle(.roundedBorder).frame(maxWidth: 260)
+                TextField("Search names", text: $search, prompt: ThemedPrompt("Search names")).textFieldStyle(.themed).frame(maxWidth: 260)
                     .accessibilityLabel("Search names on the allowlist")
                 if matches.isEmpty { Hint("No name matches \u{201C}\(search)\u{201D}.") }
                 else if !search.isEmpty { Hint("\(matches.count) of \(entries.count) match.") }
@@ -180,7 +180,7 @@ struct AllowlistPage: View {
             }
             if cut.hidden > 0 || showAllEntries {
                 Button(showAllEntries ? "Show Fewer" : "Show All (\(matches.count))") { showAllEntries.toggle() }
-                    .buttonStyle(.link).font(.callout).frame(minHeight: 24)
+                    .buttonStyle(.disclosureLink(showAllEntries ? "chevron.up" : "chevron.down")).font(.callout)
             }
             if server.hasSheriff, sheriffProfiles == nil { Hint("Profiles can be changed once GilaMonster can reach Sheriff.") }
             else if server.hasLuckPerms, !server.hasSheriff, !running { Hint("Groups can only be changed while the server runs.") }

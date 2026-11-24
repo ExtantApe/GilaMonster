@@ -52,7 +52,7 @@ struct WorldsPage: View {
         let loaded = shown.filter(Overflow.loadsAtStartup)
         let notLoaded = shown.filter { !Overflow.loadsAtStartup($0) }
         if filtering {
-            TextField("Filter worlds", text: $filter).textFieldStyle(.roundedBorder).frame(maxWidth: 260)
+            TextField("Filter worlds", text: $filter, prompt: ThemedPrompt("Filter worlds")).textFieldStyle(.themed).frame(maxWidth: 260)
                 .accessibilityLabel("Filter worlds by name")
             if shown.isEmpty { Hint("No world matches \u{201C}\(filter)\u{201D}.") }
         }

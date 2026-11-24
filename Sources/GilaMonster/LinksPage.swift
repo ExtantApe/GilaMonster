@@ -124,12 +124,12 @@ struct LinksPage: View {
             if !server.hasWelcomeWagon { Callout(tone: .warning, title: "The WelcomeWagon plugin isn't installed", detail: "Without it nobody can sign in, because it's what proves who a player is.") }
             if !server.onlineModeIsOn { Callout(tone: .warning, title: "online-mode is off", detail: "A name proves nothing on this server, so sign-in refuses everyone.") }
             LabeledContent("Address players use") {
-                TextField("Address players use", text: $pageSettings.address, prompt: Text("https://links.example.com"))
-                    .labelsHidden().textFieldStyle(.roundedBorder).frame(maxWidth: 320).disabled(serving).onChange(of: pageSettings.address) { savePage() }
+                TextField("Address players use", text: $pageSettings.address, prompt: ThemedPrompt("https://links.example.com"))
+                    .labelsHidden().textFieldStyle(.themed).frame(maxWidth: 320).disabled(serving).onChange(of: pageSettings.address) { savePage() }
             }
             LabeledContent("Port on this Mac") {
                 TextField("Port on this Mac", value: $pageSettings.port, format: .number.grouping(.never))
-                    .labelsHidden().textFieldStyle(.roundedBorder).frame(maxWidth: 90).disabled(serving).onChange(of: pageSettings.port) { savePage() }
+                    .labelsHidden().textFieldStyle(.themed).frame(maxWidth: 90).disabled(serving).onChange(of: pageSettings.port) { savePage() }
             }
             Toggle("Show the server's version", isOn: $pageSettings.showServerVersion).onChange(of: pageSettings.showServerVersion) { savePage() }
             Toggle("Show plugin versions", isOn: $pageSettings.showPluginVersions).onChange(of: pageSettings.showPluginVersions) { savePage() }

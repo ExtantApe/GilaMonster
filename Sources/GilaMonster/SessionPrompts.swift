@@ -27,16 +27,17 @@ final class SessionPrompts: NSObject, UNUserNotificationCenterDelegate, @uncheck
         service.onAsk = { approval in
             SessionAskWindow.shared.show()
             SessionAskWindow.shared.callAttention(critical: true)
-            Announcer.say("\(approval.sentence). Open the request window from the GilaMonster menu to answer. No answer means no.", urgent: true, force: true)
+            Announcer.say("\(approval.sentence). Press Option-Command-R, or choose Requests Waiting for You in the Window menu or the GilaMonster menu bar item, to answer. No answer means no.", urgent: true, force: true)
             SessionPrompts.post(approval)
-            if let at = SessionAskPlacement.reminder(asked: approval.asked, deadline: approval.deadline) {
-                Task { @MainActor in
-                    try? await Task.sleep(for: .seconds(max(0, at.timeIntervalSinceNow)))
-                    guard service.waiting.contains(where: { $0.id == approval.id }) else { return }
-                    SessionAskWindow.shared.show()
-                    SessionAskWindow.shared.callAttention(critical: false)
-                }
+            SessionAskWindow.shared.scheduleReminder(for: approval.id, from: approval.asked)
+        }
+        service.onOutcome = { ask, answer in
+            let word: String = switch answer {
+            case .allowed: "Allowed"
+            case .denied: "Denied"
+            case .noAnswer: "No answer, so it was not allowed"
             }
+            Announcer.say("\(word): \(ask.sentence)", urgent: answer != .allowed, force: true)
         }
         service.onAutoAllowed = { text in
             SessionPrompts.log.notice("Allowed for today: \(text, privacy: .public)")
@@ -45,6 +46,7 @@ final class SessionPrompts: NSObject, UNUserNotificationCenterDelegate, @uncheck
         service.onAnswered = { id in
             UNUserNotificationCenter.current().removeDeliveredNotifications(withIdentifiers: [id.uuidString])
             UNUserNotificationCenter.current().removePendingNotificationRequests(withIdentifiers: [id.uuidString])
+            SessionAskWindow.shared.cancelReminder(id)
             if service.waiting.isEmpty { SessionAskWindow.shared.hide() }
         }
         guard Bundle.main.bundleIdentifier != nil else { return }
@@ -146,7 +148,32 @@ final class SessionPrompts: NSObject, UNUserNotificationCenterDelegate, @uncheck
     /// A panel that can take keyboard focus, which a non-activating utility panel won't do by itself.
     private final class AskPanel: NSPanel {
         override var canBecomeKey: Bool { true }
+        /// Escape denies the first waiting ask, which is the one Deny has focus on. It never allows anything.
+        override func cancelOperation(_ sender: Any?) {
+            if let first = SessionAccessService.shared.waiting.first { SessionAccessService.shared.resolve(first.id, allow: false) }
+            else { orderOut(nil) }
+        }
     }
+
+    private var reminders: [UUID: Task<Void, Never>] = [:]
+
+    /// The reminder sound and Dock bounce, a minute before the ask's current deadline. Called when the ask arrives and
+    /// again whenever it's given more time, so the reminder follows the new deadline.
+    func scheduleReminder(for id: UUID, from asked: Date) {
+        reminders[id]?.cancel()
+        reminders[id] = nil
+        let service = SessionAccessService.shared
+        guard let ask = service.waiting.first(where: { $0.id == id }),
+              let at = SessionAskPlacement.reminder(asked: asked, deadline: ask.deadline) else { return }
+        reminders[id] = Task { @MainActor in
+            try? await Task.sleep(for: .seconds(max(0, at.timeIntervalSinceNow)))
+            guard !Task.isCancelled, service.waiting.contains(where: { $0.id == id }) else { return }
+            show()
+            callAttention(critical: false)
+        }
+    }
+
+    func cancelReminder(_ id: UUID) { reminders[id]?.cancel(); reminders[id] = nil }
 
     /// `activate` is for when the owner asked for it (the menu, a key, a notification click): the panel becomes the
     /// key window, GilaMonster comes forward, and focus lands on the first Deny. A new ask arriving on its own leaves
@@ -209,12 +236,21 @@ struct SessionAskList: View {
     /// through: they can't land on the wrong row that way.
     @State private var changed = Date.distantPast
     @FocusState private var focused: UUID?
+    /// True for a moment after a pointer click was dropped by the guard, so the buttons look unavailable and VoiceOver
+    /// is told why.
+    @State private var dropped = false
 
     /// Whether this press counts. A click that comes from the pointer waits out the guard; the keyboard doesn't.
     private func settled() -> Bool {
         let type = NSApp.currentEvent?.type
         let pointer = type == .leftMouseDown || type == .leftMouseUp || type == .rightMouseDown || type == .rightMouseUp || type == .otherMouseDown || type == .otherMouseUp
-        return SessionAskPlacement.accepts(pointer: pointer, sinceChange: Date().timeIntervalSince(changed))
+        let ok = SessionAskPlacement.accepts(pointer: pointer, sinceChange: Date().timeIntervalSince(changed))
+        if !ok {
+            dropped = true
+            Announcer.say("The list just changed, so that click was ignored. Press again.", urgent: true, force: true)
+            Task { @MainActor in try? await Task.sleep(for: .seconds(SessionAskPlacement.clickGuard)); dropped = false }
+        }
+        return ok
     }
 
     private func focusTop() {
@@ -249,9 +285,9 @@ struct SessionAskList: View {
                             Button("Deny") { if settled() { service.resolve(ask.id, allow: false) } }.buttonStyle(.themed)
                                 .keyboardShortcut(index == 0 && focusFirst ? .defaultAction : nil)
                                 .focused($focused, equals: ask.id)
-                                .accessibilityLabel("Deny: \(ask.sentence)")
+                                .accessibilityLabel("Deny: \(ask.sentence)").opacity(dropped ? 0.4 : 1)
                             Button("Allow") { if settled() { service.resolve(ask.id, allow: true) } }.buttonStyle(.themedPrimary)
-                                .accessibilityLabel("Allow: \(ask.sentence)")
+                                .accessibilityLabel("Allow: \(ask.sentence)").opacity(dropped ? 0.4 : 1)
                             if let family = ask.action.todayFamily {
                                 Divider().frame(height: 18).padding(.horizontal, 6)
                                 Button("Allow for Today") { if settled() { service.resolveForToday(ask.id) } }.buttonStyle(.themed)
@@ -259,10 +295,20 @@ struct SessionAskList: View {
                                     .accessibilityLabel("Allow for today: \(ask.sentence). Covers \(family.words) on every server until midnight.")
                             }
                         }
-                        Button("Need More Time") { _ = service.extend(ask.id) }.buttonStyle(.link).font(.caption).frame(minHeight: 24)
-                            .disabled(ask.extensions >= SessionAccessService.maxExtensions)
-                            .helped("Waits another minute before the answer becomes no. Nothing is allowed by this.")
-                            .accessibilityLabel("Need more time for: \(ask.sentence). Adds a minute. Nothing is allowed.")
+                        let left = SessionAccessService.maxExtensions - ask.extensions
+                        Button("Need More Time (\(left) left)") {
+                            if service.extend(ask.id) {
+                                SessionAskWindow.shared.scheduleReminder(for: ask.id, from: Date())
+                                Announcer.say("One minute added, \(left - 1) left", force: true)
+                            }
+                        }
+                        .buttonStyle(.disclosureLink("plus")).font(.caption)
+                        .disabled(left <= 0)
+                        .help("Waits another minute before the answer becomes no. Nothing is allowed by this.")
+                        .accessibilityLabel("Need more time for: \(ask.sentence). Adds a minute, \(left) left. Nothing is allowed.")
+                        if left <= 0 {
+                            Text("No more time can be added. No answer means no.").font(.caption).foregroundStyle(Theme.muted)
+                        }
                     }
                 }
             }

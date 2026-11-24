@@ -49,11 +49,11 @@ struct ConfigsPage: View {
                             Spacer(minLength: 0)
                             if server.hasStagedEdit(file) {
                                 Image(systemName: "clock.fill").foregroundStyle(Theme.warning)
-                                    .helped("Edited, waiting for a restart")
+                                    .help("Edited, waiting for a restart")
                                     .accessibilityLabel("Edited, waiting for a restart")
                             } else if case .lockedWhileRunning = file.policy, !server.state.canStart {
                                 Image(systemName: "lock.fill").foregroundStyle(Theme.muted)
-                                    .helped("Locked while the server runs")
+                                    .help("Locked while the server runs")
                                     .accessibilityLabel("Locked while the server runs")
                             }
                         }

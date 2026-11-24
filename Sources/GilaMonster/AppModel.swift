@@ -304,7 +304,7 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
                     let host = NSHostingView(rootView: AnyView(RootView(model: model).tint(Theme.accent).frame(minWidth: wide ? 1700 : 0)))
                     if ProcessInfo.processInfo.environment["GILAMONSTER_SNAPSHOT_LIGHT"] != nil { host.appearance = NSAppearance(named: .aqua) }
                     if ProcessInfo.processInfo.environment["GILAMONSTER_SNAPSHOT_DARK"] != nil { host.appearance = NSAppearance(named: .darkAqua) }
-                    let window = NSWindow(contentRect: NSRect(x: -6000, y: -6000, width: 1280, height: 1000), styleMask: [.borderless], backing: .buffered, defer: false)
+                    let window = NSWindow(contentRect: NSRect(x: -6000, y: -6000, width: 1280, height: ProcessInfo.processInfo.environment["GILAMONSTER_SNAPSHOT_HEIGHT"].flatMap(Double.init).map { CGFloat($0) } ?? 1000), styleMask: [.borderless], backing: .buffered, defer: false)
                     window.isReleasedWhenClosed = false
                     window.contentView = host
                     window.orderBack(nil)
@@ -596,6 +596,10 @@ struct ServerCommands: Commands {
             }
             .keyboardShortcut("b", modifiers: [.command, .shift]).disabled(model.selected == nil)
         }
+        CommandGroup(after: .windowList) {
+            Button("Requests Waiting for You") { SessionAskWindow.shared.show(activate: true) }
+                .keyboardShortcut("r", modifiers: [.command, .option])
+        }
         CommandGroup(after: .sidebar) {
             Button(model.showIssues ? "Hide Issues" : "Show Issues") { model.showIssues.toggle(); model.issuesOpenedByHand = model.showIssues }
                 .keyboardShortcut("i", modifiers: [.command, .option])
@@ -696,6 +700,7 @@ struct SettingsView: View {
     var body: some View {
         Form {
             Picker("Theme", selection: Binding(get: { Palette.Flavor(rawValue: themeFlavor) ?? .bold }, set: { flavor in
+                Announcer.pageChanged()   // the page redraws in the new colors; its callouts aren't news
                 Theme.flavor = flavor
                 themeFlavor = flavor.rawValue
                 Announcer.say("\(flavor == .quiet ? "Quiet" : "Bold") theme", force: true)

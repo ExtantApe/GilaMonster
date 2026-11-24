@@ -18,7 +18,7 @@ jar() { # folder name version
     printf 'name: %s\nversion: %s\nmain: com.example.%s.Main\napi-version: "26.1"\nauthors: [Made-up Author]\ndescription: A made-up plugin for screenshots.\n' "$2" "$3" "$(echo "$2" | tr -cd 'A-Za-z')" > "$d/paper-plugin.yml"
     (cd "$d" && zip -q "$1/$2-$3.jar" paper-plugin.yml); rm -rf "$d"
 }
-server() { # name plugins worlds allowlist errors
+server() { # name plugins worlds allowlist errors waiting-changes
     local s="$servers/$(echo "$1" | tr ' ' '-' | tr 'A-Z' 'a-z')"; mkdir -p "$s/plugins" "$s/logs"
     printf 'motd=%s\nmax-players=20\nserver-port=25565\nwhite-list=true\n' "$1" > "$s/server.properties"
     echo "eula=true" > "$s/eula.txt"
@@ -34,6 +34,25 @@ server() { # name plugins worlds allowlist errors
     done
     { echo "["; for ((i = 1; i <= $4; i++)); do
         printf '  {"uuid": "%08x-0000-4000-8000-%012x", "name": "MadeUpPlayer%d"}' "$i" "$i" "$i"; (( i < $4 )) && echo "," || echo; done; echo "]"; } > "$s/whitelist.json"
+    if (( ${6:-0} > 0 )); then   # waiting changes: some of each kind, one with a long summary
+        python3 -I - "$s/.gilamonster/pending.json" "$6" <<'PY'
+import json, sys, uuid, datetime
+out, n = sys.argv[1], int(sys.argv[2])
+now = datetime.datetime.now(datetime.timezone.utc).strftime("%Y-%m-%dT%H:%M:%SZ")
+rows = []
+for i in range(1, n + 1):
+    if i % 3 == 0:
+        kind, text = {"config": {"path": "plugins/MadeUpPlugin%d/config.yml" % i}}, "Change plugins/MadeUpPlugin%d/config.yml: a made-up setting with a rather long description of what changed" % i
+    elif i % 3 == 1:
+        kind, text = {"pluginRemove": {"fileName": "MadeUpPlugin%d-2.%d.1.jar" % (i, i)}}, "Remove MadeUpPlugin%d" % i
+    else:
+        kind, text = {"pluginToggle": {"fileName": "MadeUpPlugin%d-2.%d.1.jar" % (i, i), "enable": False}}, "Turn off MadeUpPlugin%d" % i
+    row = {"id": str(uuid.uuid4()).upper(), "kind": kind, "summary": text, "created": now}
+    if i == 4: row["conflict"] = "Another change to the same made-up file was made after this one, so applying both would lose the first."
+    rows.append(row)
+json.dump(rows, open(out, "w"))
+PY
+    fi
     : > "$s/logs/latest.log"
     for ((i = 1; i <= $5; i++)); do
         printf '[12:0%d:00 ERROR]: Could not pass event PlayerJoinEvent to MadeUpPlugin%d v2.%d.1\njava.lang.IllegalStateException: A made-up failure with a long message that keeps going so the screen has to deal with it: the configuration value at section.subsection.key could not be read because the file was written by a newer version\n\tat com.example.MadeUpPlugin%d.Main.onJoin(Main.java:%d)\n\tat io.papermc.paper.event.Dispatcher.call(Dispatcher.java:88)\n' $((i % 10)) "$i" "$i" "$i" $((100 + i)) >> "$s/logs/latest.log"
@@ -44,7 +63,7 @@ list=()
 if [[ "$kind" == normal ]]; then
     list+=("$(server "Made-up Server" 6 2 4 0)")
 else
-    list+=("$(server "A Made-up Server With A Name Long Enough To Need Truncating" 60 30 80 12)")
+    list+=("$(server "A Made-up Server With A Name Long Enough To Need Truncating" 60 30 80 12 30)")
     for n in 2 3 4 5 6 7 8; do list+=("$(server "Made-up Server Number $n With A Long Name" 3 1 2 0)"); done
 fi
 { echo "["; for ((i = 0; i < ${#list[@]}; i++)); do printf '  "%s"' "${list[$i]}"; (( i < ${#list[@]} - 1 )) && echo "," || echo; done; echo "]"; } > "$home/servers.json"
@@ -55,7 +74,8 @@ for theme in ${THEMES:-bold quiet}; do
         dir="$out/$kind/$theme-$look"; mkdir -p "$dir"
         rm -f "$dir/overflow-report.txt"   # a run that draws nothing must not pass on an old report
         var=GILAMONSTER_SNAPSHOT_LIGHT; [[ $look == dark ]] && var=GILAMONSTER_SNAPSHOT_DARK
-        env GILAMONSTER_HOME="$home" GILAMONSTER_SERVERS="$servers" GILAMONSTER_SNAPSHOT="$dir" GILAMONSTER_SNAPSHOT_FIRST=1 \
+        [[ "$kind" == heavy ]] && height=2800 || height=1000   # tall enough that Show More and group headings are in the picture
+        env GILAMONSTER_SNAPSHOT_HEIGHT=$height GILAMONSTER_HOME="$home" GILAMONSTER_SERVERS="$servers" GILAMONSTER_SNAPSHOT="$dir" GILAMONSTER_SNAPSHOT_FIRST=1 \
             GILAMONSTER_SNAPSHOT_THEME=$theme "$var=1" perl -e 'alarm 900; exec @ARGV' .build/debug/GilaMonster >/dev/null 2>&1 || true
         echo "$kind $theme-$look: $(ls "$dir" | wc -l | tr -d ' ') pictures"
     done

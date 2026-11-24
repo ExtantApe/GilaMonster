@@ -276,7 +276,7 @@ struct Callout<Actions: View>: View {
                         .textSelection(.enabled)
                     if long {
                         Button(expanded ? "Hide Details" : "Show Details") { expanded.toggle() }
-                            .buttonStyle(.link).font(.callout).frame(minHeight: 24)
+                            .buttonStyle(.disclosureLink(expanded ? "chevron.up" : "chevron.down")).font(.callout)
                             .accessibilityHint(expanded ? "Shows only the first lines" : "Shows the whole message")
                     }
                 }
@@ -289,6 +289,7 @@ struct Callout<Actions: View>: View {
         .background(tone.wash, in: RoundedRectangle(cornerRadius: Theme.cardRadius))
         .overlay { RoundedRectangle(cornerRadius: Theme.cardRadius).strokeBorder(tone.color, lineWidth: 1) }
         .accessibilityElement(children: .contain)
+        .accessibilityLabel("\(tone.announcement.prefix): \(text.title)")
         .onAppear { announce(text.title) }
         .onChange(of: title) { announce(Overflow.callout(title: title, detail: detail).title) }
     }
@@ -488,7 +489,7 @@ struct ShowMoreButton: View {
     var body: some View {
         if expanded || hidden > 0 {
             Button(expanded ? "Show Fewer" : "Show \(hidden) More") { expanded.toggle() }
-                .buttonStyle(.link).font(.callout).frame(minHeight: 24)
+                .buttonStyle(.disclosureLink(expanded ? "chevron.up" : "chevron.down")).font(.callout)
         }
     }
 }
@@ -541,7 +542,7 @@ struct GroupHeading: View {
     init(_ text: String, help: String? = nil) { self.text = text; self.help = help }
     var body: some View {
         Text(text).font(.headline).foregroundStyle(Theme.ink).accessibilityAddTraits(.isHeader)
-            .help(help ?? "").accessibilityHint(help ?? "")
+            .help(help ?? "")
     }
 }
 
@@ -573,3 +574,50 @@ struct FocusOnOpen: ViewModifier {
 extension View {
     func focusOnOpen() -> some View { modifier(FocusOnOpen()) }
 }
+
+/// A text button that isn't told apart by color alone: underlined, with a small symbol after it. Its text is ink,
+/// which is held to 4.5:1 on every surface and wash it sits on (PaletteChecks, "link buttons").
+struct DisclosureLinkStyle: ButtonStyle {
+    let symbol: String
+    func makeBody(configuration: Configuration) -> some View { LinkBody(configuration: configuration, symbol: symbol) }
+    private struct LinkBody: View {
+        let configuration: Configuration
+        let symbol: String
+        @Environment(\.isEnabled) private var enabled
+        var body: some View {
+            HStack(spacing: 4) {
+                configuration.label.underline()
+                Image(systemName: symbol).font(.caption.weight(.semibold)).accessibilityHidden(true)
+            }
+            .foregroundStyle(Theme.ink)
+            .frame(minHeight: 24)
+            .contentShape(Rectangle())
+            .opacity(enabled ? (configuration.isPressed ? 0.6 : 1) : 0.5)
+        }
+    }
+}
+
+extension ButtonStyle where Self == DisclosureLinkStyle {
+    static func disclosureLink(_ symbol: String) -> DisclosureLinkStyle { DisclosureLinkStyle(symbol: symbol) }
+}
+
+/// A field with the control outline (3:1 on every surface) instead of the system's faint one. Give the field a prompt
+/// styled `Theme.muted` with `ThemedPrompt` so the placeholder keeps its contrast too.
+struct ThemedFieldStyle: TextFieldStyle {
+    func _body(configuration: TextField<Self._Label>) -> some View {
+        configuration
+            .textFieldStyle(.plain)
+            .foregroundStyle(Theme.ink)
+            .padding(.horizontal, 8)
+            .frame(minHeight: 28)
+            .background(Theme.surface, in: RoundedRectangle(cornerRadius: Theme.controlRadius))
+            .overlay { RoundedRectangle(cornerRadius: Theme.controlRadius).strokeBorder(Theme.controlBorder, lineWidth: 1) }
+    }
+}
+
+extension TextFieldStyle where Self == ThemedFieldStyle {
+    static var themed: ThemedFieldStyle { ThemedFieldStyle() }
+}
+
+/// A placeholder in the muted color (4.5:1 on the surfaces).
+func ThemedPrompt(_ text: String) -> Text { Text(text).foregroundStyle(Theme.muted) }
