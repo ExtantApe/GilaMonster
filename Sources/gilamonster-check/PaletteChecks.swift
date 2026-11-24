@@ -134,3 +134,26 @@ import GilaMonsterCore
     let sample = "x.foregroundStyle(.orange)"
     check(pattern.firstMatch(in: sample, range: NSRange(sample.startIndex..., in: sample)) != nil, "the rule catches a named color")
 }
+
+/// K728: the Quit question names every server it stops and what else goes with the app.
+@MainActor func quitWordingChecks() {
+    section("Quit question: names what stops, Keep Running is the default")
+    let one = QuitWording.make(running: ["made-up-server"], leftOver: [], packHost: true, sessionAccess: true)
+    equal(one.title, "Quitting stops made-up-server.", "one server is named in the title")
+    equal(one.stopButton, "Stop made-up-server and Quit", "the stop button names it too")
+    check(one.detail.contains("The resource pack downloads and session access stop with the app too."), "says the pack host and session access stop")
+    check(one.detail.contains("close the window instead"), "says how to keep everything running")
+    let two = QuitWording.make(running: ["made-up-server", "second-server"], leftOver: [], packHost: false, sessionAccess: false)
+    equal(two.title, "Quitting stops 2 servers.", "two servers are counted")
+    check(two.detail.contains("Running: made-up-server and second-server."), "and listed by name")
+    check(!two.detail.contains("stop with the app too"), "nothing else is mentioned when nothing else runs")
+    let left = QuitWording.make(running: ["a"], leftOver: ["b"], packHost: false, sessionAccess: true)
+    check(left.detail.contains("Running: a and b.") && left.detail.contains("b was left running"), "servers left running are named")
+    check(left.detail.contains("Session access stop"), "session access alone is named")
+    // The alert itself: Keep Running is the first button and takes Return; Stop is never the default.
+    let src = URL(fileURLWithPath: #filePath).deletingLastPathComponent().deletingLastPathComponent().appendingPathComponent("GilaMonster/AppModel.swift")
+    let text = (try? String(contentsOf: src, encoding: .utf8)) ?? ""
+    check(text.contains("let keep = alert.addButton(withTitle: \"Keep Running\")\n        keep.keyEquivalent = \"\\r\""), "Keep Running is first and takes Return")
+    check(text.contains("stop.keyEquivalent = \"\"") && text.contains("guard alert.runModal() == .alertSecondButtonReturn"), "only a click on Stop quits")
+    check(!text.contains("Stop running servers and quit?"), "the old one-keypress question is gone")
+}

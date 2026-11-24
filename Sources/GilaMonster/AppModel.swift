@@ -482,13 +482,25 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
             }
             return .terminateLater
         }
+        // K728 (owner, 2026-11-24: "Build and install (Recommended)"): a quit stopped a live server with one keypress, because
+        // Return chose Stop and Quit. Now the alert names what stops, and Return keeps everything running.
+        let text = QuitWording.make(running: model.servers.filter { $0.state.isLive }.map(\.profile.name),
+                                    leftOver: model.leftOver.map(\.profile.name),
+                                    packHost: model.servers.contains { $0.packHostIsListening },
+                                    sessionAccess: SessionAccessService.shared.isListening)
         let alert = NSAlert()
-        alert.messageText = "Stop running servers and quit?"
-        let others = model.leftOver.map(\.profile.name)
-        alert.informativeText = "Players will be disconnected and worlds saved first. This can take a moment." + (others.isEmpty ? "" : " This includes \(others.joined(separator: ", ")), left running the last time GilaMonster closed.")
-        alert.addButton(withTitle: "Stop and Quit")
-        alert.addButton(withTitle: "Cancel")
-        guard alert.runModal() == .alertFirstButtonReturn else { return .terminateCancel }
+        alert.alertStyle = .warning
+        alert.messageText = text.title
+        alert.informativeText = text.detail
+        let keep = alert.addButton(withTitle: "Keep Running")
+        keep.keyEquivalent = "\r"
+        let stop = alert.addButton(withTitle: text.stopButton)
+        stop.keyEquivalent = ""
+        stop.hasDestructiveAction = true
+        alert.window.initialFirstResponder = keep
+        NSAccessibility.post(element: alert.window, notification: .announcementRequested,
+                             userInfo: [.announcement: "\(text.title) \(text.detail)", .priority: NSAccessibilityPriorityLevel.high.rawValue])
+        guard alert.runModal() == .alertSecondButtonReturn else { return .terminateCancel }
         Backups.cancelInFlight()
         Task { @MainActor in
             await model.stopAll()

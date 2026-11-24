@@ -3,6 +3,11 @@
 Each audit lists what GilaMonster promises, which checks prove each promise, and the gaps. Run the checks with `swift run gilamonster-check` (offline, made-up data, about 80 seconds). The `--real-*`, `--lab` and `--sandbox` runs boot real Paper and are listed apart.
 
 
+## 2026-11-24: Quit question (K728, 0.4.1)
+- Promises: a quit with servers running names each one, says the pack downloads and session access stop too, and keeps everything running on Return.
+- Covered: wording for one server, several, servers left running, and with or without the pack host and session access (`quitWordingChecks`); the alert's button order and default read from the source in the same group.
+- Gaps skipped (and why): the alert on screen. NSAlert's own key handling is AppKit's, and the button order and key equivalents are checked; seeing it is part of the next real quit.
+
 ## 2026-11-23: the GilaMonster rename (D271, 0.4.0)
 - Promises: every name the app shows, writes or reads is GilaMonster (bundle id, data folder, per-server folder, own folder beside the servers, Keychain services, environment variables, tools); the palette keeps WCAG AA everywhere; older recipe exports still import; Sheriff accepts the new source word; nothing in the app moves old data by itself.
 - Covered: the full suite (3647 checks) under the new names, including every palette pair in both themes, four appearances and five vision simulations (`paletteChecks`), the Theme setting's default, saving and unknown values (`themeChoiceChecks`), and no color written into a view outside the theme (`noHardCodedColorChecks`); the app half's switch by `ops/scripts/rename-d271-rehearse` (24 checks, forward and back on a throwaway copy) and the Keychain helper by `rename-d271-keychain-test` (12 checks, no UI); a search showing no old name in any tracked file.

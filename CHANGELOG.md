@@ -2,6 +2,12 @@
 
 ## Unreleased
 
+## 0.4.1 (2026-11-24)
+
+Tested with the full check suite (3659 checks). The new Quit question has been checked in code and wording, but hasn't been seen on screen yet.
+
+- **Quitting asks properly when a server is running (K728).** Return used to choose Stop and Quit, so one keypress stopped a running server. Now **Keep Running** is the default. The question names each server it would stop, and says the resource pack downloads and session access stop with the app too. It also says how to keep everything running: close the window, and GilaMonster stays in the menu bar. Stopping takes a click on the stop button, which names the server. VoiceOver reads the question out when it opens.
+
 ## 0.4.0 (2026-11-23)
 
 Tested with the full check suite (3647 checks) and the rename's rehearsals on throwaway copies. Not yet seen on screen under the new name, and VoiceOver and keyboard use were reviewed from the code only.
