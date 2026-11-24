@@ -143,7 +143,7 @@ struct PackHostingCard: View {
                 Button("Copy SHA-1") { copy(sha1) }.buttonStyle(.themed).disabled(sha1 == nil)
                 Button(checking == name ? "Checking…" : "Check") { check(name, url: url, sha1: sha1) }
                     .buttonStyle(.themed).disabled(url == nil || sha1 == nil || checking != nil)
-                    .help("Downloads it from the address, as a player's game would, and compares its SHA-1.")
+                    .helped("Downloads it from the address, as a player's game would, and compares its SHA-1.")
                 Button("Host Elsewhere…") {
                     elsewhereText = settings.recipes[ResourcePacks.slug(name)]?.elsewhere ?? ""
                     elsewhere = name

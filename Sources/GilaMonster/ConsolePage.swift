@@ -11,6 +11,7 @@ struct ConsolePage: View {
     @State private var history: [String] = []
     @State private var historyIndex: Int?
     @FocusState private var commandFocused: Bool
+    @AppStorage(TextZoom.key) private var textSize = TextZoom.standard
 
     var body: some View {
         VStack(spacing: 0) {
@@ -26,7 +27,8 @@ struct ConsolePage: View {
                 .accessibilityLabel("Show")
                 Toggle("Follow", isOn: $follow).toggleStyle(.checkbox).fixedSize()
                     .frame(height: Theme.controlHeight)
-                    .help("Keep the newest output in view")
+                    .helped("Keep the newest output in view")
+                TextSizeButtons(size: $textSize)
                 Button("Copy All") {
                     NSPasteboard.general.clearContents()
                     NSPasteboard.general.setString(server.console.map(\.text).joined(separator: "\n"), forType: .string)
@@ -37,9 +39,8 @@ struct ConsolePage: View {
             .frame(maxWidth: .infinity, alignment: .leading)
             .padding(12)
 
-            ConsoleTextView(lines: visible, signature: "\(filter)|\(minimumLevel.rawValue)", follow: follow)
+            ConsoleTextView(lines: visible, signature: "\(filter)|\(minimumLevel.rawValue)|\(textSize)", follow: follow, size: textSize)
                 .overlay { Rectangle().strokeBorder(Theme.border, lineWidth: 1) }
-                .accessibilityLabel("Server output")
                 .overlay {
                     if visible.isEmpty {
                         if server.console.isEmpty {
@@ -104,6 +105,7 @@ struct ConsoleTextView: NSViewRepresentable {
     let lines: [ConsoleLine]
     let signature: String
     let follow: Bool
+    var size = TextZoom.standard
 
     final class Coordinator {
         var lastID = -1
@@ -118,6 +120,8 @@ struct ConsoleTextView: NSViewRepresentable {
         let scroll = NSTextView.scrollableTextView()
         let text = scroll.documentView as! NSTextView
         text.isEditable = false
+        text.setAccessibilityLabel("Server output")
+        text.setAccessibilityRole(.textArea)
         text.isRichText = false
         text.usesFontPanel = false
         text.drawsBackground = true
@@ -144,7 +148,7 @@ struct ConsoleTextView: NSViewRepresentable {
         let fresh = lines.drop { $0.id <= c.lastID }
         guard !fresh.isEmpty else { return }
         let block = NSMutableAttributedString()
-        for line in fresh { block.append(Self.render(line)) }
+        for line in fresh { block.append(Self.render(line, size: size)) }
         storage.beginEditing()
         storage.append(block)
         storage.endEditing()
@@ -154,9 +158,8 @@ struct ConsoleTextView: NSViewRepresentable {
         if follow { text.scrollToEndOfDocument(nil) }
     }
 
-    private static let font = NSFont.monospacedSystemFont(ofSize: NSFont.systemFontSize - 1, weight: .regular)
-
-    private static func render(_ line: ConsoleLine) -> NSAttributedString {
+    private static func render(_ line: ConsoleLine, size: Double) -> NSAttributedString {
+        let font = NSFont.monospacedSystemFont(ofSize: size, weight: .regular)
         let color: Color
         switch (line.origin, line.level) {
         case (_, .error): color = Theme.danger
@@ -165,6 +168,26 @@ struct ConsoleTextView: NSViewRepresentable {
         case (.wrapper, _): color = Theme.info
         default: color = Theme.ink
         }
-        return NSAttributedString(string: line.text + "\n", attributes: [.font: font, .foregroundColor: NSColor(color)])
+        return NSAttributedString(string: line.displayText + "\n", attributes: [.font: font, .foregroundColor: NSColor(color)])
+    }
+}
+
+/// Smaller and larger text, with Command-minus and Command-plus. Larger answers both + and = so it works without Shift.
+struct TextSizeButtons: View {
+    @Binding var size: Double
+    var body: some View {
+        HStack(spacing: 4) {
+            Button { size = TextZoom.smaller(size) } label: { Image(systemName: "textformat.size.smaller") }
+                .buttonStyle(.themed).keyboardShortcut("-", modifiers: .command)
+                .disabled(size <= TextZoom.range.lowerBound)
+                .helped("Smaller text (Command-minus)").accessibilityLabel("Smaller text")
+            Button { size = TextZoom.larger(size) } label: { Image(systemName: "textformat.size.larger") }
+                .buttonStyle(.themed).keyboardShortcut("+", modifiers: .command)
+                .disabled(size >= TextZoom.range.upperBound)
+                .helped("Larger text (Command-plus)").accessibilityLabel("Larger text")
+            Button("") { size = TextZoom.larger(size) }.keyboardShortcut("=", modifiers: .command)
+                .frame(width: 0, height: 0).opacity(0).accessibilityHidden(true)
+        }
+        .accessibilityElement(children: .contain)
     }
 }

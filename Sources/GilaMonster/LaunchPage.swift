@@ -40,7 +40,7 @@ struct LaunchPage: View {
                     }
                     .buttonStyle(.themed)
                     .disabled(preset.memoryMB > SystemInfo.memoryMB)
-                    .help(preset.memoryMB > SystemInfo.memoryMB ? "Needs more memory than this Mac has" : "\(Format.memory(mb: preset.memoryMB)), view \(preset.viewDistance), simulation \(preset.simulationDistance)")
+                    .helped(preset.memoryMB > SystemInfo.memoryMB ? "Needs more memory than this Mac has" : "\(Format.memory(mb: preset.memoryMB)), view \(preset.viewDistance), simulation \(preset.simulationDistance)")
                 }
             }
         }

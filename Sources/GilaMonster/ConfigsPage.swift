@@ -49,11 +49,11 @@ struct ConfigsPage: View {
                             Spacer(minLength: 0)
                             if server.hasStagedEdit(file) {
                                 Image(systemName: "clock.fill").foregroundStyle(Theme.warning)
-                                    .help("Edited, waiting for a restart")
+                                    .helped("Edited, waiting for a restart")
                                     .accessibilityLabel("Edited, waiting for a restart")
                             } else if case .lockedWhileRunning = file.policy, !server.state.canStart {
                                 Image(systemName: "lock.fill").foregroundStyle(Theme.muted)
-                                    .help("Locked while the server runs")
+                                    .helped("Locked while the server runs")
                                     .accessibilityLabel("Locked while the server runs")
                             }
                         }
@@ -77,6 +77,7 @@ struct ConfigEditor: View {
     @Bindable var model: AppModel
     let server: ServerController
     let file: ConfigFile
+    @AppStorage(TextZoom.key) private var textSize = TextZoom.standard
 
     private enum Mode: String, CaseIterable, Identifiable {
         case common = "Settings", full = "Full File"
@@ -107,9 +108,9 @@ struct ConfigEditor: View {
                     text: $text, saved: saved, live: server.liveConfigText(file), format: file.format,
                     isLocked: locked, running: !server.state.canStart)
             } else {
-                PlainTextEditor(text: $text, isEditable: !locked)
+                HStack { Spacer(); TextSizeButtons(size: $textSize) }
+                PlainTextEditor(text: $text, isEditable: !locked, size: textSize, label: "Contents of \(file.title)")
                     .overlay { RoundedRectangle(cornerRadius: 6).strokeBorder(Theme.controlBorder, lineWidth: 1) }
-                    .accessibilityLabel("Contents of \(file.title)")
             }
             ForEach(Array(problems.prefix(3).enumerated()), id: \.offset) { _, problem in
                 Callout(tone: .danger, title: problem.description)
@@ -342,7 +343,7 @@ struct ConfigFieldRow: View {
             .labelsHidden().fixedSize()
         case .readOnly:
             Text(field.value).font(.callout).foregroundStyle(Theme.muted).lineLimit(1)
-                .help("Edit this in the Full File view")
+                .helped("Edit this in the Full File view")
         case .int, .number:
             TextField(field.title, text: Binding(get: { field.value }, set: { onChange($0) }))
                 .labelsHidden().textFieldStyle(.roundedBorder).frame(width: 110).multilineTextAlignment(.trailing)
@@ -422,6 +423,8 @@ struct PlayerListForm: View {
 struct PlainTextEditor: NSViewRepresentable {
     @Binding var text: String
     let isEditable: Bool
+    var size = TextZoom.standard
+    var label = "File contents"
 
     func makeCoordinator() -> Coordinator { Coordinator(self) }
 
@@ -440,7 +443,8 @@ struct PlainTextEditor: NSViewRepresentable {
         view.delegate = context.coordinator
         view.isRichText = false
         view.allowsUndo = true
-        view.font = .monospacedSystemFont(ofSize: NSFont.systemFontSize, weight: .regular)
+        view.font = .monospacedSystemFont(ofSize: size, weight: .regular)
+        view.setAccessibilityLabel(label)
         view.isAutomaticQuoteSubstitutionEnabled = false
         view.isAutomaticDashSubstitutionEnabled = false
         view.isAutomaticTextReplacementEnabled = false
@@ -460,6 +464,8 @@ struct PlainTextEditor: NSViewRepresentable {
         guard let view = scroll.documentView as? NSTextView else { return }
         context.coordinator.parent = self
         view.isEditable = isEditable
+        view.setAccessibilityLabel(label)
+        if view.font?.pointSize != CGFloat(size) { view.font = .monospacedSystemFont(ofSize: size, weight: .regular) }
         if view.string != text {
             let selection = view.selectedRanges
             view.string = text

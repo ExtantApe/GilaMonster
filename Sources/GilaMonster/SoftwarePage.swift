@@ -135,7 +135,7 @@ struct ChangeVersionCard: View {
                 Button("Try on a Test Copy") { prepare(trial: true) }
                     .buttonStyle(.themedPrimary)
                     .disabled(target.isEmpty || move == .downgrade || move == .same || server.activity != nil || server.trialPhase != nil)
-                    .help("Tries this on a throwaway copy of the server first. The real server isn't touched.")
+                    .helped("Tries this on a throwaway copy of the server first. The real server isn't touched.")
                 }
                 Button(server.state.canStart ? "Install…" : "Install at Restart…") { prepare(trial: false) }
                     .buttonStyle(.themed)
@@ -144,7 +144,7 @@ struct ChangeVersionCard: View {
                     Button("Rehearse in the Lab") { rehearse() }
                         .buttonStyle(.themed)
                         .disabled(target.isEmpty || move == .downgrade || model.lab.isBusy)
-                        .help("Opens the Lab page, set to this version.")
+                        .helped("Opens the Lab page, set to this version.")
                 }
                 if checking { ProgressView().controlSize(.small).accessibilityLabel("Checking plugins") }
             }
@@ -154,7 +154,7 @@ struct ChangeVersionCard: View {
                     Button("Check with Preflight") { checkWithPreflight() }
                         .buttonStyle(.themed)
                         .disabled(target.isEmpty || move == .downgrade || move == .same || planning || server.activity != nil || server.trialPhase.map { $0 != .finished } == true)
-                        .help("Boots a throwaway copy on this version with Preflight's upgrade tool, and lists the plugins that don't start. The real server isn't touched.")
+                        .helped("Boots a throwaway copy on this version with Preflight's upgrade tool, and lists the plugins that don't start. The real server isn't touched.")
                     if planning { ProgressView().controlSize(.small).accessibilityLabel("Checking plugins with Preflight") }
                 }
                 Hint("Uses Preflight's upgrade tool \(UpgradeTool.version), downloaded once and checked. It needs Java \(UpgradeTool.javaMajor). Paper only.")

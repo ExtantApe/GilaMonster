@@ -50,10 +50,10 @@ struct ConnectionsCard: View {
                 HStack {
                     Button("Check") { check(outside: false) }.buttonStyle(.themed).disabled(checking)
                         .disabled(because: hasAnything(loaded.settings) ? nil : "Add a connection first, with Edit Connections.")
-                        .help("Checks each agent and what it forwards to on this Mac. Nothing goes over the internet.")
+                        .helped("Checks each agent and what it forwards to on this Mac. Nothing goes over the internet.")
                     Button("Check From Outside") { check(outside: true) }.buttonStyle(.themed).disabled(checking)
                         .disabled(because: hasAnything(loaded.settings) ? nil : "Add a connection first, with Edit Connections.")
-                        .help("Also connects to each public address over the internet, through the tunnel, as a player would.")
+                        .helped("Also connects to each public address over the internet, through the tunnel, as a player would.")
                     if checking { ProgressView().controlSize(.small).accessibilityLabel("Checking") }
                 }
                 HStack {

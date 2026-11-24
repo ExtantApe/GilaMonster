@@ -379,7 +379,7 @@ struct ResourcePacksPage: View {
                     TextField("Address", text: $url, prompt: Text(server.packAddress(recipe: recipe.name) ?? "https://download.mc-packs.net/pack/\(newest.sha1).zip"))
                         .accessibilityLabel("Web address of the pack")
                     Toggle("Required", isOn: $required).toggleStyle(.checkbox).fixedSize()
-                        .help("Players who decline are disconnected.")
+                        .helped("Players who decline are disconnected.")
                     Button(server.state.canStart ? "Use on This Server" : "Use at Next Restart") { apply(newest) }.buttonStyle(.themedPrimary).disabled(working != nil || chosenURL.isEmpty)
                 }
                 if let checkFailed {
@@ -790,7 +790,7 @@ struct PackBrowser: View {
                             .background(Theme.raised, in: RoundedRectangle(cornerRadius: 6))
                         Text((item.path as NSString).lastPathComponent).font(.caption2).foregroundStyle(Theme.muted).lineLimit(1).truncationMode(.middle)
                     }
-                    .help(item.path)
+                    .helped(item.path)
                     .accessibilityElement(children: .ignore)
                     .accessibilityLabel(item.path)
                 }

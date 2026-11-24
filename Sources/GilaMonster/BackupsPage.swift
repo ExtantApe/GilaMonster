@@ -188,7 +188,7 @@ struct BackupsPage: View {
                 Button { moveTarget(index, by: 1) } label: { Image(systemName: "arrow.down") }.buttonStyle(.themed).disabled(index == targets.count - 1)
                     .accessibilityLabel("Use \((path as NSString).lastPathComponent) later")
                 Button("Remove") { server.profile.backup.smart.targets.remove(at: index); server.refreshBackups() }.buttonStyle(.themed)
-                    .accessibilityLabel("Stop using \((path as NSString).lastPathComponent)")
+                    .accessibilityLabel("Remove \((path as NSString).lastPathComponent) from storage")
             }
             if !checked[index].usable { Hint(checked[index].reason) }
         }
@@ -303,7 +303,7 @@ private struct BackupRow: View {
                 HStack(spacing: 6) {
                     Text(record.date.formatted(date: .abbreviated, time: .shortened)).foregroundStyle(Theme.ink)
                     if record.pinned { Badge(text: "Pinned", tone: .info, icon: "pin.fill") }
-                    if let warning = record.warning { Badge(text: "Note", tone: .warning).help(warning) }
+                    if let warning = record.warning { Badge(text: "Note", tone: .warning).helped(warning) }
                 }
                 Hint("\(Format.bytes(record.size)) · \(record.scope.title) · \(record.software) · \(triggerTitle)")
                 if let location = record.location {

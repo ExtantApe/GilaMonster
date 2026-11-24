@@ -128,7 +128,7 @@ struct InvitesCard: View {
         if let note = address.note { Hint(note) }
         if let ticket = new.ticket {
             Button("Print Ticket…") { printing = ticket }.buttonStyle(.themed)
-                .help("A printable card with the code, where to go and a QR code that fills the code in.")
+                .helped("A printable card with the code, where to go and a QR code that fills the code in.")
         } else {
             Hint("Printed tickets need invites on in WelcomeWagon, and its page taking codes.")
         }

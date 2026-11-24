@@ -255,13 +255,13 @@ struct SessionAskList: View {
                             if let family = ask.action.todayFamily {
                                 Divider().frame(height: 18).padding(.horizontal, 6)
                                 Button("Allow for Today") { if settled() { service.resolveForToday(ask.id) } }.buttonStyle(.themed)
-                                    .help("Allows \(family.words) on every server without asking again until midnight. Each one still checks nobody is online.")
+                                    .helped("Allows \(family.words) on every server without asking again until midnight. Each one still checks nobody is online.")
                                     .accessibilityLabel("Allow for today: \(ask.sentence). Covers \(family.words) on every server until midnight.")
                             }
                         }
                         Button("Need More Time") { _ = service.extend(ask.id) }.buttonStyle(.link).font(.caption)
                             .disabled(ask.extensions >= SessionAccessService.maxExtensions)
-                            .help("Waits another minute before the answer becomes no. Nothing is allowed by this.")
+                            .helped("Waits another minute before the answer becomes no. Nothing is allowed by this.")
                             .accessibilityLabel("Need more time for: \(ask.sentence). Adds a minute. Nothing is allowed.")
                     }
                 }

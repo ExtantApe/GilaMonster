@@ -53,7 +53,7 @@ struct LabPage: View {
                         Button("Run Checks") { runChecks() }
                             .buttonStyle(.themedPrimary)
                             .disabled(lab.isBusy || included.isEmpty)
-                            .help(lab.isBusy ? "A run is going now." : included.isEmpty ? "Tick at least one check first." : "Runs the ticked checks in order.")
+                            .helped(lab.isBusy ? "A run is going now." : included.isEmpty ? "Tick at least one check first." : "Runs the ticked checks in order.")
                         Spacer()
                     }
                     keepRow
@@ -76,7 +76,7 @@ struct LabPage: View {
         VStack(alignment: .leading, spacing: 6) {
             if lab.isBusy, lab.keepRequest == nil {
                 Button("Keep This Lab") { lab.keepCopy(note: note) }.buttonStyle(.themed)
-                    .help("Saves a copy of this run's lab just before it's deleted.")
+                    .helped("Saves a copy of this run's lab just before it's deleted.")
             } else {
                 Toggle(lab.isBusy ? "Keep a copy of this Lab when the run ends" : "Keep a copy of the Lab after the next run", isOn: Binding(
                     get: { lab.keepRequest != nil },
@@ -221,7 +221,7 @@ struct LabStationRow: View {
             }
             if case .failed(acknowledged: false) = light, !station.isOptional {
                 Button("Continue Anyway") { lab.continueAnyway(station) }.buttonStyle(.themed)
-                    .help("Unlocks the next check. This light stays red.")
+                    .helped("Unlocks the next check. This light stays red.")
             }
             if open, let result, hasDetails {
                 StationDetails(result: result).frame(maxWidth: .infinity, alignment: .leading).padding(.leading, 52)

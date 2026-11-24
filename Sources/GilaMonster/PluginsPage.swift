@@ -47,7 +47,7 @@ struct PluginsPage: View {
                     .buttonStyle(.themed).disabled(server.checkingPlugins)
                 if !server.pluginsWithoutSource.isEmpty {
                     Button("Find Sources (\(server.pluginsWithoutSource.count))…") { findingSources = true }.buttonStyle(.themed)
-                        .help("Looks up where the plugins with no source come from, so they can get update checks.")
+                        .helped("Looks up where the plugins with no source come from, so they can get update checks.")
                 }
                 if !updatable.isEmpty {
                     Button("Update All (\(updatable.count))") {
@@ -84,18 +84,18 @@ struct PluginsPage: View {
     @ViewBuilder private func statusBadge(_ p: InstalledPlugin, problem: String?) -> some View {
         let record = server.record(for: p)
         if let problem {
-            Badge(text: "Problem", tone: .danger).help(problem)
+            Badge(text: "Problem", tone: .danger).helped(problem)
         } else if record.policy == .pinned {
             Badge(text: "Kept at this version", tone: .neutral, icon: "pin.fill")
         } else if server.pending.contains(where: { $0.target == "plugin:\(p.key)" || $0.target == "file:\(p.fileName)" }) {
             Badge(text: "Waiting for restart", tone: .warning, icon: "clock.fill")
         } else if let available = record.available {
-            Badge(text: "\(available.version)", tone: available.compatibility.verdict == .unknown ? .neutral : .info, icon: "arrow.down.circle.fill")
-                .help("\(available.compatibility.verdict.title): \(available.compatibility.reason)")
+            Badge(text: "Update \(available.version)", tone: available.compatibility.verdict == .unknown ? .neutral : .info, icon: "arrow.down.circle.fill")
+                .helped("\(available.compatibility.verdict.title): \(available.compatibility.reason)")
         } else if record.lastError != nil {
-            Badge(text: "Check failed", tone: .warning).help(record.lastError ?? "")
+            Badge(text: "Check failed", tone: .warning).helped(record.lastError ?? "")
         } else if record.note != nil, record.lastCheck != nil {
-            Badge(text: "See details", tone: .info).help(record.note ?? "")
+            Badge(text: "See details", tone: .info).helped(record.note ?? "")
         } else if record.lastCheck != nil {
             Badge(text: "Up to date", tone: .good)
         } else if record.source.isSet {
@@ -193,7 +193,7 @@ struct PluginDetail: View {
                             Task { await server.startTrial(.pluginUpdate(name: plugin.name)) }
                         }
                         .buttonStyle(.themed).disabled(server.trialPhase != nil)
-                        .help("Tries this update on a throwaway copy of the server first")
+                        .helped("Tries this update on a throwaway copy of the server first")
                     }
                     Button("Install") { server.attempt { try await server.installUpdate(for: plugin) } }
                         .buttonStyle(.themedPrimary).disabled(server.activity != nil)
@@ -273,7 +273,7 @@ struct PluginDetail: View {
         }
         .fixedSize()
         .disabled(!server.state.canStart)
-        .help(server.state.canStart ? "Put an earlier jar back" : "Stop the server first")
+        .helped(server.state.canStart ? "Put an earlier jar back" : "Stop the server first")
     }
 }
 

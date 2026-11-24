@@ -190,7 +190,7 @@ struct OverviewPage: View {
                     Badge(text: String(format: "%.1f", tps.oneMinute), tone: tps.isHealthy ? .good : .warning)
                 }
                 .accessibilityElement(children: .combine)
-                .help("20 is perfect. Below about 18, players start to notice lag. Last 5 and 15 minutes: \(String(format: "%.1f", tps.fiveMinutes)), \(String(format: "%.1f", tps.fifteenMinutes)).")
+                .helped("20 is perfect. Below about 18, players start to notice lag. Last 5 and 15 minutes: \(String(format: "%.1f", tps.fiveMinutes)), \(String(format: "%.1f", tps.fifteenMinutes)).")
             }
             if let mspt = server.mspt, server.state == .running {
                 Fact(label: "Time per tick", value: String(format: "%.1f ms of 50", mspt))
@@ -273,7 +273,7 @@ struct ConnectCheckRow: View {
                 .disabled(because: server.state != .running && !checking ? "Start the server first. This checks it from the internet." : nil)
             if checking { ProgressView().controlSize(.small).accessibilityLabel("Checking") }
         }
-        .help("Asks an outside service to try connecting. This shares your public address with api.ipify.org and api.mcsrvstat.us.")
+        .helped("Asks an outside service to try connecting. This shares your public address with api.ipify.org and api.mcsrvstat.us.")
     }
 
     private func run() {
@@ -350,7 +350,7 @@ struct ServerIconCard: View {
         .disabled(icon.inUse || !icon.fits)
         .accessibilityLabel("\(icon.name)\(icon.inUse ? ", in use" : "")\(icon.fits ? "" : ", \(icon.width) by \(icon.height), not usable")")
         .accessibilityHint(icon.inUse || !icon.fits ? "" : "Makes this the server icon")
-        .help(icon.fits ? (icon.inUse ? "In use" : "Use this icon") : "Minecraft needs 64×64. Add it again to have it scaled.")
+        .helped(icon.fits ? (icon.inUse ? "In use" : "Use this icon") : "Minecraft needs 64×64. Add it again to have it scaled.")
     }
 
     private func add() {

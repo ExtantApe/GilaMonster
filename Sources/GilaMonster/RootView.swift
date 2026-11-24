@@ -345,18 +345,18 @@ struct ServerToolbar: ToolbarContent {
             if server.state.canStart {
                 Button { Task { await server.start() } } label: { Label("Start", systemImage: "play.fill") }
                     .disabled(!server.canStartNow)
-                    .help(server.busyWith.map { "Wait: \($0)…" } ?? "Start the server (⌘R)")
+                    .helped(server.busyWith.map { "Wait: \($0)…" } ?? "Start the server (⌘R)")
             } else {
                 Button { server.stop() } label: { Label("Stop", systemImage: "stop.fill") }
                     .disabled(server.state != .running && server.state != .starting)
-                    .help("Stop the server (⌘.)")
+                    .helped("Stop the server (⌘.)")
             }
             Button { server.restart() } label: { Label("Restart", systemImage: "arrow.clockwise") }
                 .disabled(server.state != .running)
-                .help("Restart the server (⇧⌘R)")
+                .helped("Restart the server (⇧⌘R)")
             if server.state == .stopping {
                 Button(role: .destructive) { server.forceStop() } label: { Label("Force Stop", systemImage: "bolt.slash.fill") }
-                    .help("Stop immediately without waiting for a clean save")
+                    .helped("Stop immediately without waiting for a clean save")
             }
             Button {
                 let shown = model.showIssues && (model.issuesOpenedByHand || openIssues > 0)
@@ -365,7 +365,7 @@ struct ServerToolbar: ToolbarContent {
             } label: {
                 Label("Issues", systemImage: openIssues > 0 ? "exclamationmark.bubble.fill" : "exclamationmark.bubble")
             }
-            .help("Show or hide the Issues panel (⌥⌘I)")
+            .helped("Show or hide the Issues panel (⌥⌘I)")
             .accessibilityValue("\(openIssues) open")
         }
     }
@@ -502,7 +502,7 @@ struct RenameSheet: View {
                 Button("Cancel") { dismiss() }.buttonStyle(.themed).keyboardShortcut(.cancelAction)
                 Spacer()
                 Button("Rename Everywhere…") { deep = true }.buttonStyle(.themed)
-                    .help("Also updates the folder, start scripts and other places the name is used, with a preview first")
+                    .helped("Also updates the folder, start scripts and other places the name is used, with a preview first")
                 Button("Rename") { rename() }.buttonStyle(.themedPrimary).keyboardShortcut(.defaultAction)
             }
         }

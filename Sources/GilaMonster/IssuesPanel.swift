@@ -28,7 +28,7 @@ struct IssuesPanel: View {
                     } label: {
                         Label("Issue actions", systemImage: "ellipsis.circle").labelStyle(.iconOnly)
                     }
-                    .menuStyle(.borderlessButton).fixedSize().help("Issue actions")
+                    .menuStyle(.borderlessButton).fixedSize().helped("Issue actions")
                 }
                 Picker("Show", selection: $showing) {
                     ForEach(Filter.allCases) { Text($0.rawValue).tag($0) }
@@ -165,9 +165,9 @@ struct IssueRow: View {
             }
             if issue.status == .open {
                 Button("Mark Resolved") { server.setIssueStatus(.resolved, id: issue.id) }.buttonStyle(.themed)
-                    .help("Hide this until it happens again")
+                    .helped("Hide this until it happens again")
                 Button("Ignore") { server.setIssueStatus(.ignored, id: issue.id) }.buttonStyle(.themed)
-                    .help("Keep counting, but stop showing it as open")
+                    .helped("Keep counting, but stop showing it as open")
             } else {
                 Button("Reopen") { server.setIssueStatus(.open, id: issue.id) }.buttonStyle(.themed)
             }
@@ -176,7 +176,7 @@ struct IssueRow: View {
                 NSPasteboard.general.setString(issue.report, forType: .string)
             }
             .buttonStyle(.themed)
-            .help("Copy this issue as Markdown")
+            .helped("Copy this issue as Markdown")
             if let url = searchURL { Link("Search the Web", destination: url).buttonStyle(.themed) }
         }
     }

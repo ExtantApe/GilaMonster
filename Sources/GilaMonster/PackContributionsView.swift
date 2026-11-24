@@ -134,7 +134,7 @@ struct PackContributionsView: View {
         .frame(width: 44, height: 44)
         .background(Theme.raised, in: RoundedRectangle(cornerRadius: 5))
         .overlay(RoundedRectangle(cornerRadius: 5).stroke(used ? Tone.good.color : Color.clear, lineWidth: 2))
-        .help("\(title(copy.pack))\(used ? ", used in the build" : "")")
+        .helped("\(title(copy.pack))\(used ? ", used in the build" : "")")
         .accessibilityElement(children: .ignore)
         .accessibilityLabel("\(title(copy.pack))\(used ? ", used in the build" : "")")
     }

@@ -544,3 +544,10 @@ struct GroupHeading: View {
             .help(help ?? "").accessibilityHint(help ?? "")
     }
 }
+
+extension View {
+    /// A tooltip that VoiceOver and Voice Control users get too: the same words as the accessibility hint.
+    func helped(_ text: String) -> some View {
+        help(text).accessibilityHint(text)
+    }
+}

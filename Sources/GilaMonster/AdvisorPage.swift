@@ -695,9 +695,9 @@ private struct AdvisorCard: View {
                 Text(verbatim: item.details).foregroundStyle(Theme.ink).fixedSize(horizontal: false, vertical: true).textSelection(.enabled)
                 HStack {
                     Button("Done") { AdvisorCenter.shared.dismiss(item, server: server, forGood: false) }.buttonStyle(.themed)
-                        .help("Removes this. If the problem is still there, a later check may raise it again.")
+                        .helped("Removes this. If the problem is still there, a later check may raise it again.")
                     Button("Don't Raise This Again") { AdvisorCenter.shared.dismiss(item, server: server, forGood: true) }.buttonStyle(.themed)
-                        .help("Tells future checks you've decided this isn't worth raising.")
+                        .helped("Tells future checks you've decided this isn't worth raising.")
                     Button("Copy") {
                         NSPasteboard.general.clearContents()
                         NSPasteboard.general.setString("Written by AI from filtered logs, so check it before acting on it.\n\n\(item.title)\n\n\(item.details)", forType: .string)
