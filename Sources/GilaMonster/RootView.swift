@@ -4,6 +4,7 @@ import SwiftUI
 
 struct RootView: View {
     @Bindable var model: AppModel
+    @AppStorage(ThemeChoice.key) private var themeFlavor = Palette.Flavor.bold.rawValue
 
     var body: some View {
         // Without the sheets: adding or setting up a server writes to its folder.
@@ -17,6 +18,11 @@ struct RootView: View {
                     WelcomeView(model: model)
                 }
             }
+            // A new theme redraws the page content, since colors are read when drawn. The sheets above it, and the
+            // window, are left alone, so a sheet that's open stays open.
+            .id(themeFlavor)
+            .onChange(of: model.page) { Announcer.pageChanged() }
+            .onChange(of: model.selectedID) { Announcer.pageChanged() }
             .sheet(isPresented: $model.showAddServer) { AddServerSheet(model: model) }
             .sheet(item: $model.labSetup) { request in LabSetupSheet(model: model, then: request.then) }
             .sheet(isPresented: $model.showFolderSetup, onDismiss: offerServers) { ServersFolderSheet() }
@@ -370,6 +376,14 @@ struct ServerToolbar: ToolbarContent {
 struct ActivityBar: View {
     let server: ServerController
     var body: some View {
+        Group { bar }
+            .onChange(of: server.activity) { old, new in
+                if old == nil, let new { Announcer.say("\(new)", force: true) }
+                else if let old, new == nil { Announcer.say("Activity ended: \(old)", force: true) }
+            }
+    }
+
+    @ViewBuilder private var bar: some View {
         if let activity = server.activity {
             HStack(spacing: 10) {
                 if let progress = server.activityProgress {

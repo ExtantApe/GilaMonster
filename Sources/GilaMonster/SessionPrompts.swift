@@ -27,6 +27,7 @@ final class SessionPrompts: NSObject, UNUserNotificationCenterDelegate, @uncheck
         service.onAsk = { approval in
             SessionAskWindow.shared.show()
             SessionAskWindow.shared.callAttention(critical: true)
+            Announcer.say("\(approval.sentence). Open the request window from the GilaMonster menu to answer. No answer means no.", urgent: true, force: true)
             SessionPrompts.post(approval)
             if let at = SessionAskPlacement.reminder(asked: approval.asked, deadline: approval.deadline) {
                 Task { @MainActor in
@@ -105,8 +106,7 @@ final class SessionPrompts: NSObject, UNUserNotificationCenterDelegate, @uncheck
             case Self.deny: SessionAccessService.shared.resolve(id, allow: false)
             default:
                 // Clicking the notification itself answers nothing: it brings the ask window forward.
-                SessionAskWindow.shared.show()
-                NSApp.activate()
+                SessionAskWindow.shared.show(activate: true)
             }
         }
     }
@@ -143,16 +143,25 @@ final class SessionPrompts: NSObject, UNUserNotificationCenterDelegate, @uncheck
     private var panel: NSPanel?
     private var attention: Int?
 
-    func show() {
+    /// A panel that can take keyboard focus, which a non-activating utility panel won't do by itself.
+    private final class AskPanel: NSPanel {
+        override var canBecomeKey: Bool { true }
+    }
+
+    /// `activate` is for when the owner asked for it (the menu, a key, a notification click): the panel becomes the
+    /// key window, GilaMonster comes forward, and focus lands on the first Deny. A new ask arriving on its own leaves
+    /// whatever the owner is typing alone, and announces itself instead.
+    func show(activate: Bool = false) {
         if panel == nil {
-            let p = NSPanel(contentRect: NSRect(x: 0, y: 0, width: 520, height: 180),
-                            styleMask: [.titled, .closable, .utilityWindow, .nonactivatingPanel], backing: .buffered, defer: false)
+            let p = AskPanel(contentRect: NSRect(x: 0, y: 0, width: 520, height: 180),
+                             styleMask: [.titled, .closable, .utilityWindow, .nonactivatingPanel], backing: .buffered, defer: false)
             p.title = "A session is asking"
             p.level = .statusBar
             p.isReleasedWhenClosed = false
             p.hidesOnDeactivate = false
             p.collectionBehavior = [.canJoinAllSpaces, .fullScreenAuxiliary]
-            p.contentView = NSHostingView(rootView: SessionAskList(service: .shared).padding(18).frame(width: 520).tint(Theme.accent))
+            p.setAccessibilityLabel("A session is asking")
+            p.contentView = NSHostingView(rootView: SessionAskList(service: .shared, focusFirst: true).padding(18).frame(width: 520).tint(Theme.accent))
             panel = p
         }
         guard let panel else { return }
@@ -161,7 +170,13 @@ final class SessionPrompts: NSObject, UNUserNotificationCenterDelegate, @uncheck
         if let content = SessionAskPlacement.frame(size: size, pointer: NSEvent.mouseLocation, screens: screens) {
             panel.setFrame(panel.frameRect(forContentRect: content), display: true)
         }
-        panel.orderFrontRegardless()
+        if activate {
+            NSApp.activate()
+            panel.makeKeyAndOrderFront(nil)
+            NotificationCenter.default.post(name: .askPanelFocus, object: nil)
+        } else {
+            panel.orderFrontRegardless()
+        }
         NSAccessibility.post(element: panel as Any, notification: .windowCreated)
     }
 
@@ -179,21 +194,40 @@ final class SessionPrompts: NSObject, UNUserNotificationCenterDelegate, @uncheck
     }
 }
 
+extension Notification.Name {
+    /// Sent when the ask panel was opened by the owner, so the first Deny takes focus.
+    static let askPanelFocus = Notification.Name("gilamonster.askPanelFocus")
+}
+
 /// Each waiting ask with Deny and Allow. Used by the ask window and by Settings.
 struct SessionAskList: View {
     let service: SessionAccessService
-    /// When the rows last changed. A click in the moment after is ignored, so a row that lapses and lets the next one
-    /// move up under the pointer can't take a click meant for it (K721 review).
+    /// True in the ask window: the first Deny takes focus when the window opens, and Return means Deny.
+    var focusFirst = false
+    /// When the rows last changed. A pointer click in the moment after is ignored, so a row that lapses and lets the
+    /// next one move up under the pointer can't take a click meant for it (K721 review). Key presses go straight
+    /// through: they can't land on the wrong row that way.
     @State private var changed = Date.distantPast
+    @FocusState private var focused: UUID?
 
-    private func settled() -> Bool { Date().timeIntervalSince(changed) > 0.8 }
+    /// Whether this press counts. A click that comes from the pointer waits out the guard; the keyboard doesn't.
+    private func settled() -> Bool {
+        let type = NSApp.currentEvent?.type
+        let pointer = type == .leftMouseDown || type == .leftMouseUp || type == .rightMouseDown || type == .rightMouseUp || type == .otherMouseDown || type == .otherMouseUp
+        return SessionAskPlacement.accepts(pointer: pointer, sinceChange: Date().timeIntervalSince(changed))
+    }
+
+    private func focusTop() {
+        guard focusFirst, let first = service.waiting.first else { return }
+        focused = first.id
+    }
 
     var body: some View {
         VStack(alignment: .leading, spacing: 10) {
             if service.waiting.isEmpty {
                 Text("Nothing is waiting.").foregroundStyle(Theme.muted)
             }
-            ForEach(service.waiting) { ask in
+            ForEach(Array(service.waiting.enumerated()), id: \.element.id) { index, ask in
                 HStack(alignment: .firstTextBaseline) {
                     VStack(alignment: .leading, spacing: 2) {
                         Text(ask.sentence).foregroundStyle(Theme.ink).fixedSize(horizontal: false, vertical: true)
@@ -205,23 +239,36 @@ struct SessionAskList: View {
                             let left = max(0, Int(ask.deadline.timeIntervalSince(context.date).rounded(.up)))
                             Text("The name is the session's own. No answer in \(left / 60):\(String(format: "%02d", left % 60)) means no.")
                                 .font(.caption).monospacedDigit().foregroundStyle(Theme.muted).fixedSize(horizontal: false, vertical: true)
-                                .accessibilityLabel("The name is the session's own. No answer in \(left) seconds means no.")
+                                // A second-by-second label would make VoiceOver chatter, so it says the minutes.
+                                .accessibilityLabel("The name is the session's own. No answer in about \(max(1, (left + 30) / 60)) minutes means no.")
                         }
                     }
                     Spacer(minLength: 12)
-                    Button("Deny") { if settled() { service.resolve(ask.id, allow: false) } }.buttonStyle(.themed)
-                        .accessibilityLabel("Deny: \(ask.sentence)")
-                    Button("Allow") { if settled() { service.resolve(ask.id, allow: true) } }.buttonStyle(.themedPrimary)
-                        .accessibilityLabel("Allow: \(ask.sentence)")
-                    if let family = ask.action.todayFamily {
-                        Divider().frame(height: 18).padding(.horizontal, 6)
-                        Button("Allow for Today") { if settled() { service.resolveForToday(ask.id) } }.buttonStyle(.themed)
-                            .help("Allows \(family.words) on every server without asking again until midnight. Each one still checks nobody is online.")
-                            .accessibilityLabel("Allow for today: \(ask.sentence). Covers \(family.words) on every server until midnight.")
+                    VStack(alignment: .trailing, spacing: 6) {
+                        HStack {
+                            Button("Deny") { if settled() { service.resolve(ask.id, allow: false) } }.buttonStyle(.themed)
+                                .keyboardShortcut(index == 0 && focusFirst ? .defaultAction : nil)
+                                .focused($focused, equals: ask.id)
+                                .accessibilityLabel("Deny: \(ask.sentence)")
+                            Button("Allow") { if settled() { service.resolve(ask.id, allow: true) } }.buttonStyle(.themedPrimary)
+                                .accessibilityLabel("Allow: \(ask.sentence)")
+                            if let family = ask.action.todayFamily {
+                                Divider().frame(height: 18).padding(.horizontal, 6)
+                                Button("Allow for Today") { if settled() { service.resolveForToday(ask.id) } }.buttonStyle(.themed)
+                                    .help("Allows \(family.words) on every server without asking again until midnight. Each one still checks nobody is online.")
+                                    .accessibilityLabel("Allow for today: \(ask.sentence). Covers \(family.words) on every server until midnight.")
+                            }
+                        }
+                        Button("Need More Time") { _ = service.extend(ask.id) }.buttonStyle(.link).font(.caption)
+                            .disabled(ask.extensions >= SessionAccessService.maxExtensions)
+                            .help("Waits another minute before the answer becomes no. Nothing is allowed by this.")
+                            .accessibilityLabel("Need more time for: \(ask.sentence). Adds a minute. Nothing is allowed.")
                     }
                 }
             }
         }
-        .onChange(of: service.waiting.map(\.id)) { changed = Date() }
+        .onChange(of: service.waiting.map(\.id)) { changed = Date(); focusTop() }
+        .onAppear { focusTop() }
+        .onReceive(NotificationCenter.default.publisher(for: .askPanelFocus)) { _ in focusTop() }
     }
 }

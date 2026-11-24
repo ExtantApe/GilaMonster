@@ -132,7 +132,9 @@ public struct SessionApproval: Identifiable, Equatable, Sendable {
     public let server: String
     public let recipe: String?
     public let asked: Date
-    public let deadline: Date
+    public var deadline: Date
+    /// How many times the owner asked for more time (SessionAccessService.extend).
+    public var extensions = 0
 
     /// "Head of Games wants to stop Made-up Server". The caller's name is their own claim.
     public var sentence: String { "\(caller) wants to \(action.verb(recipe: recipe)) \(server)" }
@@ -173,11 +175,26 @@ extension SessionAccessService {
         finish(id, .allowed)
     }
 
+    /// Most times one ask can be given more time, so an ask can't be kept open for ever.
+    public static let maxExtensions = 3
+
+    /// The owner pressed "Need More Time": the ask waits `approvalExtension` seconds longer, up to `maxExtensions`
+    /// times. Nothing is allowed by this, and the default is still no when time runs out. Returns whether it extended.
+    @discardableResult
+    public func extend(_ id: UUID) -> Bool {
+        guard answers[id] != nil, let i = waiting.firstIndex(where: { $0.id == id }), waiting[i].extensions < Self.maxExtensions else { return false }
+        waiting[i].extensions += 1
+        waiting[i].deadline = waiting[i].deadline.addingTimeInterval(approvalExtension)
+        extraWait[id, default: 0] += approvalExtension
+        return true
+    }
+
     /// The menu bar's revoke: every grant ends now.
     public func revokeToday() { today.revokeAll() }
 
     func finish(_ id: UUID, _ answer: Answer) {
         guard let c = answers.removeValue(forKey: id) else { return }
+        extraWait[id] = nil
         waiting.removeAll { $0.id == id }
         onAnswered?(id)
         c.resume(returning: answer == .allowed)
@@ -194,6 +211,10 @@ extension SessionAccessService {
             onAsk(approval)
             Task { @MainActor [weak self] in
                 try? await Task.sleep(nanoseconds: UInt64(wait * 1_000_000_000))
+                // "Need more time" adds to extraWait while this sleeps; each addition is waited out before the no.
+                while let self, self.answers[approval.id] != nil, let more = self.extraWait.removeValue(forKey: approval.id), more > 0 {
+                    try? await Task.sleep(nanoseconds: UInt64(more * 1_000_000_000))
+                }
                 self?.finish(approval.id, .noAnswer)
             }
         }

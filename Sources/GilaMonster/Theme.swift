@@ -289,6 +289,13 @@ struct Callout<Actions: View>: View {
         .background(tone.wash, in: RoundedRectangle(cornerRadius: Theme.cardRadius))
         .overlay { RoundedRectangle(cornerRadius: Theme.cardRadius).strokeBorder(tone.color.opacity(0.6), lineWidth: 1) }
         .accessibilityElement(children: .contain)
+        .onAppear { announce(text.title) }
+        .onChange(of: title) { announce(Overflow.callout(title: title, detail: detail).title) }
+    }
+
+    private func announce(_ title: String) {
+        let word = tone.announcement
+        Announcer.say("\(word.prefix): \(title)", urgent: word.urgent)
     }
 }
 
@@ -318,10 +325,19 @@ struct Fact: View {
     let label: String
     let value: String
     var body: some View {
-        HStack(alignment: .firstTextBaseline) {
-            Text(label).foregroundStyle(Theme.muted)
-            Spacer(minLength: 8)
-            Text(value).foregroundStyle(Theme.ink).multilineTextAlignment(.trailing).textSelection(.enabled)
+        // Side by side when it fits (about 280 pt and up), stacked below that so a long value gets a whole line.
+        ViewThatFits(in: .horizontal) {
+            HStack(alignment: .firstTextBaseline) {
+                Text(label).foregroundStyle(Theme.muted).lineLimit(1)
+                Spacer(minLength: 8)
+                Text(value).foregroundStyle(Theme.ink).lineLimit(1).textSelection(.enabled)
+            }
+            .frame(minWidth: 280)
+            VStack(alignment: .leading, spacing: 1) {
+                Text(label).foregroundStyle(Theme.muted)
+                Text(value).foregroundStyle(Theme.ink).fixedSize(horizontal: false, vertical: true).textSelection(.enabled)
+            }
+            .frame(maxWidth: .infinity, alignment: .leading)
         }
         .accessibilityElement(children: .combine)
     }

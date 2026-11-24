@@ -378,6 +378,9 @@ public final class SessionAccessService {
     @ObservationIgnored var lastToday: Set<UUID> = []
     /// How long a request waits for Allow before it counts as no.
     public var approvalWait: TimeInterval = 120
+    /// What "Need More Time" adds.
+    public var approvalExtension: TimeInterval = 60
+    var extraWait: [UUID: TimeInterval] = [:]
     /// Set by the app: shows the Allow notification. Nil means nobody can be asked, so every ask is refused.
     @ObservationIgnored public var onAsk: (@MainActor (SessionApproval) -> Void)?
     /// Set by the app: takes a notification away once its request is answered or lapses.

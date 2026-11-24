@@ -144,8 +144,9 @@ struct InvitesCard: View {
         if more { Hint("Showing the newest \(invites.count). Older invites are in WelcomeWagon's own list: /welcomewagon invite list.") }
         ForEach(invites) { invite in
             HStack {
-                Text(invite.name).foregroundStyle(Theme.ink).textSelection(.enabled)
-                Hint(invite.stateText() + (invite.profiles.isEmpty ? ", lobby only" : ", " + labels(invite.profiles)))
+                Text(invite.name).foregroundStyle(Theme.ink).textSelection(.enabled).rowName(invite.name)
+                let state = invite.stateText() + (invite.profiles.isEmpty ? ", lobby only" : ", " + labels(invite.profiles))
+                Hint(state).lineLimit(2).truncationMode(.tail).help(state)
                 Spacer()
                 if invite.isOpen() {
                     Hint("until \(invite.expires.formatted(date: .abbreviated, time: .omitted))")

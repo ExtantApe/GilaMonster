@@ -32,4 +32,10 @@ public enum SessionAskPlacement {
         let at = deadline.addingTimeInterval(-60)
         return at.timeIntervalSince(asked) >= 20 ? at : nil
     }
+
+    /// The click guard on Allow and Deny (K721): a click in the moment after the rows change is ignored, so a row that
+    /// lapses and lets the next one move up under the pointer can't take a click meant for the old one. A key press
+    /// can't land on the wrong row that way, so only pointer clicks wait.
+    public static let clickGuard: TimeInterval = 0.8
+    public static func accepts(pointer: Bool, sinceChange: TimeInterval) -> Bool { !pointer || sinceChange > clickGuard }
 }

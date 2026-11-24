@@ -541,7 +541,6 @@ struct GilaMonsterApp: App {
     var body: some Scene {
         Window("GilaMonster", id: "main") {
             RootView(model: model)
-                .id(themeFlavor)  // a new theme redraws everything, since colors are read when drawn
                 .frame(minWidth: 1120, minHeight: 640)
                 .tint(Theme.accent)
                 .preferredColorScheme(scheme)
@@ -576,7 +575,7 @@ struct ServerCommands: Commands {
             Button("Start") { if let s = model.selected { Task { await s.start() } } }
                 .keyboardShortcut("r").disabled(model.selected?.canStartNow != true)
             Button("Stop") { model.selected?.stop() }
-                .keyboardShortcut(".").disabled(model.selected?.state != .running && model.selected?.state != .starting)
+                .keyboardShortcut(".", modifiers: [.command, .control]).disabled(model.selected?.state != .running && model.selected?.state != .starting)
             Button("Restart") { model.selected?.restart() }
                 .keyboardShortcut("r", modifiers: [.command, .shift]).disabled(model.selected?.state != .running)
             Divider()
@@ -642,7 +641,7 @@ struct StatusMenu: View {
 
     var body: some View {
         if !SessionAccessService.shared.waiting.isEmpty {
-            Button("Requests Waiting for You (\(SessionAccessService.shared.waiting.count))…") { SessionAskWindow.shared.show() }
+            Button("Requests Waiting for You (\(SessionAccessService.shared.waiting.count))…") { SessionAskWindow.shared.show(activate: true) }
             Divider()
         }
         let today = SessionAccessService.shared.today.active(now: Date())
@@ -687,6 +686,7 @@ struct SettingsView: View {
             Picker("Theme", selection: Binding(get: { Palette.Flavor(rawValue: themeFlavor) ?? .bold }, set: { flavor in
                 Theme.flavor = flavor
                 themeFlavor = flavor.rawValue
+                Announcer.say("\(flavor == .quiet ? "Quiet" : "Bold") theme", force: true)
             })) {
                 Text("Bold").tag(Palette.Flavor.bold)
                 Text("Quiet").tag(Palette.Flavor.quiet)
