@@ -51,7 +51,7 @@ struct ServersFolderSheet: View {
     var body: some View {
         VStack(alignment: .leading, spacing: 14) {
             Image(nsImage: NSApp.applicationIconImage).resizable().frame(width: 64, height: 64).accessibilityHidden(true)
-            Text("Where should your servers live?").font(.title2.weight(.semibold)).foregroundStyle(Theme.ink)
+            SheetTitle("Where should your servers live?")
             Text(message).foregroundStyle(Theme.ink).fixedSize(horizontal: false, vertical: true)
             if let error { Callout(tone: .danger, title: error) }
             VStack(alignment: .leading, spacing: 8) {
@@ -411,7 +411,7 @@ struct BlockersSheet: View {
 
     var body: some View {
         VStack(alignment: .leading, spacing: 14) {
-            Text("Before this server can start").font(.title2.weight(.semibold)).foregroundStyle(Theme.ink)
+            SheetTitle("Before this server can start")
             ForEach(server.blockers) { blocker in
                 Card {
                     VStack(alignment: .leading, spacing: 8) {
@@ -488,9 +488,9 @@ struct RenameSheet: View {
 
     var body: some View {
         VStack(alignment: .leading, spacing: 12) {
-            Text("Rename Server").font(.title2.weight(.semibold)).foregroundStyle(Theme.ink)
+            SheetTitle("Rename Server")
             Form {
-                TextField("Name in GilaMonster", text: $name)
+                TextField("Name in GilaMonster", text: $name).focusOnOpen()
                 TextField("Server message", text: $message)
                 TextField("Folder name", text: $folder).disabled(!server.state.canStart)
             }
@@ -552,7 +552,7 @@ struct AddServerSheet: View {
 
     var body: some View {
         VStack(alignment: .leading, spacing: 14) {
-            Text("Add a Server").font(.title2.weight(.semibold)).foregroundStyle(Theme.ink)
+            SheetTitle("Add a Server")
             Picker("How", selection: $mode) {
                 ForEach(Mode.allCases) { Text($0.rawValue).tag($0) }
             }
@@ -587,7 +587,7 @@ struct AddServerSheet: View {
             }
 
             LabeledContent("Name in GilaMonster") {
-                TextField("Name in GilaMonster", text: $name, prompt: Text(folder?.lastPathComponent ?? "My Server"))
+                TextField("Name in GilaMonster", text: $name, prompt: Text(folder?.lastPathComponent ?? "My Server")).focusOnOpen()
                     .labelsHidden().textFieldStyle(.roundedBorder)
             }
 

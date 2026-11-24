@@ -83,7 +83,7 @@ struct ResourcePacksPage: View {
             Text(serveWarning)
         }
         .alert("New recipe", isPresented: $newRecipe) {
-            TextField("Name", text: $newName)
+            TextField("Name", text: $newName).focusOnOpen()
             Button("Create") { createRecipe() }
             Button("Cancel", role: .cancel) {}
         } message: {
@@ -632,7 +632,7 @@ struct UpdateReviewSheet: View {
 
     var body: some View {
         VStack(alignment: .leading, spacing: 12) {
-            Text("Update \(pending.pack.title) to \(pending.version.version)?").font(.title2.weight(.semibold)).foregroundStyle(Theme.ink)
+            SheetTitle("Update \(pending.pack.title) to \(pending.version.version)?")
             Text("In this recipe: \(pending.changes.summary).").foregroundStyle(Theme.ink)
             if !pending.changes.lostPicks.isEmpty {
                 Callout(tone: .warning, title: pending.changes.lostPicks.count == 1 ? "1 file you picked a winner for is gone" : "\(pending.changes.lostPicks.count) files you picked winners for are gone", detail: pending.changes.lostPicks.prefix(6).joined(separator: "\n"))
@@ -683,7 +683,7 @@ struct ShareSheet: View {
 
     var body: some View {
         VStack(alignment: .leading, spacing: 12) {
-            Text("Share \(recipe.name)").font(.title2.weight(.semibold)).foregroundStyle(Theme.ink)
+            SheetTitle("Share \(recipe.name)")
             if let error { Callout(tone: .danger, title: error) }
             Card(title: "The recipe", systemImage: "doc.text") {
                 Text("A small file saying where to get each pack and how to rank them. Others download the packs from their authors.").foregroundStyle(Theme.ink).fixedSize(horizontal: false, vertical: true)

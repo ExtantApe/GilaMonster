@@ -340,7 +340,7 @@ struct ServerIconCard: View {
                         Color.clear.frame(width: 64, height: 64)
                     }
                 }
-                .overlay(RoundedRectangle(cornerRadius: 4).stroke(icon.inUse ? Theme.accent : Theme.muted.opacity(0.3), lineWidth: icon.inUse ? 3 : 1))
+                .overlay(RoundedRectangle(cornerRadius: 4).stroke(icon.inUse ? Theme.accent : Theme.controlBorder, lineWidth: icon.inUse ? 3 : 1))
                 Text(icon.name).font(.caption).foregroundStyle(Theme.ink).lineLimit(2).multilineTextAlignment(.center).frame(width: 76)
                 if icon.inUse { Text("In use").font(.caption.weight(.semibold)).foregroundStyle(Theme.accent) }
                 else if !icon.fits { Text("\(icon.width)×\(icon.height)").font(.caption).foregroundStyle(Theme.warning) }

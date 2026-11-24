@@ -88,7 +88,7 @@ struct ThemeButtonStyle: ButtonStyle {
                 .font(.body.weight(kind == .primary ? .semibold : .regular))
                 .foregroundStyle(foreground)
                 .padding(.horizontal, 12)
-                .frame(minHeight: Theme.controlHeight)
+                .frame(minWidth: 24, minHeight: Theme.controlHeight)
                 .background(fill, in: RoundedRectangle(cornerRadius: Theme.controlRadius))
                 .overlay {
                     RoundedRectangle(cornerRadius: Theme.controlRadius).strokeBorder(borderColor, lineWidth: 1)
@@ -276,7 +276,7 @@ struct Callout<Actions: View>: View {
                         .textSelection(.enabled)
                     if long {
                         Button(expanded ? "Hide Details" : "Show Details") { expanded.toggle() }
-                            .buttonStyle(.link).font(.callout)
+                            .buttonStyle(.link).font(.callout).frame(minHeight: 24)
                             .accessibilityHint(expanded ? "Shows only the first lines" : "Shows the whole message")
                     }
                 }
@@ -287,7 +287,7 @@ struct Callout<Actions: View>: View {
         .padding(12)
         .frame(maxWidth: .infinity, alignment: .leading)
         .background(tone.wash, in: RoundedRectangle(cornerRadius: Theme.cardRadius))
-        .overlay { RoundedRectangle(cornerRadius: Theme.cardRadius).strokeBorder(tone.color.opacity(0.6), lineWidth: 1) }
+        .overlay { RoundedRectangle(cornerRadius: Theme.cardRadius).strokeBorder(tone.color, lineWidth: 1) }
         .accessibilityElement(children: .contain)
         .onAppear { announce(text.title) }
         .onChange(of: title) { announce(Overflow.callout(title: title, detail: detail).title) }
@@ -488,7 +488,7 @@ struct ShowMoreButton: View {
     var body: some View {
         if expanded || hidden > 0 {
             Button(expanded ? "Show Fewer" : "Show \(hidden) More") { expanded.toggle() }
-                .buttonStyle(.link).font(.callout)
+                .buttonStyle(.link).font(.callout).frame(minHeight: 24)
         }
     }
 }
@@ -521,7 +521,7 @@ struct ProblemList: View {
             .padding(12)
             .frame(maxWidth: .infinity, alignment: .leading)
             .background(tone.wash, in: RoundedRectangle(cornerRadius: Theme.cardRadius))
-            .overlay { RoundedRectangle(cornerRadius: Theme.cardRadius).strokeBorder(tone.color.opacity(0.6), lineWidth: 1) }
+            .overlay { RoundedRectangle(cornerRadius: Theme.cardRadius).strokeBorder(tone.color, lineWidth: 1) }
             .accessibilityElement(children: .contain)
         }
     }
@@ -550,4 +550,26 @@ extension View {
     func helped(_ text: String) -> some View {
         help(text).accessibilityHint(text)
     }
+}
+
+/// The title at the top of a sheet, announced as a heading.
+struct SheetTitle: View {
+    let text: String
+    init(_ text: String) { self.text = text }
+    var body: some View {
+        Text(text).font(.title2.weight(.semibold)).foregroundStyle(Theme.ink)
+            .accessibilityAddTraits(.isHeader)
+    }
+}
+
+/// Puts the keyboard cursor in this field when its sheet opens, so typing can start at once.
+struct FocusOnOpen: ViewModifier {
+    @FocusState private var focused: Bool
+    func body(content: Content) -> some View {
+        content.focused($focused).onAppear { focused = true }
+    }
+}
+
+extension View {
+    func focusOnOpen() -> some View { modifier(FocusOnOpen()) }
 }

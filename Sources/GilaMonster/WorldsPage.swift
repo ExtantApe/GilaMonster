@@ -256,7 +256,7 @@ private struct SheetFrame<Content: View, Actions: View>: View {
 
     var body: some View {
         VStack(alignment: .leading, spacing: 14) {
-            Text(title).font(.title2.weight(.semibold)).foregroundStyle(Theme.ink)
+            SheetTitle(title)
             content
             if let error { Callout(tone: .danger, title: error) }
             HStack {
@@ -281,7 +281,7 @@ private struct CreateWorldSheet: View {
     var body: some View {
         SheetFrame(title: "New World") {
             Form {
-                TextField("Name", text: $world.name, prompt: Text("mining"))
+                TextField("Name", text: $world.name, prompt: Text("mining")).focusOnOpen()
                 Picker("Type", selection: $world.environment) {
                     ForEach(WorldEnvironment.allCases) { Text($0.title).tag($0) }
                 }
@@ -344,7 +344,7 @@ private struct EditWorldSheet: View {
     var body: some View {
         SheetFrame(title: "\(world.title) Settings") {
             Form {
-                TextField("Display name", text: $alias)
+                TextField("Display name", text: $alias).focusOnOpen()
                 Picker("Game mode", selection: $gamemode) {
                     ForEach(options(Self.gamemodes, gamemode), id: \.self) { Text($0.capitalized).tag($0) }
                 }
@@ -391,7 +391,7 @@ private struct CloneWorldSheet: View {
 
     var body: some View {
         SheetFrame(title: "Copy \(world.title)") {
-            TextField("New world's name", text: $target).textFieldStyle(.roundedBorder)
+            TextField("New world's name", text: $target).textFieldStyle(.roundedBorder).focusOnOpen()
             if !target.isEmpty, !Multiverse.isValidName(target) { Callout(tone: .warning, title: "Names can use letters, numbers, - and _.") }
             Hint("This world is \(Format.bytes(world.size)). The copy needs about that much free disk space.")
         } actions: {

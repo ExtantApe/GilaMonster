@@ -180,7 +180,7 @@ struct AllowlistPage: View {
             }
             if cut.hidden > 0 || showAllEntries {
                 Button(showAllEntries ? "Show Fewer" : "Show All (\(matches.count))") { showAllEntries.toggle() }
-                    .buttonStyle(.link).font(.callout)
+                    .buttonStyle(.link).font(.callout).frame(minHeight: 24)
             }
             if server.hasSheriff, sheriffProfiles == nil { Hint("Profiles can be changed once GilaMonster can reach Sheriff.") }
             else if server.hasLuckPerms, !server.hasSheriff, !running { Hint("Groups can only be changed while the server runs.") }
@@ -361,7 +361,7 @@ private struct GroupEditor: View {
 
     var body: some View {
         VStack(alignment: .leading, spacing: 12) {
-            Text("Groups for \(entry.name)").font(.title2.weight(.semibold)).foregroundStyle(Theme.ink)
+            SheetTitle("Groups for \(entry.name)")
             if let current {
                 ForEach(offered, id: \.self) { group in
                     Toggle(group, isOn: Binding(get: { chosen.contains(group) }, set: { on in

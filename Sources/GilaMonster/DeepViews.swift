@@ -56,8 +56,8 @@ struct WorldRenameSheet: View {
 
     var body: some View {
         VStack(alignment: .leading, spacing: 12) {
-            Text("Rename \(world.title)").font(.title2.weight(.semibold)).foregroundStyle(Theme.ink)
-            TextField("New name", text: $name).textFieldStyle(.roundedBorder)
+            SheetTitle("Rename \(world.title)")
+            TextField("New name", text: $name).textFieldStyle(.roundedBorder).focusOnOpen()
                 .onChange(of: name) { plan = problem == nil ? server.worldRenamePlan(world, to: name) : nil }
             if !name.isEmpty, let problem { Callout(tone: .warning, title: problem) }
             if plan != nil {
@@ -103,8 +103,8 @@ struct ServerRenameSheet: View {
 
     var body: some View {
         VStack(alignment: .leading, spacing: 12) {
-            Text("Rename Everywhere").font(.title2.weight(.semibold)).foregroundStyle(Theme.ink)
-            TextField("New server name", text: $name, prompt: Text("Sonoran Realms")).textFieldStyle(.roundedBorder)
+            SheetTitle("Rename Everywhere")
+            TextField("New server name", text: $name, prompt: Text("My Server")).textFieldStyle(.roundedBorder).focusOnOpen()
                 .onChange(of: name) { _, _ in
                     if !formats.contains(folder) { folder = formats.first ?? "" }
                     rebuild()
@@ -239,8 +239,11 @@ struct PlayersPage: View {
                 Image(systemName: server.players.contains(player.title) ? "circle.fill" : "circle")
                     .font(.caption2).foregroundStyle(Theme.accent)
                     .accessibilityLabel(server.players.contains(player.title) ? "Online" : "Offline")
-                Text(player.title).foregroundStyle(Theme.ink).lineLimit(1)
+                Text(player.title).foregroundStyle(Theme.ink).rowName(player.title)
+                Spacer(minLength: 4)
+                if server.players.contains(player.title) { Text("online").font(.caption).foregroundStyle(Theme.muted).fixedSize() }
             }
+            .accessibilityElement(children: .combine)
             .tag(player.id)
         }
         .scrollContentBackground(.hidden)
@@ -440,7 +443,7 @@ struct PlayerRestoreSheet: View {
 
     var body: some View {
         VStack(alignment: .leading, spacing: 12) {
-            Text("Restore \(snapshot.name)").font(.title2.weight(.semibold)).foregroundStyle(Theme.ink)
+            SheetTitle("Restore \(snapshot.name)")
             Hint("From \(snapshot.date.formatted(date: .abbreviated, time: .shortened)). The world isn't touched, and their current state is snapshotted first.")
             Picker("What to restore", selection: $inventoryOnly) {
                 Text("Inventory and ender chest").tag(true)
@@ -497,7 +500,7 @@ struct MergeSheet: View {
 
     var body: some View {
         VStack(alignment: .leading, spacing: 12) {
-            Text("Merge \(suggestion.from.title)").font(.title2.weight(.semibold)).foregroundStyle(Theme.ink)
+            SheetTitle("Merge \(suggestion.from.title)")
             Text(suggestion.reason).foregroundStyle(Theme.ink).fixedSize(horizontal: false, vertical: true)
             if suggestion.to.uuid.isEmpty {
                 Picker("Merge into", selection: $targetID) {
@@ -651,7 +654,7 @@ struct BackupDiffSheet: View {
 
     var body: some View {
         VStack(alignment: .leading, spacing: 12) {
-            Text("Compare Backups").font(.title2.weight(.semibold)).foregroundStyle(Theme.ink)
+            SheetTitle("Compare Backups")
             Picker("Compare \(record.date.formatted(date: .abbreviated, time: .shortened)) with", selection: $otherName) {
                 Text("Choose a backup").tag("")
                 ForEach(others) { Text($0.date.formatted(date: .abbreviated, time: .shortened)).tag($0.fileName) }

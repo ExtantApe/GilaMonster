@@ -203,7 +203,7 @@ struct LabStationRow: View {
                 VStack(alignment: .leading, spacing: 2) {
                     HStack(spacing: 8) {
                         Text(station.title).font(.body.weight(.semibold)).foregroundStyle(Theme.ink)
-                        if station.isOptional { Text("Optional").font(.system(size: 11)).foregroundStyle(Theme.muted) }
+                        if station.isOptional { Text("Optional").font(.caption).foregroundStyle(Theme.muted) }
                     }
                     Hint(detailLine)
                     if case .failed = light, let next = nextStep { Text(next).font(.callout).foregroundStyle(Theme.ink).fixedSize(horizontal: false, vertical: true) }
@@ -413,7 +413,7 @@ struct LabSetupSheet: View {
 
     var body: some View {
         VStack(alignment: .leading, spacing: 14) {
-            Label("Set up the Lab", systemImage: "flask").font(.title2.weight(.semibold)).foregroundStyle(Theme.ink)
+            Label("Set up the Lab", systemImage: "flask").font(.title2.weight(.semibold)).foregroundStyle(Theme.ink).accessibilityAddTraits(.isHeader)
             Text("The Lab is a practice server in \((LabFiles.root.path as NSString).abbreviatingWithTildeInPath). GilaMonster fills it with its own worlds and bot players, and uses it to rehearse upgrades. It never copies your real worlds or players.")
                 .foregroundStyle(Theme.ink).fixedSize(horizontal: false, vertical: true)
             Text("Running it means running a Minecraft server, so Mojang's EULA applies. Your acceptance covers the Lab and its rebuilds.")

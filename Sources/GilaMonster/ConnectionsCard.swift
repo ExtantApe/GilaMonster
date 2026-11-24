@@ -179,13 +179,13 @@ struct ConnectionsEditor: View {
 
     var body: some View {
         VStack(alignment: .leading, spacing: 14) {
-            Text("Connections").font(.title2.weight(.semibold))
+            Text("Connections").font(.title2.weight(.semibold)).accessibilityAddTraits(.isHeader)
             Hint("Addresses and names are saved in this server's .gilamonster/connections.json. Secrets are never saved there: they go in your Keychain, or stay in the service's own file.")
             if loaded.unreadable {
                 Callout(tone: .warning, title: "The old file couldn't be read", detail: "Saving moves it aside as connections.json.unreadable, so nothing is lost.")
             }
             LabeledContent("Players join with") {
-                TextField("play.example.test", text: $settings.playerAddress).textFieldStyle(.roundedBorder)
+                TextField("play.example.test", text: $settings.playerAddress).textFieldStyle(.roundedBorder).focusOnOpen()
                     .accessibilityLabel("Address players join with")
             }
             LabeledContent("Web map") {

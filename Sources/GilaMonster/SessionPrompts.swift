@@ -259,7 +259,7 @@ struct SessionAskList: View {
                                     .accessibilityLabel("Allow for today: \(ask.sentence). Covers \(family.words) on every server until midnight.")
                             }
                         }
-                        Button("Need More Time") { _ = service.extend(ask.id) }.buttonStyle(.link).font(.caption)
+                        Button("Need More Time") { _ = service.extend(ask.id) }.buttonStyle(.link).font(.caption).frame(minHeight: 24)
                             .disabled(ask.extensions >= SessionAccessService.maxExtensions)
                             .helped("Waits another minute before the answer becomes no. Nothing is allowed by this.")
                             .accessibilityLabel("Need more time for: \(ask.sentence). Adds a minute. Nothing is allowed.")

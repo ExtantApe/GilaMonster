@@ -370,7 +370,7 @@ struct SourceEditor: View {
 
     var body: some View {
         VStack(alignment: .leading, spacing: 14) {
-            Text("Where \(plugin.name) comes from").font(.title2.weight(.semibold)).foregroundStyle(Theme.ink)
+            SheetTitle("Where \(plugin.name) comes from")
             SourceForm(source: $source).formStyle(.columns)
             if let tested { TestResult(result: tested) }
             HStack {
@@ -413,7 +413,7 @@ struct FindSourcesSheet: View {
 
     var body: some View {
         VStack(alignment: .leading, spacing: 12) {
-            Text("Find plugin sources").font(.title2.weight(.semibold)).foregroundStyle(Theme.ink)
+            SheetTitle("Find plugin sources")
             Hint("A source is where a plugin's updates come from. These matches are by name, so check any that look wrong before using them.")
             if let proposals {
                 ScrollView {
@@ -488,7 +488,7 @@ struct AddPluginSheet: View {
 
     var body: some View {
         VStack(alignment: .leading, spacing: 14) {
-            Text("Add a Plugin").font(.title2.weight(.semibold)).foregroundStyle(Theme.ink)
+            SheetTitle("Add a Plugin")
             SourceForm(source: $source).formStyle(.columns)
             Hint(server.state.canStart ? "It will be installed straight away." : "Plugins can't be added to a running server safely, so this waits for the next restart.")
             if let error { Callout(tone: .danger, title: error) }

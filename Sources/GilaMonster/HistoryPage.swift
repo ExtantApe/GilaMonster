@@ -99,11 +99,13 @@ struct MetricChart: View {
                 LineMark(x: .value("Time", point.0), y: .value(title, point.1))
                     .foregroundStyle(tone.color)
                     .interpolationMethod(.monotone)
+                    .lineStyle(StrokeStyle(lineWidth: 2))
             }
             .chartYScale(domain: domain ?? 0...max(1, (points.map(\.1).max() ?? 1) * 1.15))
             .frame(height: 120)
             .accessibilityLabel(title)
             .accessibilityValue(summary(points.map(\.1)))
+            .accessibilityChartDescriptor(SeriesDescriptor(title: title, yTitle: title, points: points.map { ($0.0, $0.1) }))
         }
     }
 
@@ -121,10 +123,16 @@ struct PlayersChart: View {
                 AreaMark(x: .value("Time", s.date), y: .value("Players", s.players))
                     .foregroundStyle(Theme.accent.opacity(0.35))
                     .interpolationMethod(.stepEnd)
+                // A solid line on top of the wash, so the count is readable without telling two tints apart.
+                LineMark(x: .value("Time", s.date), y: .value("Players", s.players))
+                    .foregroundStyle(Theme.accent)
+                    .interpolationMethod(.stepEnd)
+                    .lineStyle(StrokeStyle(lineWidth: 2))
             }
             .frame(height: 100)
             .accessibilityLabel("Players online")
             .accessibilityValue("Highest \(samples.map(\.players).max() ?? 0)")
+            .accessibilityChartDescriptor(SeriesDescriptor(title: "Players online", yTitle: "Players", points: samples.map { ($0.date, Double($0.players)) }, whole: true))
         }
     }
 }
@@ -244,5 +252,35 @@ struct PlayerStatsCard: View {
                 Fact(label: stat.title, value: stat.display(stats.value(stat)))
             }
         }
+    }
+}
+
+/// What VoiceOver's Audio Graphs and chart exploration read: one series over time, with its range and each point.
+struct SeriesDescriptor: AXChartDescriptorRepresentable {
+    let title: String
+    let yTitle: String
+    let points: [(Date, Double)]
+    var whole = false
+
+    func makeChartDescriptor() -> AXChartDescriptor {
+        let times = points.map { $0.0.timeIntervalSinceReferenceDate }
+        let values = points.map(\.1)
+        let xAxis = AXNumericDataAxisDescriptor(
+            title: "Time", range: (times.min() ?? 0)...max(times.max() ?? 1, (times.min() ?? 0) + 1), gridlinePositions: []
+        ) { Date(timeIntervalSinceReferenceDate: $0).formatted(date: .abbreviated, time: .shortened) }
+        let low = values.min() ?? 0, high = values.max() ?? 1
+        let yAxis = AXNumericDataAxisDescriptor(title: yTitle, range: min(0, low)...max(high, low + 1), gridlinePositions: []) {
+            whole ? String(Int($0.rounded())) : String(format: "%.1f", $0)
+        }
+        let series = AXDataSeriesDescriptor(name: title, isContinuous: !whole,
+                                            dataPoints: points.map { AXDataPoint(x: $0.0.timeIntervalSinceReferenceDate, y: $0.1) })
+        return AXChartDescriptor(title: title, summary: nil, xAxis: xAxis, yAxis: yAxis, additionalAxes: [], series: [series])
+    }
+
+    func updateChartDescriptor(_ descriptor: AXChartDescriptor) {
+        let fresh = makeChartDescriptor()
+        descriptor.series = fresh.series
+        descriptor.xAxis = fresh.xAxis
+        descriptor.yAxis = fresh.yAxis
     }
 }

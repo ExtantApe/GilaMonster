@@ -170,7 +170,7 @@ struct QuestionsCard: View {
             .padding(12)
             .frame(maxWidth: .infinity, alignment: .leading)
             .background(Tone.warning.wash, in: RoundedRectangle(cornerRadius: Theme.cardRadius))
-            .overlay { RoundedRectangle(cornerRadius: Theme.cardRadius).strokeBorder(Tone.warning.color.opacity(0.6), lineWidth: 1) }
+            .overlay { RoundedRectangle(cornerRadius: Theme.cardRadius).strokeBorder(Tone.warning.color, lineWidth: 1) }
             .accessibilityElement(children: .contain)
         }
     }
@@ -186,7 +186,7 @@ struct SheriffProfileSheet: View {
 
     var body: some View {
         VStack(alignment: .leading, spacing: 12) {
-            Text("Profiles for \(entry.name)").font(.title2.weight(.semibold)).foregroundStyle(Theme.ink)
+            SheetTitle("Profiles for \(entry.name)")
             SheriffApproval(server: server, uuid: entry.uuid, name: entry.name, profiles: profiles) { _ in changed() }
             if server.hasWelcomeWagon { Divider(); WebSignInSection(server: server, name: entry.name) }
             HStack {
