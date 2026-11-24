@@ -4,10 +4,11 @@
 
 ## 0.4.0 (2026-11-23)
 
-Tested with the full check suite (3637 checks) and the rename's rehearsals on throwaway copies. Not yet seen on screen under the new name.
+Tested with the full check suite (3647 checks) and the rename's rehearsals on throwaway copies. Not yet seen on screen under the new name, and VoiceOver and keyboard use were reviewed from the code only.
 
 - **GilaMonster is the app's new name (D271, D272, D279).** The app, its command-line tools (`gilamonster-session`, `gilamonster-mcp`), its bundle id (`com.extantape.gilamonster`), its data folder (`~/Library/Application Support/GilaMonster`), each server's `.gilamonster` folder and the folder beside your servers all carry the new name. A one-time switch on the owner's Mac moved the old folders, saved settings and Keychain items across; nothing in the app migrates by itself. macOS treats it as a new app, so it asks once for notifications and Keychain access.
-- **New icon and colors.** A pixel-art Gila monster, and a palette of cream and basalt with turquoise for structure and red-orange for the main action. Every pair still meets WCAG AA in light, dark and Increase Contrast, and under color blindness simulations. The colors now live in one table with role names, ready for the Bold and Quiet themes in the next release.
+- **New icon, and Bold and Quiet themes (owner: "Looks good, Bold default (Recommended)").** A pixel-art Gila monster in the Dock and the menu bar, where a dot shows a server running. Settings has **Theme**, Bold or Quiet, next to **Appearance** (Match System, Light or Dark), so there are four looks. Bold is the default. Every pair of colors meets WCAG AA in all four, with Increase Contrast, and under color blindness simulations. The colors come from Brand's tokens through `scripts/palette-tokens.py`, so a new palette is one file. A new check fails if a view writes a color of its own instead of using the theme.
+- **Allowlist wording.** Four places that still said whitelist now say allowlist.
 - **Sessions tell Sheriff a change came from `gilamonster`.** Recipe exports say `gilamonster-pack-recipe`, and older exports still import.
 
 ## 0.3.0 (2026-11-23)

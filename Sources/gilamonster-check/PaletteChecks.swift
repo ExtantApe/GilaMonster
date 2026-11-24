@@ -92,3 +92,45 @@ import GilaMonsterCore
     check(!QuitReason.user.unattended, "a person quitting is still asked")
     equal(QuitReason.code("shut"), 0x73687574, "the four letters make the code macOS uses")
 }
+
+/// The Theme setting (owner, 2026-11-23: "Looks good, Bold default (Recommended)"): Bold by default, Quiet remembered,
+/// and anything else saved reads as Bold. Both flavors are held to WCAG by paletteChecks.
+@MainActor func themeChoiceChecks() {
+    section("Theme setting: Bold by default, and remembered")
+    let suite = "gilamonster-check.theme.\(UUID().uuidString)"
+    guard let defaults = UserDefaults(suiteName: suite) else { check(false, "a scratch settings domain"); return }
+    defer { defaults.removePersistentDomain(forName: suite) }
+    equal(ThemeChoice.load(defaults), .bold, "nothing saved means Bold")
+    ThemeChoice.save(.quiet, defaults)
+    equal(ThemeChoice.load(defaults), .quiet, "Quiet is remembered")
+    equal(defaults.string(forKey: ThemeChoice.key), "quiet", "it's saved under the documented key")
+    defaults.set("loud", forKey: ThemeChoice.key)
+    equal(ThemeChoice.load(defaults), .bold, "an unknown value reads as Bold")
+    ThemeChoice.save(.bold, defaults)
+    equal(ThemeChoice.load(defaults), .bold, "Bold is remembered")
+    check(Palette.Flavor.allCases.count == 2, "two flavors, both checked for contrast")
+    check(Palette.accent.hex(.light, .bold) != Palette.accent.hex(.light, .quiet) || Palette.pop.hex(.light, .bold) != Palette.pop.hex(.light, .quiet), "Bold and Quiet differ")
+}
+
+/// Every view takes its colors from Theme, so a theme change reaches everything and Increase Contrast is followed.
+/// Reads the app's own source: a color written straight into a view fails, unless its line says theme-exempt and why.
+@MainActor func noHardCodedColorChecks() {
+    section("Views take every color from the theme")
+    let root = URL(fileURLWithPath: #filePath).deletingLastPathComponent().deletingLastPathComponent().appendingPathComponent("GilaMonster")
+    guard let files = try? FileManager.default.contentsOfDirectory(at: root, includingPropertiesForKeys: nil) else { check(false, "the app's source is readable"); return }
+    let pattern = try! NSRegularExpression(pattern: #"Color\((red|white|hue|\.sRGB)|NSColor\((srgbRed|red|white|calibrated|deviceRed)|Color\.(red|green|blue|orange|yellow|pink|purple|gray|black|white|teal|mint|cyan|indigo|brown)\b|\((\.red|\.green|\.blue|\.orange|\.yellow|\.pink|\.purple|\.gray|\.black|\.white|\.teal|\.mint|\.cyan|\.indigo|\.brown)\)|NSColor\.system[A-Z]"#)
+    var found: [String] = []
+    var swiftFiles = 0
+    for file in files where file.pathExtension == "swift" && file.lastPathComponent != "Theme.swift" {
+        swiftFiles += 1
+        guard let text = try? String(contentsOf: file, encoding: .utf8) else { continue }
+        for (n, line) in text.split(separator: "\n", omittingEmptySubsequences: false).enumerated() where !line.contains("theme-exempt") {
+            let s = String(line)
+            if pattern.firstMatch(in: s, range: NSRange(s.startIndex..., in: s)) != nil { found.append("\(file.lastPathComponent):\(n + 1)") }
+        }
+    }
+    check(swiftFiles > 20, "read the app's views (\(swiftFiles) files)")
+    check(found.isEmpty, "no view writes a color of its own: \(found.joined(separator: ", "))")
+    let sample = "x.foregroundStyle(.orange)"
+    check(pattern.firstMatch(in: sample, range: NSRange(sample.startIndex..., in: sample)) != nil, "the rule catches a named color")
+}

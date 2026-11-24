@@ -539,7 +539,7 @@ struct GilaMonsterApp: App {
             if AdvisorTrial.isOn {
                 Text("This trial has no settings.").padding(40)
             } else {
-                SettingsView(model: model).tint(Theme.accent).preferredColorScheme(scheme).id(themeFlavor)
+                SettingsView(model: model).tint(Theme.accent).preferredColorScheme(scheme)
             }
         }
 
@@ -612,7 +612,7 @@ struct MenuBarLabel: View {
         let image = NSImage(size: size, flipped: false) { rect in
             base.draw(in: rect)
             if dot {
-                NSColor.black.setFill()
+                NSColor.black.setFill()  // theme-exempt: a template image; macOS colors it for the menu bar
                 NSBezierPath(ovalIn: NSRect(x: rect.maxX - 6, y: 0, width: 6, height: 6)).fill()
             }
             return true
@@ -659,7 +659,7 @@ struct StatusMenu: View {
             openWindow(id: "main")
             NSApp.activate(ignoringOtherApps: true)
         }
-        Button("Quit") { NSApp.terminate(nil) }
+        Button("Quit") { NSApp.terminate(nil) }.keyboardShortcut("q")
     }
 }
 
