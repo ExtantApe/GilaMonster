@@ -288,6 +288,11 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
             model.showFolderSetup = false
             try? FileOps.ensureDir(URL(fileURLWithPath: folder))
             var windows: [NSWindow] = []   // Kept until the end: closing them while SwiftUI settles isn't safe.
+            // The no-overflow report: a page whose fitting width is wider than the window it's drawn in has something that
+            // can't shrink (a long name on one line, say). Read by gilamonster-check --snapshot.
+            let windowWidth: CGFloat = 1280
+            var pagesChecked = 0
+            var overflowing: [String] = []
             // GILAMONSTER_SNAPSHOT_FIRST draws only the first server's pages (the others still show in the sidebar).
             let drawn = ProcessInfo.processInfo.environment["GILAMONSTER_SNAPSHOT_FIRST"] != nil ? Array(model.servers.prefix(1)) : model.servers
             for server in drawn where ProcessInfo.processInfo.environment["GILAMONSTER_SNAPSHOT_DIALOGS_ONLY"] == nil {
@@ -303,6 +308,9 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
                     window.orderBack(nil)
                     try? await Task.sleep(for: .seconds(page == .overview ? 5 : page == .resourcePacks ? 12 : 2.5))
                     host.layoutSubtreeIfNeeded()
+                    pagesChecked += 1
+                    let fitting = host.fittingSize.width
+                    if fitting > windowWidth + 0.5 { overflowing.append("OVERFLOW \(page.rawValue): fitting width \(Int(fitting.rounded())) is over the window's \(Int(windowWidth))") }
                     if let rep = host.bitmapImageRepForCachingDisplay(in: host.bounds) {
                         host.cacheDisplay(in: host.bounds, to: rep)
                         let name = "\(server.profile.name.replacingOccurrences(of: " ", with: "-"))-\(page.rawValue).png"
@@ -312,6 +320,8 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
                     windows.append(window)
                 }
             }
+            let report = (["checked \(pagesChecked) pages"] + overflowing).joined(separator: "\n") + "\n"
+            try? report.write(to: URL(fileURLWithPath: folder).appendingPathComponent("overflow-report.txt"), atomically: true, encoding: .utf8)
             // The dialogs too, which otherwise only appear after a click.
             // The quit question needs no server (D215).
             let quitDialogs: [(String, AnyView)] = [

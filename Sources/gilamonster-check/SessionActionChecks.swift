@@ -104,6 +104,31 @@ import Security
     r = await call("hosting-add", ["recipe": "made-up-recipe"])
     check(r["ok"] as? Bool == false && error(r).contains("didn't answer"), "no answer in time is a no")
     check(service.waiting.isEmpty && server.packHostSettings.recipes["made-up-recipe"] == nil, "nothing changed, and nothing is left waiting")
+
+    section("Session actions: Need More Time")
+    // "Need More Time" waits longer before the no. It allows nothing, and it can only be used three times.
+    service.approvalWait = 0.3
+    service.approvalExtension = 0.4
+    var extendResults: [Bool] = []
+    var deadlineMoved = false
+    service.onAsk = { a in
+        let before = a.deadline
+        for _ in 0..<(SessionAccessService.maxExtensions + 1) { extendResults.append(service.extend(a.id)) }
+        deadlineMoved = (service.waiting.first { $0.id == a.id }?.deadline ?? before) > before
+    }
+    let started = Date()
+    r = await call("hosting-add", ["recipe": "made-up-recipe"])
+    let waited = Date().timeIntervalSince(started)
+    check(r["ok"] as? Bool == false && error(r).contains("didn't answer"), "an extended ask that nobody answers is still a no")
+    check(server.packHostSettings.recipes["made-up-recipe"] == nil, "extending allowed nothing")
+    equal(extendResults, [true, true, true, false], "three extensions work, the fourth is refused")
+    check(deadlineMoved, "each extension moves the shown deadline")
+    check(waited >= 0.3 + 3 * 0.4 - 0.05, "the wait grew by each extension (\(String(format: "%.2f", waited)) s)")
+    check(service.waiting.isEmpty, "nothing is left waiting afterwards")
+    check(!service.extend(UUID()), "extending an ask that isn't waiting does nothing")
+    service.approvalExtension = 60
+    service.approvalWait = 0.3
+    service.onAsk = { a in asked.append(a); if let reply { service.resolve(a.id, allow: reply) } }
     reply = true
     r = await call("hosting-add", ["recipe": "made-up-recipe"])
     check(r["ok"] as? Bool == true && server.packHostSettings.recipes["made-up-recipe"] != nil, "allowed, it's done")

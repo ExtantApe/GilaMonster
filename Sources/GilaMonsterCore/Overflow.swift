@@ -88,6 +88,17 @@ public enum Overflow {
         }
     }
 
+    /// Reads the snapshot's overflow-report.txt: how many pages it drew, and the pages that were wider than the window.
+    /// A report with no "checked N pages" line, or with N of zero, counts as not having run.
+    public static func readReport(_ text: String) -> (pages: Int, overflowing: [String]) {
+        let lines = text.split(separator: "\n").map(String.init)
+        let pages = lines.compactMap { line -> Int? in
+            guard line.hasPrefix("checked "), line.hasSuffix(" pages") else { return nil }
+            return Int(line.dropFirst(8).dropLast(6))
+        }.first ?? 0
+        return (pages, lines.filter { $0.hasPrefix("OVERFLOW ") })
+    }
+
     /// The limits each list uses, in one place (from Brand's review, 2026-11-23).
     public enum Limit {
         public static let allowlistSearchFrom = 12, allowlistShown = 25

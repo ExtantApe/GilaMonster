@@ -145,6 +145,15 @@ defer { try? FileManager.default.removeItem(at: scratch) }
 nonisolated(unsafe) var passed = 0
 nonisolated(unsafe) var failures: [String] = []
 
+// ... --snapshot  Draws every page with heavy made-up data (scripts/snapshot-fixtures.sh) and fails if any page is wider
+//     than its window. Needs a debug build of GilaMonster and takes several minutes. GILAMONSTER_SNAPSHOT_OUT=<folder>
+//     keeps the pictures there; otherwise they go in a temporary folder that's deleted at the end.
+if CommandLine.arguments.contains("--snapshot") {
+    await snapshotOverflowChecks()
+    print(failures.isEmpty ? "\(passed) passed" : "\(failures.count) FAILED:\n" + failures.joined(separator: "\n"))
+    exit(failures.isEmpty ? 0 : 1)
+}
+
 // ... --connections  Only the connection and color checks, which need no server or network.
 if CommandLine.arguments.contains("--connections") {
     await connectionChecks()
@@ -166,6 +175,7 @@ if CommandLine.arguments.contains("--connections") {
     needsYouChecks()
     await driveFallbackChecks()
     sessionAskPlacementChecks()
+    overflowChecks()
     inviteTicketChecks()
     await packPublishChecks()
     // --live: also asks this Mac's own playit agent, read-only, and prints only health and summaries.
@@ -4819,6 +4829,7 @@ func makePack(_ name: String, _ files: [String: String], inside: String? = nil) 
     needsYouChecks()
     await driveFallbackChecks()
     sessionAskPlacementChecks()
+    overflowChecks()
     inviteTicketChecks()
     await packPublishChecks()
     await packSongChecks()

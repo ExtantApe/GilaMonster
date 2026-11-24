@@ -26,4 +26,9 @@ import Foundation
     let asked = Date(timeIntervalSince1970: 1_000_000)
     equal(SessionAskPlacement.reminder(asked: asked, deadline: asked.addingTimeInterval(120)), asked.addingTimeInterval(60), "2-minute wait: the reminder plays with a minute left")
     check(SessionAskPlacement.reminder(asked: asked, deadline: asked.addingTimeInterval(70)) == nil, "70-second wait: no second sound 10 seconds after the first")
+
+    section("Session asks: the click guard")
+    check(!SessionAskPlacement.accepts(pointer: true, sinceChange: 0.2), "a pointer click just after the rows change is ignored")
+    check(SessionAskPlacement.accepts(pointer: true, sinceChange: 1.0), "a pointer click after the guard counts")
+    check(SessionAskPlacement.accepts(pointer: false, sinceChange: 0.0), "a key press goes straight through: it can't land on the wrong row")
 }
