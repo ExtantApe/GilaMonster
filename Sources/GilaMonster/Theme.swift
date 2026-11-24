@@ -139,6 +139,8 @@ extension ButtonStyle where Self == ThemeButtonStyle {
 struct Card<Content: View>: View {
     var title: String?
     var systemImage: String?
+    /// One line under the title saying what the card is, so it isn't repeated above a long list.
+    var subtitle: String?
     @ViewBuilder var content: Content
 
     var body: some View {
@@ -151,6 +153,7 @@ struct Card<Content: View>: View {
                 }
                 .accessibilityAddTraits(.isHeader)
             }
+            if let subtitle { Text(subtitle).font(.callout).foregroundStyle(Theme.muted).fixedSize(horizontal: false, vertical: true) }
             content
         }
         .padding(14)
@@ -237,7 +240,7 @@ struct Badge: View {
 
     var body: some View {
         Label {
-            Text(text).font(.caption.weight(.medium)).foregroundStyle(Theme.ink).lineLimit(1).fixedSize()
+            Text(text).font(.caption.weight(.medium)).foregroundStyle(Theme.ink).lineLimit(1).truncationMode(.tail).help(text)
         } icon: {
             Image(systemName: icon ?? tone.icon).font(.caption).foregroundStyle(tone.color)
         }
@@ -254,13 +257,29 @@ struct Callout<Actions: View>: View {
     let title: String
     var detail: String?
     @ViewBuilder var actions: Actions
+    @State private var expanded = false
 
     var body: some View {
+        // A long title (often a raw error) keeps one sentence; the rest joins the detail, which shows three lines
+        // until Show Details (Overflow).
+        let text = Overflow.callout(title: title, detail: detail)
+        let long = Overflow.isLong(text.detail)
         HStack(alignment: .top, spacing: 10) {
             Image(systemName: tone.icon).foregroundStyle(tone.color).font(.title3).accessibilityHidden(true)
             VStack(alignment: .leading, spacing: 3) {
-                Text(title).font(.body.weight(.semibold)).foregroundStyle(Theme.ink)
-                if let detail { Text(detail).foregroundStyle(Theme.ink).fixedSize(horizontal: false, vertical: true) }
+                Text(text.title).font(.body.weight(.semibold)).foregroundStyle(Theme.ink)
+                    .fixedSize(horizontal: false, vertical: true)
+                if let detail = text.detail {
+                    Text(detail).foregroundStyle(Theme.ink)
+                        .lineLimit(long && !expanded ? Overflow.detailLines : nil)
+                        .fixedSize(horizontal: false, vertical: true)
+                        .textSelection(.enabled)
+                    if long {
+                        Button(expanded ? "Hide Details" : "Show Details") { expanded.toggle() }
+                            .buttonStyle(.link).font(.callout)
+                            .accessibilityHint(expanded ? "Shows only the first lines" : "Shows the whole message")
+                    }
+                }
             }
             Spacer(minLength: 8)
             actions
@@ -393,7 +412,7 @@ struct SourceBadges: View {
             let colors = Theme.sourceColors[source.kind.rawValue] ?? (Theme.raised, Theme.muted)
             HStack(spacing: 4) {
                 Label {
-                    Text(b.source).font(.caption.weight(.semibold)).foregroundStyle(Theme.ink).lineLimit(1).fixedSize()
+                    Text(b.source).font(.caption.weight(.semibold)).foregroundStyle(Theme.ink).lineLimit(1).truncationMode(.tail).help(b.source)
                 } icon: {
                     Image(systemName: source.kind.symbol).font(.caption).foregroundStyle(colors.accent)
                 }
@@ -442,4 +461,52 @@ struct DisabledBecause: ViewModifier {
 
 extension View {
     func disabled(because reason: String?) -> some View { modifier(DisabledBecause(reason: reason)) }
+}
+
+// MARK: - Long lists (Overflow)
+
+/// "Show 12 More" under a cut-off list, and "Show Fewer" once it's open.
+struct ShowMoreButton: View {
+    let hidden: Int
+    @Binding var expanded: Bool
+    var body: some View {
+        if expanded || hidden > 0 {
+            Button(expanded ? "Show Fewer" : "Show \(hidden) More") { expanded.toggle() }
+                .buttonStyle(.link).font(.callout)
+        }
+    }
+}
+
+/// Several problems of one kind in one callout, as a list, cut off after `Overflow.Limit.warnings`.
+struct ProblemList: View {
+    let tone: Tone
+    let what: String
+    let problems: [String]
+    @State private var expanded = false
+    var body: some View {
+        if problems.count == 1 {
+            Callout(tone: tone, title: what, detail: problems[0])
+        } else if !problems.isEmpty {
+            let cut = Overflow.slice(problems, limit: Overflow.Limit.warnings, expanded: expanded)
+            HStack(alignment: .top, spacing: 10) {
+                Image(systemName: tone.icon).foregroundStyle(tone.color).font(.title3).accessibilityHidden(true)
+                VStack(alignment: .leading, spacing: 4) {
+                    Text("\(what): \(problems.count) problems").font(.body.weight(.semibold)).foregroundStyle(Theme.ink)
+                    ForEach(Array(cut.shown.enumerated()), id: \.offset) { _, problem in
+                        HStack(alignment: .firstTextBaseline, spacing: 6) {
+                            Text("•").foregroundStyle(Theme.muted).accessibilityHidden(true)
+                            Text(problem).foregroundStyle(Theme.ink).fixedSize(horizontal: false, vertical: true).textSelection(.enabled)
+                        }
+                    }
+                    ShowMoreButton(hidden: cut.hidden, expanded: $expanded)
+                }
+                Spacer(minLength: 0)
+            }
+            .padding(12)
+            .frame(maxWidth: .infinity, alignment: .leading)
+            .background(tone.wash, in: RoundedRectangle(cornerRadius: Theme.cardRadius))
+            .overlay { RoundedRectangle(cornerRadius: Theme.cardRadius).strokeBorder(tone.color.opacity(0.6), lineWidth: 1) }
+            .accessibilityElement(children: .contain)
+        }
+    }
 }

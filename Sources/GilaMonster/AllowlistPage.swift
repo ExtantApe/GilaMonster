@@ -14,6 +14,7 @@ struct AllowlistPage: View {
     @State private var message: String?
     @State private var working = false
     @State private var pendingWarnings: [String] = []
+    @State private var showAllAttempts = false
     @State private var removing: AllowlistEntry?
     @State private var editing: AllowlistEntry?
     @State private var conflictA = ""
@@ -238,24 +239,26 @@ struct AllowlistPage: View {
                 EmptyView()
             }
             if !luckPerms { Callout(tone: .warning, title: "LuckPerms isn't running", detail: "Sheriff refuses every change without it, saying why.") }
-            ForEach(problems, id: \.self) { Callout(tone: .warning, title: "Sheriff's settings", detail: $0) }
+            ProblemList(tone: .warning, what: "Sheriff's settings", problems: problems)
         default:
             Hint("Checking Sheriff…")
         }
     }
 
     private var attemptsCard: some View {
-        Card(title: "Turned away recently (\(attempts.count))", systemImage: "hand.raised") {
-            Hint("People the allowlist stopped, newest first in Sheriff's list. Approving still looks the name up first.")
-            ForEach(attempts) { attempt in
+        let cut = Overflow.slice(attempts, limit: Overflow.Limit.turnedAway, expanded: showAllAttempts)
+        return Card(title: "Turned away recently (\(attempts.count))", systemImage: "hand.raised",
+                    subtitle: "People the allowlist stopped, newest first. Approving still looks the name up first.") {
+            ForEach(cut.shown) { attempt in
                 HStack {
-                    Text(attempt.name).foregroundStyle(Theme.ink).textSelection(.enabled)
+                    Text(attempt.name).foregroundStyle(Theme.ink).textSelection(.enabled).lineLimit(1).truncationMode(.middle).help(attempt.name)
                     Hint(attempt.count == 1 ? "once" : "\(attempt.count) times")
                     Spacer()
                     Button("Approve…") { typed = attempt.name; lookUp() }.buttonStyle(.themed)
                         .accessibilityLabel("Approve \(attempt.name)")
                 }
             }
+            ShowMoreButton(hidden: cut.hidden, expanded: $showAllAttempts)
         }
     }
 

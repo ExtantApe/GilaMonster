@@ -288,7 +288,9 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
             model.showFolderSetup = false
             try? FileOps.ensureDir(URL(fileURLWithPath: folder))
             var windows: [NSWindow] = []   // Kept until the end: closing them while SwiftUI settles isn't safe.
-            for server in model.servers where ProcessInfo.processInfo.environment["GILAMONSTER_SNAPSHOT_DIALOGS_ONLY"] == nil {
+            // GILAMONSTER_SNAPSHOT_FIRST draws only the first server's pages (the others still show in the sidebar).
+            let drawn = ProcessInfo.processInfo.environment["GILAMONSTER_SNAPSHOT_FIRST"] != nil ? Array(model.servers.prefix(1)) : model.servers
+            for server in drawn where ProcessInfo.processInfo.environment["GILAMONSTER_SNAPSHOT_DIALOGS_ONLY"] == nil {
                 for page in PageID.allCases {
                     model.selectedID = server.id
                     model.page = page
