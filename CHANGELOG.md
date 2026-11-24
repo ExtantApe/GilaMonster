@@ -2,7 +2,7 @@
 
 ## Unreleased
 
-## 0.5.0 (unreleased)
+## 0.5.0 (2026-11-24)
 
 The full-review release. Tested with the full check suite (3757 checks, 98 of them new), the heavy-data overflow check (`--snapshot`, 12 more checks, passed) and, for layout, pictures of every page drawn off screen from made-up servers, normal and heavy, in Bold and Quiet, light and dark. VoiceOver, Voice Control and the keyboard were not run by hand: the accessibility changes come from a code review and are checked only where a check can reach them (the rules, not the speech). The ask panel's focus and the announcements are not tested.
 
