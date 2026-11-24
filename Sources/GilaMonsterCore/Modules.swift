@@ -3,7 +3,7 @@ import Observation
 
 /// Major features that can be switched off. All compiled in and all on by default: there's no third-party code here.
 /// Off hides a feature and stops its background work. Its data stays where it is.
-public enum LeafModule: String, CaseIterable, Identifiable, Sendable {
+public enum AppModule: String, CaseIterable, Identifiable, Sendable {
     case worlds, players, history, cleanup, testCopies, backupDrill, lab, resourcePacks, links, advisor, pluginCommands, sourceLookup
 
     public var id: String { rawValue }
@@ -69,13 +69,13 @@ public final class Modules {
 
     init() { off = JSONStore.load(AppPaths.home.appendingPathComponent("modules.json"), defaults: []) }
 
-    public func isOn(_ module: LeafModule) -> Bool {
+    public func isOn(_ module: AppModule) -> Bool {
         // The trial shares this file with the real app, so it doesn't save its own choice here.
         if module == .advisor, AdvisorTrial.isOn { return true }
         return module.startsOff ? off.contains("on:\(module.rawValue)") : !off.contains(module.rawValue)
     }
 
-    public func set(_ module: LeafModule, on: Bool) {
+    public func set(_ module: AppModule, on: Bool) {
         if module.startsOff {
             if on { off.insert("on:\(module.rawValue)") } else { off.remove("on:\(module.rawValue)") }
         } else if on {

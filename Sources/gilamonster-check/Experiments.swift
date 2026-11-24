@@ -56,7 +56,7 @@ import Foundation
         quiet(c)
         c.profile.backup.destination = root.appendingPathComponent(".gilamonster/backups").path
         try EULA.accept(c.paths)
-        guard let build = try await SoftwareCatalog.latestBuild(flavor, mc: mc) else { throw LeafError("No \(flavor.title) \(mc)") }
+        guard let build = try await SoftwareCatalog.latestBuild(flavor, mc: mc) else { throw AppError("No \(flavor.title) \(mc)") }
         c.profile.software.flavor = flavor
         try await c.installSoftware(build)
         for source in plugins { try await c.addPlugin(source: source) }
@@ -704,7 +704,7 @@ import Foundation
                 try? await Task.sleep(for: .seconds(20))
             }
         }
-        throw last ?? LeafError("No server")
+        throw last ?? AppError("No server")
     }
     for (mc, jar, label, useSettings) in [("1.21.11", newJar, "3.9.0, your settings", true), ("1.21.11", newJar, "3.9.0, fresh settings", false), ("26.3", oldJar, "3.5.9, your settings", true), ("26.3", newJar, "3.9.0, your settings", true), ("26.3", newJar, "3.9.0, fresh settings", false), ("1.21.11", oldJar, "3.5.9, fresh settings", false)] {
         lab.heading("ActionHealth \(label) on Paper \(mc)")

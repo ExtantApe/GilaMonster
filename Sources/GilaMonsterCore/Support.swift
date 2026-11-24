@@ -7,7 +7,7 @@ public enum GilaMonster {
     public static let userAgent = "GilaMonster/\(version) (https://github.com/\(repository))"
 }
 
-public struct LeafError: LocalizedError, Equatable {
+public struct AppError: LocalizedError, Equatable {
     public let message: String
     public init(_ message: String) { self.message = message }
     public var errorDescription: String? { message }
@@ -191,7 +191,7 @@ public enum JSONStore {
     }
 
     public static func save<T: Encodable>(_ value: T, to url: URL) throws {
-        guard !AdvisorTrial.isOn else { throw LeafError("The Advisor trial doesn't save anything.") }
+        guard !AdvisorTrial.isOn else { throw AppError("The Advisor trial doesn't save anything.") }
         try FileOps.ensureDir(url.deletingLastPathComponent())
         try encoder.encode(value).write(to: url, options: .atomic)
     }

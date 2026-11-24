@@ -714,7 +714,7 @@ do {
     equal(SoftwareBuild.safeJarName("../../Library/LaunchAgents/x.plist", fallback: "paper-26.2-1.jar"), "paper-26.2-1.jar", "a server jar name with a path in it isn't used")
     equal(SoftwareBuild.safeJarName("paper-26.2-135.jar", fallback: "x.jar"), "paper-26.2-135.jar", "a plain jar name is kept")
     check(ExpectedHashes().isEmpty && !ExpectedHashes(md5: "a").hasStrongHash && ExpectedHashes(sha256: "a").hasStrongHash, "no checksum, or MD5 alone, doesn't count as a published hash")
-    check(LeafModule.allCases.contains(.sourceLookup) && !LeafModule.sourceLookup.startsOff, "recognising plugins by checksum can be switched off, and stays on by default")
+    check(AppModule.allCases.contains(.sourceLookup) && !AppModule.sourceLookup.startsOff, "recognising plugins by checksum can be switched off, and stays on by default")
     // The audit's area A.
     check(!PackGate.admits(headers: [:], root: folder("no-player")), "a request with no player headers is refused before any file is read")
     check(!MapGateway.blueMapServer(webserverConf: "port: 8100\n").onlyThisMac, "BlueMap on its default address isn't Mac-only, so /map/ stays off")
@@ -1650,7 +1650,7 @@ do {
     do { // Modules: on by default, remembered, and off means off.
         let store = Modules.shared
         store.reload()
-        check(LeafModule.allCases.filter { !$0.startsOff }.allSatisfy(store.isOn), "everything starts on")
+        check(AppModule.allCases.filter { !$0.startsOff }.allSatisfy(store.isOn), "everything starts on")
         check(!store.isOn(.advisor), "except the Advisor, which sends data elsewhere")
         store.set(.advisor, on: true)
         check(store.isOn(.advisor), "which you can turn on")
@@ -2686,7 +2686,7 @@ if CommandLine.arguments.contains("--real-paper") {
         let table = try await ProtocolTable.load(mc: realMC, cache: folder("real-map-protocol"), java: c.resolvedJava()?.path ?? "")
         let viewerBot = try await join("MadeUpViewer", c, table, port: port)
         let otherBot = try await join("MadeUpOther", c, table, port: port)
-        guard let viewer = c.playerUUIDs["MadeUpViewer"], let other = c.playerUUIDs["MadeUpOther"] else { throw LeafError("no player ids") }
+        guard let viewer = c.playerUUIDs["MadeUpViewer"], let other = c.playerUUIDs["MadeUpOther"] else { throw AppError("no player ids") }
         write(#"[{"uuid":"\#(viewer)","name":"MadeUpViewer"},{"uuid":"\#(other)","name":"MadeUpOther"}]"#, root.appendingPathComponent("whitelist.json"))
         await run("lp user \(viewer) permission set multiverse.access.madeup_magic true", until: "Set")
         // Let BlueMap draw something of the magic world before asking for it.
@@ -2804,7 +2804,7 @@ if CommandLine.arguments.contains("--real-paper") {
     }
     do {
         // These accounts only ever appear on this temporary server's own lists.
-        guard case let .found(first) = await AccountLookup.lookUp("nOtCh"), case let .found(second) = await AccountLookup.lookUp("JEB_") else { throw LeafError("Mojang lookup failed") }
+        guard case let .found(first) = await AccountLookup.lookUp("nOtCh"), case let .found(second) = await AccountLookup.lookUp("JEB_") else { throw AppError("Mojang lookup failed") }
         equal(first.name, "Notch", "the real spelling comes back"); equal(second.name, "jeb_", "for any capitals")
         let afterLookup = try? await SoftwareCatalog.versions(.vanilla)
         check(afterLookup?.isEmpty == false, "a lookup doesn't break Mojang's version list afterwards")
@@ -3399,7 +3399,7 @@ func localAddresses() -> [String] {
         await checkUntil(240, "real server up: \(c.state)") { c.state == .running }
         await checkUntil(30, "players come from the management server") { c.management != nil }
         let text = (try? String(contentsOf: c.paths.properties, encoding: .utf8)) ?? ""
-        guard let endpoint = ManagementEndpoint.from(properties: text) else { throw LeafError("no usable endpoint after start") }
+        guard let endpoint = ManagementEndpoint.from(properties: text) else { throw AppError("no usable endpoint after start") }
         let wrong = ManagementLink(ManagementEndpoint(port: endpoint.port, secret: String(repeating: "x", count: 40)))
         wrong.open()
         let wrongAnswer = await wrong.call("minecraft:server/status", timeout: .seconds(3))
@@ -3434,7 +3434,7 @@ func localAddresses() -> [String] {
         // WelcomeWagon's own shipped config with its features switched on, as the invites run does (0.5+ keeps them off).
         var shipped = try await Tool.run("/usr/bin/unzip", ["-p", jar, "config.yml"]).out
         for (from, to) in [("enabled: false", "enabled: true"), ("port: 25680", "port: 25596"), ("public-url: \"\"", "public-url: \"https://links.example.test\"")] {
-            guard shipped.contains(from) else { throw LeafError("WelcomeWagon's shipped config no longer has \(from)") }
+            guard shipped.contains(from) else { throw AppError("WelcomeWagon's shipped config no longer has \(from)") }
             shipped = shipped.replacingOccurrences(of: from, with: to)
         }
         try FileOps.ensureDir(c.paths.plugins.appendingPathComponent("WelcomeWagon"))
@@ -3493,7 +3493,7 @@ func localAddresses() -> [String] {
         guard let token = link() else {
             for line in c.console where line.text.contains("WelcomeWagon") || line.text.contains("MadeUpBot") || line.text.lowercased().contains("signin") { print("    console: \(line.text.prefix(200))") }
             for m in bot.privateMessages.suffix(8) { print("    bot got: \(m.prefix(200))") }
-            throw LeafError("no link arrived")
+            throw AppError("no link arrived")
         }
         check(FileOps.children(pending).first?.lastPathComponent == "\(LinksWeb.hash(token)).json", "its hash is what's saved")
         check(!c.console.contains { $0.text.contains(token) }, "the link isn't in the console")
@@ -4077,9 +4077,9 @@ func buildStandIn(jdk: JavaRuntime, into jar: URL) async throws {
     write(source, file)
     let bin = URL(fileURLWithPath: jdk.path).deletingLastPathComponent()
     let compile = try await Tool.run(bin.appendingPathComponent("javac").path, ["-d", work.path, file.path])
-    guard compile.ok else { throw LeafError("javac: \(compile.err)") }
+    guard compile.ok else { throw AppError("javac: \(compile.err)") }
     let pack = try await Tool.run(bin.appendingPathComponent("jar").path, ["cfe", jar.path, "StandIn", "-C", work.path, "StandIn.class"])
-    guard pack.ok else { throw LeafError("jar: \(pack.err)") }
+    guard pack.ok else { throw AppError("jar: \(pack.err)") }
 }
 
 /// The whole life of a server, against whichever jar it's given.
@@ -4320,7 +4320,7 @@ func buildStandIn(jdk: JavaRuntime, into jar: URL) async throws {
             equal(c.trialReport?.booted, false, "a clean exit while starting isn't success")
             check(c.trialController?.issues.contains { $0.ruleID == "server-failed-start" } == true, "and is explained"); if case .crashed = c.trialController?.state { passed += 1 } else { failures.append("giving up should read as a failure: \(String(describing: c.trialController?.state))") }
             await c.collapseTrial()
-            await c.startTrial(.custom(title: "Throws", { _ in throw LeafError("It went wrong") }))
+            await c.startTrial(.custom(title: "Throws", { _ in throw AppError("It went wrong") }))
             equal(c.trialReport?.failure, "It went wrong", "failure reported"); await c.collapseTrial()
             check(c.state == .running, "real server ran throughout")
             try? FileManager.default.removeItem(at: c.paths.plugins.appendingPathComponent("DiscordSRV.jar"))

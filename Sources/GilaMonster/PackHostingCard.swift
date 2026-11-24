@@ -87,7 +87,7 @@ struct PackHostingCard: View {
             })) {
                 VStack(alignment: .leading, spacing: 2) {
                     Text("Only players joining this server").foregroundStyle(Theme.ink)
-                    Text("A pack goes only to a game that names a whitelisted player the server shows connecting in the last 5 minutes, or online now. Anyone else, a browser included, is told there's nothing there.")
+                    Text("A pack goes only to a game that names a player on the allowlist the server shows connecting in the last 5 minutes, or online now. Anyone else, a browser included, is told there's nothing there.")
                         .font(.caption).foregroundStyle(Theme.muted).fixedSize(horizontal: false, vertical: true)
                 }
             }
@@ -103,7 +103,7 @@ struct PackHostingCard: View {
                 Hint("Packmule's own link check sends this file's token straight to this Mac, so it gets past the joining check. It never works through a web server. To make a new one, delete the file and start serving again.")
             }
             if settings.joiningOnly {
-                Hint("This stops casual downloads and shared links. A game's request can be faked, so someone who knows a whitelisted player's name and ID could still get the pack while that player is joining. Only players listed in the whitelist get it, whether or not the whitelist is switched on.")
+                Hint("This stops casual downloads and shared links. A game's request can be faked, so someone who knows the name and ID of a player on the allowlist could still get the pack while that player is joining. Only players listed in the whitelist get it, whether or not the whitelist is switched on.")
             }
             Hint("The game can't sign in, so a long random path hides a pack, and every player's game is given it. It runs only while GilaMonster is open, uses your upload speed, and keeps no record of who downloads.")
         }

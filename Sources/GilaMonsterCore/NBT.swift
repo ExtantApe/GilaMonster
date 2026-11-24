@@ -7,16 +7,16 @@ public enum Gzip {
 
     public static func decompress(_ input: Data) throws -> Data {
         let data = Data(input)
-        guard isGzip(data), data.count >= 18 else { throw LeafError("That file isn't gzip data.") }
+        guard isGzip(data), data.count >= 18 else { throw AppError("That file isn't gzip data.") }
         let flags = data[3]
         var offset = 10
-        if flags & 4 != 0 { guard offset + 1 < data.count else { throw LeafError("That gzip data is damaged.") }; offset += 2 + Int(data[offset]) + Int(data[offset + 1]) << 8 }
+        if flags & 4 != 0 { guard offset + 1 < data.count else { throw AppError("That gzip data is damaged.") }; offset += 2 + Int(data[offset]) + Int(data[offset + 1]) << 8 }
         if flags & 8 != 0 { while offset < data.count, data[offset] != 0 { offset += 1 }; offset += 1 }
         if flags & 16 != 0 { while offset < data.count, data[offset] != 0 { offset += 1 }; offset += 1 }
         if flags & 2 != 0 { offset += 2 }
         let size = Int(data[data.count - 4]) | Int(data[data.count - 3]) << 8 | Int(data[data.count - 2]) << 16 | Int(data[data.count - 1]) << 24
         // A crafted header can point past the end, or claim a huge size (K158 audit).
-        guard offset <= data.count - 8 else { throw LeafError("That gzip data is damaged.") }
+        guard offset <= data.count - 8 else { throw AppError("That gzip data is damaged.") }
         var capacity = min(max(size, 1024), 512 << 20)
         let body = data[offset..<(data.count - 8)]
         for _ in 0..<2 {
@@ -29,7 +29,7 @@ public enum Gzip {
             if written == size || (written > 0 && written < capacity) { return out.prefix(written) }
             capacity = min(max(capacity * 8, 1 << 24), 512 << 20)   // ISIZE wraps at 4 GB; a hint only, and capped.
         }
-        throw LeafError("That file's compressed data is damaged.")
+        throw AppError("That file's compressed data is damaged.")
     }
 
     public static func compress(_ data: Data) throws -> Data {
@@ -40,7 +40,7 @@ public enum Gzip {
                 compression_encode_buffer(dst.bindMemory(to: UInt8.self).baseAddress!, capacity, src.bindMemory(to: UInt8.self).baseAddress!, data.count, nil, COMPRESSION_ZLIB)
             }
         }
-        guard written > 0 else { throw LeafError("Couldn't compress that data.") }
+        guard written > 0 else { throw AppError("Couldn't compress that data.") }
         var out = Data([0x1F, 0x8B, 8, 0, 0, 0, 0, 0, 0, 0xFF])
         out.append(body.prefix(written))
         func le(_ v: UInt32) -> [UInt8] { [UInt8(v & 0xFF), UInt8((v >> 8) & 0xFF), UInt8((v >> 16) & 0xFF), UInt8((v >> 24) & 0xFF)] }
@@ -145,7 +145,7 @@ public indirect enum NBT: Equatable, Sendable {
         let compressed = Gzip.isGzip(input)
         var reader = Reader(data: compressed ? try Gzip.decompress(input) : Data(input))
         let type = try reader.u8()
-        guard type == 10 else { throw LeafError("That isn't a Minecraft data file.") }
+        guard type == 10 else { throw AppError("That isn't a Minecraft data file.") }
         let name = try reader.string()
         let root = try reader.tag(type, depth: 0)
         return Document(name: name, root: root, compressed: compressed)
@@ -171,7 +171,7 @@ public indirect enum NBT: Equatable, Sendable {
         init(data: Data) { self.data = Data(data) }
 
         mutating func take(_ n: Int) throws -> Data {
-            guard n >= 0, at + n <= data.count else { throw LeafError("That data file is cut short or damaged.") }
+            guard n >= 0, at + n <= data.count else { throw AppError("That data file is cut short or damaged.") }
             defer { at += n }
             return data[at..<(at + n)]
         }
@@ -185,11 +185,11 @@ public indirect enum NBT: Equatable, Sendable {
         }
         mutating func count() throws -> Int {
             let n = Int(try be(Int32.self))
-            guard n >= 0, n <= data.count else { throw LeafError("That data file is cut short or damaged.") }
+            guard n >= 0, n <= data.count else { throw AppError("That data file is cut short or damaged.") }
             return n
         }
         mutating func tag(_ type: UInt8, depth: Int) throws -> NBT {
-            guard depth < 512 else { throw LeafError("That data file is nested too deeply.") }
+            guard depth < 512 else { throw AppError("That data file is nested too deeply.") }
             switch type {
             case 1: return .byte(Int8(bitPattern: try u8()))
             case 2: return .short(try be(Int16.self))
@@ -202,7 +202,7 @@ public indirect enum NBT: Equatable, Sendable {
             case 9:
                 let inner = try u8()
                 let n = Int(try be(Int32.self))
-                guard n <= data.count else { throw LeafError("That data file is cut short or damaged.") }
+                guard n <= data.count else { throw AppError("That data file is cut short or damaged.") }
                 var items: [NBT] = []
                 for _ in 0..<max(n, 0) { items.append(try tag(inner, depth: depth + 1)) }
                 return .list(inner, items)
@@ -224,7 +224,7 @@ public indirect enum NBT: Equatable, Sendable {
                 for _ in 0..<(try count()) { out.append(try be(Int64.self)) }
                 return .longArray(out)
             default:
-                throw LeafError("That data file has an unknown kind of value.")
+                throw AppError("That data file has an unknown kind of value.")
             }
         }
     }

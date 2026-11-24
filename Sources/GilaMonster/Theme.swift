@@ -28,6 +28,9 @@ enum Theme {
     static let warningWash = dynamic(Palette.warningWash)
     static let danger = dynamic(Palette.danger)
     static let dangerWash = dynamic(Palette.dangerWash)
+    static let up = dynamic(Palette.up)
+    static let starting = dynamic(Palette.starting)
+    static let meter = dynamic(Palette.meter)
     static let info = dynamic(Palette.info)
     static let infoWash = dynamic(Palette.infoWash)
     /// Plugin source badge colours, by SourceKind raw value: (tint, icon accent).
@@ -39,15 +42,19 @@ enum Theme {
     static let cardRadius: CGFloat = 10
 
     /// The palette's numbers live in GilaMonsterCore, where `gilamonster-check` holds every pair to WCAG AA.
+    /// Bold or Quiet, read each time a color is drawn. Set by the Theme setting, which also redraws every window.
+    nonisolated(unsafe) static var flavor: Palette.Flavor = ThemeChoice.load()
+
     private static func dynamic(_ swatch: Palette.Swatch) -> Color {
         Color(nsColor: NSColor(name: nil) { appearance in
             let match = appearance.bestMatch(from: [.aqua, .darkAqua, .accessibilityHighContrastAqua, .accessibilityHighContrastDarkAqua])
-            switch match {
-            case .accessibilityHighContrastAqua: return nsColor(swatch.contrastLight)
-            case .accessibilityHighContrastDarkAqua: return nsColor(swatch.contrastDark)
-            case .darkAqua: return nsColor(swatch.dark)
-            default: return nsColor(swatch.light)
+            let mode: Palette.Mode = switch match {
+            case .accessibilityHighContrastAqua: .contrastLight
+            case .accessibilityHighContrastDarkAqua: .contrastDark
+            case .darkAqua: .dark
+            default: .light
             }
+            return nsColor(swatch.hex(mode, flavor))
         })
     }
 

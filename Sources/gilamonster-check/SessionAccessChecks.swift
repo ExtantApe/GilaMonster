@@ -171,7 +171,7 @@ import Security
 
         let (path, _) = throwawayKeychain("real-session")
         var kc: SecKeychain?
-        guard SecKeychainOpen(path, &kc) == errSecSuccess, let kc else { throw LeafError("no throwaway keychain") }
+        guard SecKeychainOpen(path, &kc) == errSecSuccess, let kc else { throw AppError("no throwaway keychain") }
         let service = SessionAccessService()
         service.keychain = kc
         service.logFile = folder("real-session-log").appendingPathComponent("calls.jsonl")

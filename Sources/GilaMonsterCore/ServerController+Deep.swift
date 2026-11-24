@@ -36,7 +36,7 @@ extension ServerController {
             if let point {
                 try? await Backups.restore(point, profile: profile, root: paths.root)
                 refreshConfigs()
-                throw LeafError("The rename stopped part-way, so everything was put back. \(error.localizedDescription)")
+                throw AppError("The rename stopped part-way, so everything was put back. \(error.localizedDescription)")
             }
             throw error
         }
@@ -58,7 +58,7 @@ extension ServerController {
         case let .moveFolder(from, to):
             let source = paths.root.appendingPathComponent(from), target = paths.root.appendingPathComponent(to)
             guard FileOps.exists(source) else { return }
-            guard !FileOps.exists(target) else { throw LeafError("\(to) already exists.") }
+            guard !FileOps.exists(target) else { throw AppError("\(to) already exists.") }
             try FileOps.ensureDir(target.deletingLastPathComponent())
             try FileManager.default.moveItem(at: source, to: target)
         case let .replaceFile(path, text):
@@ -104,20 +104,20 @@ extension ServerController {
                 try await child.installSoftware(build)
             case let .pluginUpdate(name):
                 guard let plugin = child.plugins.first(where: { $0.name == name }), let record = records[plugin.key] else {
-                    throw LeafError("\(name) isn't in the copy.")
+                    throw AppError("\(name) isn't in the copy.")
                 }
                 child.adoptRecord(record, key: plugin.key)
                 try await child.installUpdate(for: plugin)
             case let .worldRename(worldName, to):
                 await child.refreshWorlds()
-                guard let world = child.worlds.first(where: { $0.name == worldName }) else { throw LeafError("\(worldName) isn't in the copy.") }
+                guard let world = child.worlds.first(where: { $0.name == worldName }) else { throw AppError("\(worldName) isn't in the copy.") }
                 try await child.applyRename(child.worldRenamePlan(world, to: to), restart: false)
             case let .serverRename(to):
                 try await child.applyRename(child.serverRenamePlan(name: to, folder: nil), restart: false)
             case let .custom(_, work):
                 try await work(child)
             }
-            if let held = child.pending.compactMap(\.conflict).first { throw LeafError(held) }
+            if let held = child.pending.compactMap(\.conflict).first { throw AppError(held) }
 
             trialPhase = .booting
             let started = Date()
@@ -255,15 +255,15 @@ extension ServerController {
             try FileOps.ensureDir(folder)
             let archive = Backups.folder(of: record, profile: profile).appendingPathComponent(record.fileName)
             let result = try await Tool.run("/usr/bin/tar", ["-xzf", archive.path, "-C", folder.path], stopIf: DiskGuard.watch(folder))
-            if let stopped = result.stoppedBecause { throw LeafError("The drill stopped unpacking and removed what it had unpacked. \(stopped)") }
-            guard result.ok else { throw LeafError("The archive couldn't be unpacked. \(result.err.prefix(200))") }
+            if let stopped = result.stoppedBecause { throw AppError("The drill stopped unpacking and removed what it had unpacked. \(stopped)") }
+            guard result.ok else { throw AppError("The archive couldn't be unpacked. \(result.err.prefix(200))") }
             var report = TrialReport()
             let child = try await prepareCopy(folder, report: &report)
             defer { child.stopTicker() }
             if let software = record.softwareState { child.profile.software = software }
             if let launch = record.launch { child.profile.launch.javaPath = launch.javaPath }
             await child.start()
-            if !child.blockers.isEmpty { throw LeafError("It couldn't start: \(child.blockers.map(\.title).joined(separator: ", ")).") }
+            if !child.blockers.isEmpty { throw AppError("It couldn't start: \(child.blockers.map(\.title).joined(separator: ", ")).") }
             let started = Date()
             for _ in 0..<(600 * 4) {
                 if child.state == .running || child.state.canStart { break }
@@ -440,7 +440,7 @@ extension ServerController {
             if let plugin = plugins.first(where: { $0.name == name }) { try await installUpdate(for: plugin) }
         case let .worldRename(worldName, to):
             await refreshWorlds()
-            guard let world = worlds.first(where: { $0.name == worldName }) else { throw LeafError("\(worldName) wasn't found.") }
+            guard let world = worlds.first(where: { $0.name == worldName }) else { throw AppError("\(worldName) wasn't found.") }
             try await applyRename(worldRenamePlan(world, to: to), rebuild: { [self] in worldRenamePlan(world, to: to) })
         case let .serverRename(to):
             try await applyRename(serverRenamePlan(name: to, folder: nil), rebuild: { [self] in serverRenamePlan(name: to, folder: nil) })
@@ -499,7 +499,7 @@ extension ServerController {
     /// Restores a player without touching the world. Waits for a restart whenever the server might overwrite it.
     public func restorePlayer(_ snapshot: PlayerSnapshot, inventoryOnly: Bool, containers: [String]) throws -> SaveOutcome {
         if PlayerSnapshots.isFromNewerVersion(snapshot, paths: paths, profile: profile) {
-            throw LeafError("This snapshot is from a newer Minecraft version than this server is on, so it can't be loaded here.")
+            throw AppError("This snapshot is from a newer Minecraft version than this server is on, so it can't be loaded here.")
         }
         let online = players.contains(snapshot.name)
         // Multiverse-Inventories keeps profiles in memory and can reapply them on join, so with it
@@ -539,7 +539,7 @@ extension ServerController {
             try PlayerMerge.apply(plan, paths: paths, archive: archive)
         } catch {
             if let point { try? await Backups.restore(point, profile: profile, root: paths.root) }
-            throw LeafError("The merge stopped part-way, so everything was put back. \(error.localizedDescription)")
+            throw AppError("The merge stopped part-way, so everything was put back. \(error.localizedDescription)")
         }
         if let point {
             setActiveUpgrade(UpgradeRecord(
@@ -562,7 +562,7 @@ extension ServerController {
     }
 
     public func cleanUp(_ items: [CleanupItem]) async throws {
-        guard state.canStart else { throw LeafError("Stop the server before cleaning up its folder.") }
+        guard state.canStart else { throw AppError("Stop the server before cleaning up its folder.") }
         _ = try Cleanup.apply(items, profile: profile, paths: paths)
         recordEvent(.cleanup, "Moved \(items.count) leftover\(items.count == 1 ? "" : "s") aside")
         await refreshPlugins()
@@ -570,7 +570,7 @@ extension ServerController {
     }
 
     public func undoCleanup(_ batch: CleanupBatch) async throws {
-        guard state.canStart else { throw LeafError("Stop the server first.") }
+        guard state.canStart else { throw AppError("Stop the server first.") }
         try Cleanup.undo(batch, profile: profile, paths: paths)
         await refreshPlugins()
         await scanForCleanup()

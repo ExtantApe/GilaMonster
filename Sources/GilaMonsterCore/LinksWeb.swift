@@ -448,7 +448,7 @@ public final class LinksListener {
     }
 
     public func start(port: Int) throws {
-        guard let endpointPort = NWEndpoint.Port(rawValue: UInt16(port)) else { throw LeafError("\(port) isn't a usable port.") }
+        guard let endpointPort = NWEndpoint.Port(rawValue: UInt16(port)) else { throw AppError("\(port) isn't a usable port.") }
         let parameters = NWParameters.tcp
         parameters.requiredLocalEndpoint = .hostPort(host: .ipv4(.loopback), port: endpointPort)
         parameters.acceptLocalOnly = true
@@ -617,8 +617,8 @@ extension ServerController {
 
     public func startLinksPage() throws {
         stopLinksPage()
-        guard Modules.shared.isOn(.links) else { throw LeafError("Plugin links is switched off in Settings.") }
-        if let problem = linksPageProblem { throw LeafError(problem) }
+        guard Modules.shared.isOn(.links) else { throw AppError("Plugin links is switched off in Settings.") }
+        if let problem = linksPageProblem { throw AppError(problem) }
         let web = linksWeb ?? LinksWeb(paths: paths, settings: { [weak self] in self?.linksPageSettings ?? LinksPageSettings() }, content: { [weak self] in self?.linksPageContent ?? LinksPageContent() })
         web.tidy()
         let listener = LinksListener(web: web, allowed: { Modules.shared.isOn(.links) })

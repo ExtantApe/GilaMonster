@@ -4,49 +4,38 @@ import Foundation
 /// The app's Theme builds its colors from these. Change a value here and `gilamonster-check` (run by CI) fails
 /// if any pair below drops under its minimum, in any appearance or under any of the color-vision simulations.
 public enum Palette {
+    /// Bold or Quiet (owner, 2026-11-23: "Looks good, Bold default (Recommended)"). Each has its own colors in all
+    /// four appearances; the app's names for them are the same in both.
+    public enum Flavor: String, CaseIterable, Sendable, Codable { case bold, quiet }
+
     public struct Swatch: Sendable, Equatable {
-        public let light: UInt32, dark: UInt32, contrastLight: UInt32, contrastDark: UInt32
+        public typealias Four = (light: UInt32, dark: UInt32, contrastLight: UInt32, contrastDark: UInt32)
+        let bold: [UInt32], quiet: [UInt32]
+        /// One color in both flavors, with Increase Contrast falling back to the plain one.
         init(_ light: UInt32, _ dark: UInt32, contrast: (UInt32, UInt32)? = nil) {
-            self.light = light; self.dark = dark
-            contrastLight = contrast?.0 ?? light; contrastDark = contrast?.1 ?? dark
+            let four = [light, dark, contrast?.0 ?? light, contrast?.1 ?? dark]
+            bold = four; quiet = four
         }
-        public func hex(_ mode: Mode) -> UInt32 {
+        init(bold b: (UInt32, UInt32, UInt32, UInt32), quiet q: (UInt32, UInt32, UInt32, UInt32)) {
+            bold = [b.0, b.1, b.2, b.3]; quiet = [q.0, q.1, q.2, q.3]
+        }
+        public func hex(_ mode: Mode, _ flavor: Flavor = .bold) -> UInt32 {
+            let four = flavor == .bold ? bold : quiet
             switch mode {
-            case .light: light
-            case .dark: dark
-            case .contrastLight: contrastLight
-            case .contrastDark: contrastDark
+            case .light: return four[0]
+            case .dark: return four[1]
+            case .contrastLight: return four[2]
+            case .contrastDark: return four[3]
             }
         }
+        public var light: UInt32 { hex(.light) }
+        public var dark: UInt32 { hex(.dark) }
     }
 
     /// The four appearances macOS can ask for: light, dark, and each with Increase Contrast on.
     public enum Mode: String, CaseIterable, Sendable { case light, dark, contrastLight = "light, increased contrast", contrastDark = "dark, increased contrast" }
 
-    // GilaMonster (D272, D277): from Brand's tokens in brand/kit/palette.md. Light is cream and white, dark is deep and
-    // basalt. Swap these numbers for a new palette; gilamonster-check holds every pair below in every appearance.
-    public static let background = Swatch(0xF5EBDD, 0x1E1C20)
-    public static let surface = Swatch(0xFFFFFF, 0x2A282C)
-    public static let raised = Swatch(0xFAF3EA, 0x252327)
-    /// Outlines of cards and dividers. Decoration only: anything a person clicks or types in uses controlBorder.
-    public static let border = Swatch(0xE2D4C0, 0x403C44, contrast: (0x5A5560, 0xB0ABB6))
-    /// Outlines of buttons and fields: 3:1 against every surface, so a control can be found without its fill.
-    public static let controlBorder = Swatch(0x857D88, 0x8F8A95, contrast: (0x5A5560, 0xB0ABB6))
-    public static let ink = Swatch(0x2A282C, 0xF5EBDD, contrast: (0x000000, 0xFFFFFF))
-    public static let muted = Swatch(0x4B474F, 0xB9B5BE)
-    /// Turquoise: structure, links and focus.
-    public static let accent = Swatch(0x166F74, 0x21A4AB, contrast: (0x105155, 0x2BCED6))
-    public static let accentWash = Swatch(0xD8EEEF, 0x1D3E40)
-    /// Red-orange, the brand color: the one bold pop, for the main action.
-    public static let pop = Swatch(0xB13917, 0xEA8060, contrast: (0x822A11, 0xF1AC97))
-    public static let onPop = Swatch(0xFFFFFF, 0x1E1C20)
-    public static let popText = Swatch(0xB13917, 0xEA8060, contrast: (0x822A11, 0xF1AC97))
-    public static let warning = Swatch(0x95580B, 0xF2A541, contrast: (0x6D4008, 0xF4B058))
-    public static let warningWash = Swatch(0xFBEBD2, 0x45351C)
-    public static let danger = Swatch(0xB0183C, 0xFF7D93, contrast: (0x8B132F, 0xFFA5B4))
-    public static let dangerWash = Swatch(0xFBE1E6, 0x4A2129)
-    public static let info = Swatch(0x166F74, 0x21A4AB, contrast: (0x105155, 0x2BCED6))
-    public static let infoWash = Swatch(0xDCEFF0, 0x1F3B3D)
+    // The colors themselves are in PaletteTokens.swift, written from Brand's JSON by scripts/palette-tokens.py.
 
     /// Plugin source badges (owner, 2026-11-15): a tint per source behind ink text, and an accent for its icon.
     /// The text is always ink, so the tint only has to keep ink readable; the accent needs 3:1 on the tint.
@@ -101,6 +90,18 @@ public enum Palette {
             add("popText", popText, s, bg, .ui)  // the main button's outline
             add("danger", danger, s, bg, .ui)                  // the danger button's outline
             add("accent", accent, s, bg, .ui)                      // focus rings, toggles, icons
+        }
+        // The window chrome Brand's themes define, ready for when the app draws it.
+        add("barInk", barInk, "bar", bar, .text)
+        add("sideInk", sideInk, "side", side, .text)
+        add("sideMuted", sideMuted, "side", side, .text)
+        add("onSel", onSel, "sel", sel, .text)
+        add("selMark", selMark, "side", side, .ui)
+        add("bandInk", bandInk, "band", band, .text)
+        for (s, bg) in surfaces {
+            add("up", up, s, bg, .ui)
+            add("starting", starting, s, bg, .ui)
+            add("meter", meter, s, bg, .ui)
         }
         return list
     }()
@@ -163,9 +164,9 @@ public enum Palette {
     // MARK: The audit
 
     public struct Finding: Sendable {
-        public let pair: Pair, mode: Mode, vision: Vision, ratio: Double
+        public let pair: Pair, mode: Mode, vision: Vision, ratio: Double, flavor: Flavor
         public var line: String {
-            "\(pair.foreground) on \(pair.background) (\(pair.use.rawValue)), \(mode.rawValue)\(vision == .typical ? "" : ", \(vision.rawValue)"): \(String(format: "%.2f", ratio)):1, needs \(pair.use.minimum):1"
+            "\(pair.foreground) on \(pair.background) (\(pair.use.rawValue)), \(flavor.rawValue) \(mode.rawValue)\(vision == .typical ? "" : ", \(vision.rawValue)"): \(String(format: "%.2f", ratio)):1, needs \(pair.use.minimum):1"
         }
     }
 
@@ -173,10 +174,12 @@ public enum Palette {
     public static func failures() -> [Finding] {
         var out: [Finding] = []
         for pair in pairs {
+            for flavor in Flavor.allCases {
             for mode in Mode.allCases {
                 for vision in Vision.allCases {
-                    let r = contrast(simulate(pair.fg.hex(mode), vision), simulate(pair.bg.hex(mode), vision))
-                    if r < pair.use.minimum { out.append(Finding(pair: pair, mode: mode, vision: vision, ratio: r)) }
+                    let r = contrast(simulate(pair.fg.hex(mode, flavor), vision), simulate(pair.bg.hex(mode, flavor), vision))
+                    if r < pair.use.minimum { out.append(Finding(pair: pair, mode: mode, vision: vision, ratio: r, flavor: flavor)) }
+                }
                 }
             }
         }
@@ -187,10 +190,12 @@ public enum Palette {
     public static func lowest() -> [(Pair, Double, Mode, Vision)] {
         pairs.map { pair in
             var low = (Double.infinity, Mode.light, Vision.typical)
-            for mode in Mode.allCases {
-                for vision in Vision.allCases {
-                    let r = contrast(simulate(pair.fg.hex(mode), vision), simulate(pair.bg.hex(mode), vision))
-                    if r < low.0 { low = (r, mode, vision) }
+            for flavor in Flavor.allCases {
+                for mode in Mode.allCases {
+                    for vision in Vision.allCases {
+                        let r = contrast(simulate(pair.fg.hex(mode, flavor), vision), simulate(pair.bg.hex(mode, flavor), vision))
+                        if r < low.0 { low = (r, mode, vision) }
+                    }
                 }
             }
             return (pair, low.0, low.1, low.2)

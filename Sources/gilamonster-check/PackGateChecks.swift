@@ -212,7 +212,7 @@ func rawStatus(port: Int, _ request: String) async -> Int? {
 
 private func socketConnect(port: Int) throws -> Int32 {
     let fd = socket(AF_INET, SOCK_STREAM, 0)
-    guard fd >= 0 else { throw LeafError("no socket") }
+    guard fd >= 0 else { throw AppError("no socket") }
     var addr = sockaddr_in()
     addr.sin_family = sa_family_t(AF_INET)
     addr.sin_port = in_port_t(UInt16(port).bigEndian)
@@ -220,7 +220,7 @@ private func socketConnect(port: Int) throws -> Int32 {
     var timeout = timeval(tv_sec: 5, tv_usec: 0)
     setsockopt(fd, SOL_SOCKET, SO_RCVTIMEO, &timeout, socklen_t(MemoryLayout<timeval>.size))
     let ok = withUnsafePointer(to: &addr) { $0.withMemoryRebound(to: sockaddr.self, capacity: 1) { connect(fd, $0, socklen_t(MemoryLayout<sockaddr_in>.size)) } }
-    guard ok == 0 else { close(fd); throw LeafError("no connection") }
+    guard ok == 0 else { close(fd); throw AppError("no connection") }
     return fd
 }
 
@@ -237,7 +237,7 @@ private func socketConnect(port: Int) throws -> Int32 {
     try await c.installSoftware(try await SoftwareCatalog.latestBuild(.paper, mc: realMC)!)
     c.profile.lastPluginCheck = Date(); c.profile.software.lastCheck = Date()
     await c.start()
-    guard await until(240, { c.state == .running }) else { throw LeafError("The demo server didn't start: \(c.console.suffix(3).map(\.text))") }
+    guard await until(240, { c.state == .running }) else { throw AppError("The demo server didn't start: \(c.console.suffix(3).map(\.text))") }
     c.stop()
     _ = await until(90, { c.state == .stopped })
     let made = await makePack("GilaMonster Test Pack", ["pack.mcmeta": #"{"pack":{"pack_format":75,"description":"GilaMonster test pack (made up)"}}"#, "assets/madeup/x.json": "{}"])

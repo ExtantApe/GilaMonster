@@ -57,7 +57,7 @@ public enum BackupCaps {
 
     /// Sets or clears (nil) the cap for the drive holding `url`.
     public static func set(_ bytes: Int64?, for url: URL) throws {
-        guard let drive = driveID(for: url) else { throw LeafError("GilaMonster can't tell which drive \(url.path) is on.") }
+        guard let drive = driveID(for: url) else { throw AppError("GilaMonster can't tell which drive \(url.path) is on.") }
         var caps = all()
         if let bytes, bytes > 0 { caps[drive.id] = DriveCap(name: drive.name, bytes: bytes) } else { caps[drive.id] = nil }
         try FileOps.ensureDir(AppPaths.home)

@@ -367,6 +367,6 @@ func fakeListener(reply: Data) throws -> NWListener {
     let ready = DispatchSemaphore(value: 0)
     listener.stateUpdateHandler = { if case .ready = $0 { ready.signal() } }
     listener.start(queue: queue)
-    guard ready.wait(timeout: .now() + 3) == .success, listener.port != nil else { listener.cancel(); throw LeafError("no listener") }
+    guard ready.wait(timeout: .now() + 3) == .success, listener.port != nil else { listener.cancel(); throw AppError("no listener") }
     return listener
 }

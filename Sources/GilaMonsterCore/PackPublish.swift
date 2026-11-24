@@ -54,25 +54,25 @@ public enum PackPublish {
 
     static func randomToken() throws -> String {
         var bytes = [UInt8](repeating: 0, count: 32)
-        guard SecRandomCopyBytes(kSecRandomDefault, bytes.count, &bytes) == errSecSuccess else { throw LeafError("Couldn't make a random path.") }
+        guard SecRandomCopyBytes(kSecRandomDefault, bytes.count, &bytes) == errSecSuccess else { throw AppError("Couldn't make a random path.") }
         return bytes.map { String(format: "%02x", $0) }.joined()
     }
 
     /// Copies one build into the served folder under a new random path and checks the copy. Returns where it is.
     /// Fails closed: nothing is recorded unless the copy is whole and has the right hash.
     public static func publish(build: URL, sha1: String, settings s: PackPublishSettings, online: [String], now: Date = Date()) throws -> PublishedBuild {
-        if let why = problem(s) { throw LeafError(why) }
-        guard PackHosting.isSHA1(sha1), FileOps.exists(build) else { throw LeafError("That build isn't in the library any more.") }
+        if let why = problem(s) { throw AppError(why) }
+        guard PackHosting.isSHA1(sha1), FileOps.exists(build) else { throw AppError("That build isn't in the library any more.") }
         let root = URL(fileURLWithPath: (s.folder as NSString).expandingTildeInPath, isDirectory: true)
         let room = (DiskGuard.standIn ?? DiskGuard.space)(root)
-        if let why = DiskGuard.refusal(free: room.free, capacity: room.capacity, needed: FileOps.size(build)) { throw LeafError("Not published. \(why)") }
+        if let why = DiskGuard.refusal(free: room.free, capacity: room.capacity, needed: FileOps.size(build)) { throw AppError("Not published. \(why)") }
         let token = try randomToken()
         let dir = root.appendingPathComponent(token, isDirectory: true)
         try FileManager.default.createDirectory(at: dir, withIntermediateDirectories: false, attributes: [.posixPermissions: 0o755])
         let target = dir.appendingPathComponent("\(sha1).zip"), part = dir.appendingPathComponent(".\(sha1).part")
         do {
             try FileManager.default.copyItem(at: build, to: part)
-            guard try Hashing.digests(of: part).sha1.lowercased() == sha1.lowercased() else { throw LeafError("The copy didn't match the build, so it was removed.") }
+            guard try Hashing.digests(of: part).sha1.lowercased() == sha1.lowercased() else { throw AppError("The copy didn't match the build, so it was removed.") }
             try FileManager.default.setAttributes([.posixPermissions: 0o644], ofItemAtPath: part.path)
             try FileManager.default.moveItem(at: part, to: target)
         } catch {
@@ -123,14 +123,14 @@ public enum PackPublish {
     /// holding that build's zip and nothing else. Anything else in the served folder is never touched.
     public static func remove(_ build: PublishedBuild, settings s: PackPublishSettings) throws {
         guard build.token.range(of: "^[0-9a-f]{64}$", options: .regularExpression) != nil, PackHosting.isSHA1(build.sha1) else {
-            throw LeafError("That record doesn't look like one of GilaMonster's builds, so nothing was removed.")
+            throw AppError("That record doesn't look like one of GilaMonster's builds, so nothing was removed.")
         }
         let root = URL(fileURLWithPath: (s.folder as NSString).expandingTildeInPath, isDirectory: true)
         let dir = root.appendingPathComponent(build.token, isDirectory: true)
         guard FileManager.default.fileExists(atPath: dir.path) else { return }
         let inside = (try? FileManager.default.contentsOfDirectory(atPath: dir.path)) ?? []
         guard inside == ["\(build.sha1).zip"] else {
-            throw LeafError("\(build.token.prefix(8))… holds something GilaMonster didn't put there, so it was left alone.")
+            throw AppError("\(build.token.prefix(8))… holds something GilaMonster didn't put there, so it was left alone.")
         }
         try FileManager.default.removeItem(at: dir)
     }
@@ -147,7 +147,7 @@ extension ServerController {
     public func publishPack(recipe name: String, sha1: String) throws -> PublishedBuild {
         var s = packPublishSettings
         let key = ResourcePacks.slug(name)
-        if s.builds[key]?.first?.sha1 == sha1 { throw LeafError("That build is already the one players get.") }
+        if s.builds[key]?.first?.sha1 == sha1 { throw AppError("That build is already the one players get.") }
         let made = try PackPublish.publish(build: ResourcePacks.buildFile(sha1: sha1, recipe: name), sha1: sha1, settings: s, online: Array(players))
         s.builds[key] = [made] + (s.builds[key] ?? [])
         packPublishSettings = s

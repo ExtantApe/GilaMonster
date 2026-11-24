@@ -84,7 +84,7 @@ public enum JavaManager {
         }
         let api = "https://api.adoptium.net/v3/assets/latest/\(major)/hotspot?architecture=\(arch)&image_type=jre&os=mac&vendor=eclipse"
         let assets = try await HTTP.decode([Asset].self, HTTP.url(api))
-        guard let asset = assets.first else { throw LeafError("Temurin has no Java \(major) for this Mac.") }
+        guard let asset = assets.first else { throw AppError("Temurin has no Java \(major) for this Mac.") }
 
         let work = AppPaths.runtimes.appendingPathComponent(".install-\(major)-\(UUID().uuidString)", isDirectory: true)
         try FileOps.ensureDir(work)
@@ -92,14 +92,14 @@ public enum JavaManager {
         let archive = work.appendingPathComponent("jre.tar.gz")
         try await HTTP.download(HTTP.url(asset.binary.package.link), to: archive, expect: ExpectedHashes(sha256: asset.binary.package.checksum), progress: progress)
         let result = try await Tool.run("/usr/bin/tar", ["-xzf", archive.path, "-C", work.path])
-        guard result.ok else { throw LeafError("Couldn't unpack Java \(major): \(result.err)") }
+        guard result.ok else { throw AppError("Couldn't unpack Java \(major): \(result.err)") }
         guard let bundle = FileOps.children(work).first(where: { FileOps.exists($0.appendingPathComponent("Contents/Home/bin/java")) }) else {
-            throw LeafError("The Java \(major) download wasn't laid out as expected.")
+            throw AppError("The Java \(major) download wasn't laid out as expected.")
         }
         let target = AppPaths.runtimes.appendingPathComponent("temurin-\(major)", isDirectory: true)
         try FileOps.move(bundle, to: target)
         guard let runtime = await inspect(path: target.appendingPathComponent("Contents/Home/bin/java").path, managed: true) else {
-            throw LeafError("Java \(major) was installed but didn't run.")
+            throw AppError("Java \(major) was installed but didn't run.")
         }
         return runtime
     }

@@ -30,7 +30,7 @@ import Foundation
         profile.isLab = true
         profile.name = LabFiles.serverName
         try JSONStore.save(profile, to: ServerPaths(root: root).profile)
-        guard let c = ServerController.open(root: root) else { throw LeafError("the stand-in lab didn't open") }
+        guard let c = ServerController.open(root: root) else { throw AppError("the stand-in lab didn't open") }
         return c
     }
 
@@ -60,7 +60,7 @@ import Foundation
         // Fail.
         lab.stationStandIn = { _ in
             _ = try makeLab()
-            throw LeafError("Made-up failure")
+            throw AppError("Made-up failure")
         }
         await lab.run(.plugins, model: model)
         check(lab.failure?.contains("Made-up failure") == true, "a failing run says why: \(lab.failure ?? "-")")

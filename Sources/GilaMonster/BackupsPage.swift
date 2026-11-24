@@ -365,7 +365,7 @@ struct DriveCapsSection: View {
                 }
                 if let cap = drive.cap {
                     ProgressView(value: Double(min(drive.used, cap)), total: Double(cap))
-                        .tint(drive.warning == nil ? Theme.accent : .orange)
+                        .tint(drive.warning == nil ? Theme.accent : Theme.warning)
                         .accessibilityLabel("\(drive.name) backups")
                         .accessibilityValue(usage(drive))
                 }

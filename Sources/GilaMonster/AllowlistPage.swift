@@ -246,7 +246,7 @@ struct AllowlistPage: View {
 
     private var attemptsCard: some View {
         Card(title: "Turned away recently (\(attempts.count))", systemImage: "hand.raised") {
-            Hint("People the whitelist stopped, newest first in Sheriff's list. Approving still looks the name up first.")
+            Hint("People the allowlist stopped, newest first in Sheriff's list. Approving still looks the name up first.")
             ForEach(attempts) { attempt in
                 HStack {
                     Text(attempt.name).foregroundStyle(Theme.ink).textSelection(.enabled)

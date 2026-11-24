@@ -177,7 +177,7 @@ public enum Cleanup {
         let from = holdingArea(profile).appendingPathComponent(batch.folder)
         for item in batch.items {
             let target = paths.root.appendingPathComponent(item)
-            guard !FileOps.exists(target) else { throw LeafError("\(item) already exists again, so it wasn't brought back. Nothing else was changed after that point.") }
+            guard !FileOps.exists(target) else { throw AppError("\(item) already exists again, so it wasn't brought back. Nothing else was changed after that point.") }
             try FileOps.move(from.appendingPathComponent(item), to: target)
         }
         try FileManager.default.removeItem(at: from)
@@ -222,7 +222,7 @@ public enum ConnectCheck {
     /// and `api.mcsrvstat.us`. Only ever runs when asked.
     public static func run(port: Int) async throws -> ConnectResult {
         let ip = String(decoding: try await HTTP.data(HTTP.url("https://api.ipify.org")), as: UTF8.self).trimmingCharacters(in: .whitespacesAndNewlines)
-        guard ip.range(of: #"^[0-9a-fA-F:.]+$"#, options: .regularExpression) != nil else { throw LeafError("Couldn't work out this Mac's public address.") }
+        guard ip.range(of: #"^[0-9a-fA-F:.]+$"#, options: .regularExpression) != nil else { throw AppError("Couldn't work out this Mac's public address.") }
         let address = ip.contains(":") ? "[\(ip)]:\(port)" : "\(ip):\(port)"
         let body = try await HTTP.data(HTTP.url("https://api.mcsrvstat.us/3/\(ip.contains(":") ? "[\(ip)]" : ip):\(port)"))
         return parse(body, address: address)
@@ -368,6 +368,6 @@ public enum Trial {
             try? FileManager.default.removeItem(at: target)
             result = try await Tool.run("/bin/cp", ["-RL", source.path, target.path])
         }
-        guard result.ok else { throw LeafError("Couldn't copy the server: \(result.err.prefix(200))") }
+        guard result.ok else { throw AppError("Couldn't copy the server: \(result.err.prefix(200))") }
     }
 }

@@ -39,14 +39,14 @@ public enum PackGate {
         chmod(folder.path, 0o700)
         if FileManager.default.fileExists(atPath: file.path) || (try? FileManager.default.destinationOfSymbolicLink(atPath: file.path)) != nil { return }
         var bytes = [UInt8](repeating: 0, count: 32)
-        guard SecRandomCopyBytes(kSecRandomDefault, bytes.count, &bytes) == errSecSuccess else { throw LeafError("Couldn't make a random pack-check token.") }
+        guard SecRandomCopyBytes(kSecRandomDefault, bytes.count, &bytes) == errSecSuccess else { throw AppError("Couldn't make a random pack-check token.") }
         let text = Data((bytes.map { String(format: "%02x", $0) }.joined() + "\n").utf8)
         let fd = open(file.path, O_WRONLY | O_CREAT | O_EXCL | O_NOFOLLOW, 0o600)
-        guard fd >= 0 else { throw LeafError("Couldn't write the pack-check token file.") }
+        guard fd >= 0 else { throw AppError("Couldn't write the pack-check token file.") }
         defer { close(fd) }
         fchmod(fd, 0o600)
         let written = text.withUnsafeBytes { write(fd, $0.baseAddress, $0.count) }
-        guard written == text.count else { unlink(file.path); throw LeafError("Couldn't write the pack-check token file.") }
+        guard written == text.count else { unlink(file.path); throw AppError("Couldn't write the pack-check token file.") }
     }
 
     /// The token, read fresh: a plain file, not a link, owned by this account, mode exactly 600, holding 64 lowercase

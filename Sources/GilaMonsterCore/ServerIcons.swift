@@ -44,8 +44,8 @@ public enum ServerIcons {
 
     /// Makes the chosen icon the one Paper reads. The one in use is kept in the folder first if it isn't there yet.
     public static func use(_ choice: ServerIconChoice, paths: ServerPaths) throws {
-        guard choice.fits else { throw LeafError("\(choice.file.lastPathComponent) is \(choice.width)×\(choice.height). Minecraft needs a 64×64 PNG.") }
-        guard choice.file.deletingLastPathComponent().standardizedFileURL == folder(paths).standardizedFileURL else { throw LeafError("That icon isn't in this server's icon folder.") }
+        guard choice.fits else { throw AppError("\(choice.file.lastPathComponent) is \(choice.width)×\(choice.height). Minecraft needs a 64×64 PNG.") }
+        guard choice.file.deletingLastPathComponent().standardizedFileURL == folder(paths).standardizedFileURL else { throw AppError("That icon isn't in this server's icon folder.") }
         try keepCurrent(paths)
         let data = try Data(contentsOf: choice.file)
         try data.write(to: active(paths), options: .atomic)
@@ -71,10 +71,10 @@ public enum ServerIcons {
     /// so pixel art stays sharp. Anything else is refused with the reason.
     public static func add(_ source: URL, paths: ServerPaths) throws -> Added {
         guard let image = CGImageSourceCreateWithURL(source as CFURL, nil), let cg = CGImageSourceCreateImageAtIndex(image, 0, nil) else {
-            throw LeafError("\(source.lastPathComponent) isn't an image GilaMonster can read.")
+            throw AppError("\(source.lastPathComponent) isn't an image GilaMonster can read.")
         }
         guard cg.width == cg.height else {
-            throw LeafError("\(source.lastPathComponent) is \(cg.width)×\(cg.height). A server icon has to be square; crop it first, then add it.")
+            throw AppError("\(source.lastPathComponent) is \(cg.width)×\(cg.height). A server icon has to be square; crop it first, then add it.")
         }
         try FileOps.ensureDir(folder(paths))
         let isPNG = (CGImageSourceGetType(image) as String?) == UTType.png.identifier
@@ -101,19 +101,19 @@ public enum ServerIcons {
     static func nearest(_ image: CGImage, to side: Int) throws -> CGImage {
         guard let context = CGContext(data: nil, width: side, height: side, bitsPerComponent: 8, bytesPerRow: 0,
                                       space: CGColorSpace(name: CGColorSpace.sRGB)!, bitmapInfo: CGImageAlphaInfo.premultipliedLast.rawValue) else {
-            throw LeafError("The image couldn't be resized.")
+            throw AppError("The image couldn't be resized.")
         }
         context.interpolationQuality = .none
         context.draw(image, in: CGRect(x: 0, y: 0, width: side, height: side))
-        guard let out = context.makeImage() else { throw LeafError("The image couldn't be resized.") }
+        guard let out = context.makeImage() else { throw AppError("The image couldn't be resized.") }
         return out
     }
 
     static func png(_ image: CGImage) throws -> Data {
         let out = NSMutableData()
-        guard let dest = CGImageDestinationCreateWithData(out, UTType.png.identifier as CFString, 1, nil) else { throw LeafError("The PNG couldn't be written.") }
+        guard let dest = CGImageDestinationCreateWithData(out, UTType.png.identifier as CFString, 1, nil) else { throw AppError("The PNG couldn't be written.") }
         CGImageDestinationAddImage(dest, image, nil)
-        guard CGImageDestinationFinalize(dest) else { throw LeafError("The PNG couldn't be written.") }
+        guard CGImageDestinationFinalize(dest) else { throw AppError("The PNG couldn't be written.") }
         return out as Data
     }
 

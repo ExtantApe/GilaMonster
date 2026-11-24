@@ -236,7 +236,7 @@ public enum SessionAccess {
     @discardableResult
     public static func newToken(keychain: SecKeychain? = nil) throws -> String {
         var bytes = [UInt8](repeating: 0, count: 32)
-        guard SecRandomCopyBytes(kSecRandomDefault, bytes.count, &bytes) == errSecSuccess else { throw LeafError("Couldn't make a random token.") }
+        guard SecRandomCopyBytes(kSecRandomDefault, bytes.count, &bytes) == errSecSuccess else { throw AppError("Couldn't make a random token.") }
         let value = bytes.map { String(format: "%02x", $0) }.joined()
         var base: [String: Any] = [kSecClass as String: kSecClassGenericPassword, kSecAttrService as String: keychainService, kSecAttrAccount as String: keychainAccount]
         if let keychain { base[kSecMatchSearchList as String] = [keychain] }
@@ -246,7 +246,7 @@ public enum SessionAccess {
                                   kSecAttrLabel as String: keychainService]
         if let keychain { add[kSecUseKeychain as String] = keychain }
         let status = SecItemAdd(add as CFDictionary, nil)
-        guard status == errSecSuccess else { throw LeafError("The Keychain didn't save the token (error \(status)).") }
+        guard status == errSecSuccess else { throw AppError("The Keychain didn't save the token (error \(status)).") }
         return value
     }
 }
@@ -269,16 +269,16 @@ public final class SessionSocket: @unchecked Sendable {
     public var isListening: Bool { lock.lock(); defer { lock.unlock() }; return fd >= 0 }
 
     public func start() throws {
-        guard path.utf8.count < 104 else { throw LeafError("The socket's path is too long for macOS.") }
+        guard path.utf8.count < 104 else { throw AppError("The socket's path is too long for macOS.") }
         let dir = (path as NSString).deletingLastPathComponent
         try FileManager.default.createDirectory(atPath: dir, withIntermediateDirectories: true)
         // Only one listener: an old socket from a crash is removed, but only if it's a socket.
         if let type = try? FileManager.default.attributesOfItem(atPath: path)[.type] as? FileAttributeType {
-            guard type == .typeSocket else { throw LeafError("Something that isn't a socket is in the way at \(path).") }
+            guard type == .typeSocket else { throw AppError("Something that isn't a socket is in the way at \(path).") }
             unlink(path)
         }
         let s = socket(AF_UNIX, SOCK_STREAM, 0)
-        guard s >= 0 else { throw LeafError("Couldn't make the socket.") }
+        guard s >= 0 else { throw AppError("Couldn't make the socket.") }
         var address = sockaddr_un()
         address.sun_family = sa_family_t(AF_UNIX)
         withUnsafeMutableBytes(of: &address.sun_path) { raw in
@@ -290,9 +290,9 @@ public final class SessionSocket: @unchecked Sendable {
         let old = umask(0o077)
         let bound = withUnsafePointer(to: &address) { $0.withMemoryRebound(to: sockaddr.self, capacity: 1) { bind(s, $0, socklen_t(MemoryLayout<sockaddr_un>.size)) } }
         umask(old)
-        guard bound == 0 else { close(s); throw LeafError("Couldn't open the socket (\(String(cString: strerror(errno))))") }
+        guard bound == 0 else { close(s); throw AppError("Couldn't open the socket (\(String(cString: strerror(errno))))") }
         chmod(path, 0o600)
-        guard listen(s, 8) == 0 else { close(s); unlink(path); throw LeafError("Couldn't listen on the socket.") }
+        guard listen(s, 8) == 0 else { close(s); unlink(path); throw AppError("Couldn't listen on the socket.") }
         lock.lock(); fd = s; lock.unlock()
         let thread = Thread { [weak self] in self?.acceptLoop(s) }
         thread.name = "GilaMonster session access"

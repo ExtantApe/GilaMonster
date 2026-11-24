@@ -113,8 +113,8 @@ public enum LegacySprites {
     /// the order 1.20.2, 1.20.5, 26.2. Nothing that exists is overwritten or deleted, and nothing is written outside
     /// `packRoot`.
     public static func migrate(packRoot: URL) throws -> Report {
-        guard FileOps.isDirectory(packRoot) else { throw LeafError("\(packRoot.lastPathComponent) isn't a folder.") }
-        guard realPath(packRoot) != nil else { throw LeafError("Couldn't find \(packRoot.path).") }
+        guard FileOps.isDirectory(packRoot) else { throw AppError("\(packRoot.lastPathComponent) isn't a folder.") }
+        guard realPath(packRoot) != nil else { throw AppError("Couldn't find \(packRoot.path).") }
         var report = Report()
         var createdThisRun = Set<String>()
         for step in Step.allCases {

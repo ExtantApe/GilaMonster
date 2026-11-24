@@ -123,13 +123,13 @@ public enum Backups {
     public static func verify(_ record: BackupRecord, in folder: URL, expectingWorlds worlds: [String]) async throws {
         let archive = folder.appendingPathComponent(record.fileName)
         guard FileOps.exists(archive), FileOps.size(archive) > 0 else {
-            throw LeafError("The backup \(record.fileName) is missing from \(folder.path).")
+            throw AppError("The backup \(record.fileName) is missing from \(folder.path).")
         }
         let listing = try await Tool.run("/usr/bin/tar", ["-tzf", archive.path])
-        guard listing.ok else { throw LeafError("The backup \(record.fileName) is damaged and can't be read.") }
+        guard listing.ok else { throw AppError("The backup \(record.fileName) is damaged and can't be read.") }
         let entries = Set(listing.out.split(whereSeparator: \.isNewline).map(String.init))
         for world in worlds where !entries.contains("\(world)/level.dat") && !entries.contains("\(world)/region/") {
-            throw LeafError("The backup \(record.fileName) doesn't contain the world \(world).")
+            throw AppError("The backup \(record.fileName) doesn't contain the world \(world).")
         }
     }
 
@@ -182,21 +182,21 @@ public enum Backups {
         let dest = folder ?? destination(profile)
         let items = withoutDestination(items(root, scope: scope), root: root, destination: dest)
         guard !items.isEmpty else {
-            throw LeafError(scope == .worlds ? "There's no world to back up yet. Start the server once first." : "There's nothing to back up yet.")
+            throw AppError(scope == .worlds ? "There's no world to back up yet. Start the server once first." : "There's nothing to back up yet.")
         }
         // A drive that isn't plugged in has no folder to write to. Making one would fill the Mac's own disk instead.
         guard DriveCheck.isConnected(dest) else {
-            throw LeafError("The backup wasn't started: \(DriveCheck.name(dest)) isn't connected, and nothing was written to the Mac's own disk instead.")
+            throw AppError("The backup wasn't started: \(DriveCheck.name(dest)) isn't connected, and nothing was written to the Mac's own disk instead.")
         }
         do { try FileOps.ensureDir(dest) } catch {
-            throw LeafError("Can't write to the backup folder \(dest.path). If it's on an external drive, check it's connected.")
+            throw AppError("Can't write to the backup folder \(dest.path). If it's on an external drive, check it's connected.")
         }
         // A compressed backup can't exceed the source by much; require the full size to be safe.
         let needed = items.reduce(Int64(0)) { $0 + FileOps.directorySize(root.appendingPathComponent($1).resolvingSymlinksInPath()) }
         // Fails closed, before anything is written: the disk keeps its floor free afterwards (2026-11-14).
         let room = (DiskGuard.standIn ?? DiskGuard.space)(dest)
         if let why = DiskGuard.refusal(free: room.free, capacity: room.capacity, needed: needed) {
-            throw LeafError("The backup wasn't started. \(why)")
+            throw AppError("The backup wasn't started. \(why)")
         }
 
         let date = Date()
@@ -226,7 +226,7 @@ public enum Backups {
         let result = try await Tool.run("/usr/bin/tar", args, stopIf: stopIf, onStart: { process in
             inFlight.with { $0[job]?.process = process }
         })
-        if let stopped = result.stoppedBecause { throw LeafError("The backup was stopped part way and its partial file removed. \(stopped)") }
+        if let stopped = result.stoppedBecause { throw AppError("The backup was stopped part way and its partial file removed. \(stopped)") }
         var warning: String?
         // tar stores a link as a link, so what it points at isn't in the backup. Better said than found out later.
         let linked = items.filter { (try? FileManager.default.destinationOfSymbolicLink(atPath: root.appendingPathComponent($0).path)) != nil }
@@ -234,7 +234,7 @@ public enum Backups {
         if !result.ok {
             // Files changing mid-read make tar complain. If the archive reads back whole, it's usable.
             let verify = try await Tool.run("/usr/bin/tar", ["-tzf", partial.path])
-            guard verify.ok else { throw LeafError("The backup failed: \(result.err.prefix(300))") }
+            guard verify.ok else { throw AppError("The backup failed: \(result.err.prefix(300))") }
             warning = [warning, "Some files changed while being copied."].compactMap { $0 }.joined(separator: " ")
         }
         try FileOps.move(partial, to: archive)
@@ -302,7 +302,7 @@ public enum Backups {
     /// Anything that goes wrong here leaves the original alone: it's an extra copy, never the only one.
     public static func mirror(_ record: BackupRecord, profile: ServerProfile, to folder: URL) async throws {
         let source = destination(profile).appendingPathComponent(record.fileName)
-        guard FileOps.exists(source) else { throw LeafError("That backup isn't where it should be.") }
+        guard FileOps.exists(source) else { throw AppError("That backup isn't where it should be.") }
         let target = folder.appendingPathComponent(record.fileName)
         // Names can come round again within a second, so the same name and size don't prove it's the same backup.
         if FileOps.exists(target), FileOps.size(target) == record.size {
@@ -310,11 +310,11 @@ public enum Backups {
             if same { return }
         }
         do { try FileOps.ensureDir(folder) } catch {
-            throw LeafError("Can't write to \(folder.path). If it's on another drive, check it's connected.")
+            throw AppError("Can't write to \(folder.path). If it's on another drive, check it's connected.")
         }
         let room = (DiskGuard.standIn ?? DiskGuard.space)(folder)
         if let why = DiskGuard.refusal(free: room.free, capacity: room.capacity, needed: record.size) {
-            throw LeafError("Not copied to \(folder.path). \(why)")
+            throw AppError("Not copied to \(folder.path). \(why)")
         }
         let part = folder.appendingPathComponent(record.fileName + ".part")
         try? FileManager.default.removeItem(at: part)
@@ -322,7 +322,7 @@ public enum Backups {
         // Off the main thread, because a big backup over a slow drive takes a while.
         try await Task.detached(priority: .utility) { try FileManager.default.copyItem(at: source, to: part) }.value
         let (original, copy) = try await Task.detached(priority: .utility) { (try Hashing.digests(of: source).sha1, try Hashing.digests(of: part).sha1) }.value
-        guard original == copy else { throw LeafError("The copy at \(folder.path) didn't match, so it was discarded.") }
+        guard original == copy else { throw AppError("The copy at \(folder.path) didn't match, so it was discarded.") }
         try FileOps.move(part, to: target)
         try JSONStore.save(record, to: sidecar(for: target))
     }
@@ -350,7 +350,7 @@ public enum Backups {
         defer { try? FileManager.default.removeItem(at: part) }
         try await Task.detached(priority: .utility) { try FileManager.default.copyItem(at: source, to: part) }.value
         let listing = try await Tool.run("/usr/bin/tar", ["-tzf", part.path])
-        guard listing.ok else { throw LeafError("That copy can't be read, so it wasn't brought back.") }
+        guard listing.ok else { throw AppError("That copy can't be read, so it wasn't brought back.") }
         try FileOps.move(part, to: dest.appendingPathComponent(record.fileName))
         try JSONStore.save(record, to: sidecar(for: dest.appendingPathComponent(record.fileName)))
     }
@@ -402,7 +402,7 @@ public enum Backups {
         defer { try? FileManager.default.removeItem(at: work) }
 
         let result = try await Tool.run("/usr/bin/tar", ["-xzf", archive.path, "-C", extracted.path])
-        guard result.ok else { throw LeafError("Couldn't read that backup, so nothing was changed. \(result.err.prefix(200))") }
+        guard result.ok else { throw AppError("Couldn't read that backup, so nothing was changed. \(result.err.prefix(200))") }
 
         var moved: [(new: URL, target: URL, saved: URL?)] = []
         do {
@@ -437,7 +437,7 @@ public enum Backups {
                     try? FileManager.default.removeItem(at: step.target)
                 }
             }
-            throw LeafError("The restore failed and was undone. \(error.localizedDescription)")
+            throw AppError("The restore failed and was undone. \(error.localizedDescription)")
         }
     }
 }

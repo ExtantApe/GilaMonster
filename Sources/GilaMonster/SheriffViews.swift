@@ -29,7 +29,7 @@ struct SheriffApproval: View {
                 Hint("Asking Sheriff what \(name) has…")
             } else {
                 if let current {
-                    Fact(label: "On the whitelist", value: current.whitelisted ? "Yes" : "Not yet")
+                    Fact(label: "On the allowlist", value: current.whitelisted ? "Yes" : "Not yet")
                     if !current.throughOtherGroups.isEmpty {
                         Hint("Also gets \(labels(current.throughOtherGroups)) through another group, which Sheriff can't change here.")
                     }

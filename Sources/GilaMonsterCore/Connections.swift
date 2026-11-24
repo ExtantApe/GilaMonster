@@ -162,20 +162,20 @@ public enum ConnectionStore {
     public static func moveToKeychain(_ pasted: PastedSecret, meta: URL, save: (String, String) throws -> Void) throws {
         let url = file(meta)
         guard let data = try? Data(contentsOf: url), var object = try JSONSerialization.jsonObject(with: data) as? [String: Any] else {
-            throw LeafError("connections.json couldn't be read.")
+            throw AppError("connections.json couldn't be read.")
         }
         if let service = pasted.service {
             guard var services = object["services"] as? [Any],
                   let index = services.firstIndex(where: { ($0 as? [String: Any])?["id"] as? String == service }),
-                  var entry = services[index] as? [String: Any] else { throw LeafError("\(service) isn't in the file any more.") }
-            guard let value = entry[pasted.key] as? String, !value.isEmpty else { throw LeafError("There's no text to move in \(pasted.key).") }
+                  var entry = services[index] as? [String: Any] else { throw AppError("\(service) isn't in the file any more.") }
+            guard let value = entry[pasted.key] as? String, !value.isEmpty else { throw AppError("There's no text to move in \(pasted.key).") }
             try save(value, pasted.account)
             entry.removeValue(forKey: pasted.key)
             entry["secret"] = ["keychain": ["account": pasted.account]]
             services[index] = entry
             object["services"] = services
         } else {
-            guard let value = object[pasted.key] as? String, !value.isEmpty else { throw LeafError("There's no text to move in \(pasted.key).") }
+            guard let value = object[pasted.key] as? String, !value.isEmpty else { throw AppError("There's no text to move in \(pasted.key).") }
             try save(value, pasted.account)
             object.removeValue(forKey: pasted.key)
         }
@@ -288,7 +288,7 @@ public enum ConnectionSecrets {
 
     /// Saves or replaces it. The value is never logged or written anywhere else.
     public static func save(_ value: String, account: String, in keychain: SecKeychain? = nil) throws {
-        guard !value.isEmpty else { throw LeafError("Nothing to save.") }
+        guard !value.isEmpty else { throw AppError("Nothing to save.") }
         remove(account: account, in: keychain)
         var q = query(account)
         q[kSecValueData as String] = Data(value.utf8)
@@ -296,7 +296,7 @@ public enum ConnectionSecrets {
         if let keychain { q[kSecUseKeychain as String] = keychain }
         else { q[kSecAttrAccessible as String] = kSecAttrAccessibleAfterFirstUnlockThisDeviceOnly }
         let status = SecItemAdd(q as CFDictionary, nil)
-        guard status == errSecSuccess else { throw LeafError("The Keychain didn't save it (error \(status)).") }
+        guard status == errSecSuccess else { throw AppError("The Keychain didn't save it (error \(status)).") }
     }
 
     public static func remove(account: String, in keychain: SecKeychain? = nil) {

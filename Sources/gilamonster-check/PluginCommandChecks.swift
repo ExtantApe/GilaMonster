@@ -294,7 +294,7 @@ private let head = "[12:00:00 INFO]: "
     defer { if let saved { try? saved.write(to: modulesFile) } else { try? FileManager.default.removeItem(at: modulesFile) }; store.reload() }
     try? FileManager.default.removeItem(at: modulesFile)
     store.reload()
-    check(LeafModule.pluginCommands.startsOff && !store.isOn(.pluginCommands), "plugin commands start off on a fresh install")
+    check(AppModule.pluginCommands.startsOff && !store.isOn(.pluginCommands), "plugin commands start off on a fresh install")
     store.set(.pluginCommands, on: true)
     store.reload()
     check(store.isOn(.pluginCommands), "turned on, it stays on")
@@ -546,9 +546,9 @@ private func buildFakeFormatOne(jdk: JavaRuntime, into jar: URL) async throws {
     write(source, file)
     let bin = URL(fileURLWithPath: jdk.path).deletingLastPathComponent()
     let compile = try await Tool.run(bin.appendingPathComponent("javac").path, ["-d", work.path, file.path])
-    guard compile.ok else { throw LeafError("javac: \(compile.err)") }
+    guard compile.ok else { throw AppError("javac: \(compile.err)") }
     let pack = try await Tool.run(bin.appendingPathComponent("jar").path, ["cfe", jar.path, "FakeFormatOne", "-C", work.path, "FakeFormatOne.class"])
-    guard pack.ok else { throw LeafError("jar: \(pack.err)") }
+    guard pack.ok else { throw AppError("jar: \(pack.err)") }
 }
 
 extension Result {
@@ -947,7 +947,7 @@ private final class PageClient {
 
     func csrf(_ path: String) async throws -> String {
         let page = try await request(path).body
-        guard let r = page.range(of: #"name="csrf" value=""#), let end = page[r.upperBound...].firstIndex(of: "\"") else { throw LeafError("no form on \(path)") }
+        guard let r = page.range(of: #"name="csrf" value=""#), let end = page[r.upperBound...].firstIndex(of: "\"") else { throw AppError("no form on \(path)") }
         return String(page[r.upperBound..<end])
     }
 }
@@ -1077,7 +1077,7 @@ private final class PageClient {
         write(sheriffConfig, root.appendingPathComponent("plugins/Sheriff/config.yml"))
         var lk = try await Tool.run("/usr/bin/unzip", ["-p", welcomewagon.path, "config.yml"]).out
         for (a, b) in [("enabled: false", "enabled: true"), ("port: 25680", "port: \(web)"), ("public-url: \"\"", "public-url: \"https://play.example.test\"")] {
-            guard lk.contains(a) else { throw LeafError("WelcomeWagon's shipped config no longer has \(a)") }
+            guard lk.contains(a) else { throw AppError("WelcomeWagon's shipped config no longer has \(a)") }
             lk = lk.replacingOccurrences(of: a, with: b)
         }
         try FileOps.ensureDir(root.appendingPathComponent("plugins/WelcomeWagon"))
@@ -1109,7 +1109,7 @@ private final class PageClient {
     c.profile.name = "Invites demo"
     Modules.shared.set(.pluginCommands, on: true)
     await c.start()
-    guard await until(240, { c.state == .running }) else { throw LeafError("The demo server didn't start: \(c.console.suffix(3).map(\.text))") }
+    guard await until(240, { c.state == .running }) else { throw AppError("The demo server didn't start: \(c.console.suffix(3).map(\.text))") }
     await c.refreshPlugins()
     for group in ["young", "grown", "young_sky", "grown_sky", "builders"] { _ = await c.ask("lp creategroup \(group)") { $0.contains { $0.contains(group) } } }
     _ = await c.commands.run("sheriff", ["reload"])

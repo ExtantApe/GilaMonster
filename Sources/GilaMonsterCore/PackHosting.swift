@@ -295,7 +295,7 @@ public final class PackHost: @unchecked Sendable {
     public func update(routes new: [PackRoute]) { queue.async { self.routes = new } }
 
     public func start(port: Int) throws {
-        guard let endpointPort = NWEndpoint.Port(rawValue: UInt16(clamping: port)) else { throw LeafError("\(port) isn't a usable port.") }
+        guard let endpointPort = NWEndpoint.Port(rawValue: UInt16(clamping: port)) else { throw AppError("\(port) isn't a usable port.") }
         try listen(on: endpointPort, port: port, triesLeft: 10)
     }
 
@@ -553,7 +553,7 @@ extension ServerController {
     /// holding the old hash fails to load the pack until it's given the new one.
     public func serveBuild(sha1: String?, recipe name: String) throws {
         if let sha1 {
-            guard PackHosting.isSHA1(sha1), FileOps.exists(ResourcePacks.buildFile(sha1: sha1, recipe: name)) else { throw LeafError("That build isn't in the library any more.") }
+            guard PackHosting.isSHA1(sha1), FileOps.exists(ResourcePacks.buildFile(sha1: sha1, recipe: name)) else { throw AppError("That build isn't in the library any more.") }
         }
         hostedRecipe(name)
         var settings = packHostSettings
@@ -571,7 +571,7 @@ extension ServerController {
 
     public func setPackElsewhere(_ address: String?, recipe name: String) throws {
         let trimmed = address?.trimmingCharacters(in: .whitespacesAndNewlines) ?? ""
-        if !trimmed.isEmpty, !PackHosting.isFullAddress(trimmed) { throw LeafError("That needs to be a full web address, starting with https://.") }
+        if !trimmed.isEmpty, !PackHosting.isFullAddress(trimmed) { throw AppError("That needs to be a full web address, starting with https://.") }
         hostedRecipe(name)
         var settings = packHostSettings
         settings.recipes[ResourcePacks.slug(name)]?.elsewhere = trimmed.isEmpty ? nil : trimmed
@@ -579,11 +579,11 @@ extension ServerController {
     }
 
     public func setPackHost(address: String, port: Int) throws {
-        guard let clean = PackHosting.cleanAddress(address) else { throw LeafError("Enter the address players reach, such as https://packs.example.net, or with one short folder, such as https://join.example.net/zz. Lowercase letters, digits and dashes only.") }
+        guard let clean = PackHosting.cleanAddress(address) else { throw AppError("Enter the address players reach, such as https://packs.example.net, or with one short folder, such as https://join.example.net/zz. Lowercase letters, digits and dashes only.") }
         var settings = packHostSettings
         settings.address = clean
         settings.port = port
-        guard settings.portIsUsable else { throw LeafError("The port has to be between 1024 and 65535.") }
+        guard settings.portIsUsable else { throw AppError("The port has to be between 1024 and 65535.") }
         packHostSettings = settings
     }
 
@@ -602,10 +602,10 @@ extension ServerController {
 
     public func startPackHost() throws {
         stopPackHost(remember: false)
-        guard Modules.shared.isOn(.resourcePacks) else { throw LeafError("Resource packs is switched off in Settings.") }
+        guard Modules.shared.isOn(.resourcePacks) else { throw AppError("Resource packs is switched off in Settings.") }
         var settings = packHostSettings
-        guard !settings.address.isEmpty else { throw LeafError("Enter the address players reach first.") }
-        guard settings.portIsUsable else { throw LeafError("The port has to be between 1024 and 65535.") }
+        guard !settings.address.isEmpty else { throw AppError("Enter the address players reach first.") }
+        guard settings.portIsUsable else { throw AppError("The port has to be between 1024 and 65535.") }
         let root = paths.root
         let gated = settings.joiningOnly
         // With joining only on, Packmule's link check gets in with the pack-check token (D219). Off, everyone does anyway.
@@ -653,11 +653,11 @@ extension ServerController {
     /// Writes the pack into server.properties. With a per-world pack plugin this refuses, because the packs are its to send.
     public func usePack(url: String, sha1: String, required: Bool, recipe: String) async throws -> SaveOutcome {
         await refreshPlugins()
-        if let plugin = perWorldPackPlugin { throw LeafError("\(plugin) is on this server, so GilaMonster leaves its pack settings alone. Give \(plugin) the build's address and SHA-1 instead.") }
+        if let plugin = perWorldPackPlugin { throw AppError("\(plugin) is on this server, so GilaMonster leaves its pack settings alone. Give \(plugin) the build's address and SHA-1 instead.") }
         if isServedFromHere(address: url, recipe: recipe) || isBuildAddress(url, recipe: recipe), !packHostIsListening {
-            throw LeafError("That address is served by this app, and serving is off. Start it first, or players couldn't download the pack.")
+            throw AppError("That address is served by this app, and serving is off. Start it first, or players couldn't download the pack.")
         }
-        guard let file = configs.first(where: { $0.path == "server.properties" }) else { throw LeafError("This server has no server.properties yet. Start it once first.") }
+        guard let file = configs.first(where: { $0.path == "server.properties" }) else { throw AppError("This server has no server.properties yet. Start it once first.") }
         return try saveConfig(file, text: try ResourcePacks.applying(url: url, sha1: sha1, required: required, to: configText(file)))
     }
 }

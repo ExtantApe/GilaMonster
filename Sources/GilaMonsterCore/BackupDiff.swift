@@ -67,11 +67,11 @@ public enum BackupCompare {
         defer { try? FileManager.default.removeItem(at: work) }
         let needed = (older.size + newer.size) * 3
         if let free = FileOps.freeSpace(at: work), free < needed {
-            throw LeafError("Comparing needs about \(Format.bytes(needed)) of free space for a moment, and \(Format.bytes(free)) is free.")
+            throw AppError("Comparing needs about \(Format.bytes(needed)) of free space for a moment, and \(Format.bytes(free)) is free.")
         }
         for (record, target) in [(older, a), (newer, b)] {
             let result = try await Tool.run("/usr/bin/tar", ["-xzf", Backups.folder(of: record, profile: profile).appendingPathComponent(record.fileName).path, "-C", target.path])
-            guard result.ok else { throw LeafError("Couldn't read \(record.fileName). \(result.err.prefix(200))") }
+            guard result.ok else { throw AppError("Couldn't read \(record.fileName). \(result.err.prefix(200))") }
         }
         return await compare(old: a, new: b)
     }

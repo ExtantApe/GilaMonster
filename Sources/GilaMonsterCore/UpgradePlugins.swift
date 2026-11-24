@@ -163,7 +163,7 @@ extension ServerController {
     /// Java for the tool, which needs 25 or newer.
     func upgradeToolJava() throws -> String {
         guard let java = JavaManager.best(for: UpgradeTool.javaMajor, in: runtimes) else {
-            throw LeafError("The upgrade check needs Java \(UpgradeTool.javaMajor) or newer. Install it from Settings, then try again.")
+            throw AppError("The upgrade check needs Java \(UpgradeTool.javaMajor) or newer. Install it from Settings, then try again.")
         }
         return java.path
     }
@@ -193,7 +193,7 @@ extension ServerController {
             defer { setActivity(nil) }
             try FileOps.ensureDir(work)
             let paper = work.appendingPathComponent(build.fileName)
-            guard !build.hashes.isEmpty else { throw LeafError("That Paper build has no published checksum, so it wasn't used.") }
+            guard !build.hashes.isEmpty else { throw AppError("That Paper build has no published checksum, so it wasn't used.") }
             try await HTTP.download(HTTP.url(build.downloadURL), to: paper, expect: build.hashes)
             setActivity("Copying the server for the check…")
             let copy = work.appendingPathComponent("copy", isDirectory: true)
@@ -230,8 +230,8 @@ extension ServerController {
     /// Switches off what the plan lists, through the tool. GilaMonster's own verified restore point of the whole server
     /// comes first. The tool then refuses if the server is running or a jar changed since the check.
     public func applyPluginPlan(_ plan: PluginUpgradePlan) async throws {
-        guard plan.canApply else { throw LeafError(plan.stop ?? (plan.blocked.isEmpty ? "There's nothing to switch off." : "A plugin that must stay on would have to go, so the upgrade waits.")) }
-        guard state.canStart, !state.isLive else { throw LeafError("Stop the server first. Plugins are only switched off while it's stopped.") }
+        guard plan.canApply else { throw AppError(plan.stop ?? (plan.blocked.isEmpty ? "There's nothing to switch off." : "A plugin that must stay on would have to go, so the upgrade waits.")) }
+        guard state.canStart, !state.isLive else { throw AppError("Stop the server first. Plugins are only switched off while it's stopped.") }
         let java = try upgradeToolJava()
         if !isTrialCopy { _ = try await makeRestorePoint() }
         let file = paths.meta.appendingPathComponent("upgrade-plan-\(UUID().uuidString).json")
@@ -242,7 +242,7 @@ extension ServerController {
         defer { setActivity(nil) }
         let result = try await UpgradeTool.run(java: java, ["apply", "--server", paths.root.path, "--plan", file.path, "--yes"])
         await refreshPlugins()
-        guard result.ok else { throw LeafError("Nothing was switched off. \(UpgradeTool.lastWords(result))") }
+        guard result.ok else { throw AppError("Nothing was switched off. \(UpgradeTool.lastWords(result))") }
         appendWrapper("Switched off for \(plan.target): \(plan.off.map(\.name).joined(separator: ", ")).", level: .info)
         recordEvent(.plugin, "Plugins switched off for \(plan.target)", detail: plan.off.map(\.name).joined(separator: ", "))
     }
@@ -257,13 +257,13 @@ extension ServerController {
     /// Puts plugins the tool switched off back on. Only while stopped; a newer jar in its place is left alone.
     public func switchBackOn(_ names: [String]) async throws {
         guard !names.isEmpty else { return }
-        guard state.canStart, !state.isLive else { throw LeafError("Stop the server first. Plugins are only switched on while it's stopped.") }
+        guard state.canStart, !state.isLive else { throw AppError("Stop the server first. Plugins are only switched on while it's stopped.") }
         let java = try upgradeToolJava()
         setActivity("Switching plugins back on…")
         defer { setActivity(nil) }
         let result = try await UpgradeTool.run(java: java, ["restore", "--server", paths.root.path] + names.flatMap { ["--plugin", $0] } + ["--yes"])
         await refreshPlugins()
-        guard result.ok else { throw LeafError("Not every plugin went back on. \(UpgradeTool.lastWords(result))") }
+        guard result.ok else { throw AppError("Not every plugin went back on. \(UpgradeTool.lastWords(result))") }
         appendWrapper("Switched back on: \(names.joined(separator: ", ")).", level: .info)
         recordEvent(.plugin, "Plugins switched back on", detail: names.joined(separator: ", "))
     }

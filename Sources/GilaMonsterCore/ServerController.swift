@@ -196,7 +196,7 @@ public final class ServerController: Identifiable {
     /// Starts managing an existing folder. Only `.gilamonster` is written; the server is left as it was.
     public static func adopt(root: URL, name: String?) async throws -> ServerController {
         if let existing = open(root: root) { return existing }
-        guard FileOps.isDirectory(root) else { throw LeafError("That folder doesn't exist.") }
+        guard FileOps.isDirectory(root) else { throw AppError("That folder doesn't exist.") }
         var profile = ServerProfile()
         profile.name = name?.isEmpty == false ? name! : root.lastPathComponent
         let detected = await ServerDetector.detect(root)
@@ -321,7 +321,7 @@ public final class ServerController: Identifiable {
         let text = (try? String(contentsOf: paths.properties, encoding: .utf8)) ?? ""
         var port = 0
         for candidate in (41000...41999).shuffled() where !SystemInfo.isPortBusy(candidate) { port = candidate; break }
-        guard port > 0 else { throw LeafError("No free port was found for the management server.") }
+        guard port > 0 else { throw AppError("No free port was found for the management server.") }
         let updated = ManagementEndpoint.enabling(text, port: port)
         if state.canStart { try FileOps.writeAtomic(updated, to: paths.properties) }
         else { try ConfigStage(paths: paths).stage("server.properties", text: updated) }
@@ -342,7 +342,7 @@ public final class ServerController: Identifiable {
 
     /// Takes the busy mark, or refuses if another long operation holds it.
     func beginBusy(_ what: String) throws {
-        if let other = busyWith { throw LeafError("\(other) is still in progress. Try again when it's done.") }
+        if let other = busyWith { throw AppError("\(other) is still in progress. Try again when it's done.") }
         busyWith = what
     }
 
@@ -353,16 +353,16 @@ public final class ServerController: Identifiable {
     /// Renames the server. Moving the folder is optional, and only possible while it's stopped.
     public func rename(to name: String, moveFolderTo folderName: String?) throws -> URL? {
         let clean = name.trimmingCharacters(in: .whitespacesAndNewlines)
-        guard !isLab else { throw LeafError("The Lab keeps its name, so GilaMonster can always find it.") }
-        guard !clean.isEmpty else { throw LeafError("The name can't be empty.") }
+        guard !isLab else { throw AppError("The Lab keeps its name, so GilaMonster can always find it.") }
+        guard !clean.isEmpty else { throw AppError("The name can't be empty.") }
         var moved: URL?
         if let folderName, folderName != paths.root.lastPathComponent {
-            guard !state.isLive else { throw LeafError("Stop the server before renaming its folder.") }
+            guard !state.isLive else { throw AppError("Stop the server before renaming its folder.") }
             guard !folderName.isEmpty, !folderName.contains("/"), !folderName.hasPrefix(".") else {
-                throw LeafError("That isn't a usable folder name.")
+                throw AppError("That isn't a usable folder name.")
             }
             let target = paths.root.deletingLastPathComponent().appendingPathComponent(folderName, isDirectory: true)
-            guard !FileOps.exists(target) else { throw LeafError("A folder called \(folderName) already exists there.") }
+            guard !FileOps.exists(target) else { throw AppError("A folder called \(folderName) already exists there.") }
             try FileManager.default.moveItem(at: paths.root, to: target)
             paths = ServerPaths(root: target)
             moved = target
@@ -970,7 +970,7 @@ public final class ServerController: Identifiable {
             return nil
         case let .pluginInstall(name, file, finalName, replaces, upstreamID):
             let staged = paths.staged.appendingPathComponent(file)
-            guard FileOps.exists(staged) else { throw LeafError("The staged file for \(name) is missing.") }
+            guard FileOps.exists(staged) else { throw AppError("The staged file for \(name) is missing.") }
             if let replaces, FileOps.exists(paths.plugins.appendingPathComponent(replaces)) {
                 try FileOps.move(paths.plugins.appendingPathComponent(replaces), to: paths.pluginArchive.appendingPathComponent(replaces))
             }
@@ -987,7 +987,7 @@ public final class ServerController: Identifiable {
             return nil
         case let .playerRestore(folder, uuid, _, inventoryOnly, containers):
             guard let snapshot = PlayerSnapshots.list(uuid: uuid, profile: profile).first(where: { $0.folder == folder }) else {
-                throw LeafError("That snapshot is missing.")
+                throw AppError("That snapshot is missing.")
             }
             try applyPlayerRestore(snapshot, inventoryOnly: inventoryOnly, containers: containers)
             return nil
@@ -1001,7 +1001,7 @@ public final class ServerController: Identifiable {
     }
 
     private func swapJar(from staged: URL, build: SoftwareBuild) throws {
-        guard FileOps.exists(staged) else { throw LeafError("The downloaded jar is missing. Download it again.") }
+        guard FileOps.exists(staged) else { throw AppError("The downloaded jar is missing. Download it again.") }
         if let old = FileOps.child(profile.software.jarName, of: paths.root), FileOps.exists(old), profile.software.jarName != build.fileName {
             try FileOps.move(old, to: paths.jarArchive.appendingPathComponent(profile.software.jarName))
         }
@@ -1198,13 +1198,13 @@ public final class ServerController: Identifiable {
     public func installSoftware(_ build: SoftwareBuild) async throws {
         let move = SoftwareCatalog.classify(current: profile.software, flavor: build.flavor, mc: build.mcVersion, build: build.build)
         if move == .downgrade {
-            throw LeafError("Minecraft worlds can't go back to an older version. To return to \(build.mcVersion), restore a backup made on that version, then switch.")
+            throw AppError("Minecraft worlds can't go back to an older version. To return to \(build.mcVersion), restore a backup made on that version, then switch.")
         }
         let name = "jars/\(build.fileName)"
         let staged = paths.staged.appendingPathComponent(name)
         setActivity("Downloading \(build.flavor.title) \(build.label)…", progress: 0)
         defer { setActivity(nil) }
-        guard !build.hashes.isEmpty else { throw LeafError("\(build.label) has no published checksum, so it wasn't installed.") }
+        guard !build.hashes.isEmpty else { throw AppError("\(build.label) has no published checksum, so it wasn't installed.") }
         try await HTTP.download(HTTP.url(build.downloadURL), to: staged, expect: build.hashes) { [weak self] value in
             Task { @MainActor in self?.activityProgress = value }
         }
@@ -1224,7 +1224,7 @@ public final class ServerController: Identifiable {
 
     /// Rolls back to an archived jar of the same Minecraft version.
     public func rollbackJar(_ name: String) async throws {
-        guard state.canStart else { throw LeafError("Stop the server first.") }
+        guard state.canStart else { throw AppError("Stop the server first.") }
         try beginBusy("Rolling back the server jar")
         defer { endBusy() }
         let detected = name.range(of: #"^(paper|purpur|folia)-(.+?)-(\d+)\.jar$"#, options: [.regularExpression, .caseInsensitive]) != nil
@@ -1232,14 +1232,14 @@ public final class ServerController: Identifiable {
             let parts = (name as NSString).deletingPathExtension.components(separatedBy: "-")
             let mc = parts.dropFirst().dropLast().joined(separator: "-")
             if let from = profile.software.gameVersion, let to = GameVersion(mc), to < from {
-                throw LeafError("That jar is for Minecraft \(mc), older than this world. Restore a backup from that version instead.")
+                throw AppError("That jar is for Minecraft \(mc), older than this world. Restore a backup from that version instead.")
             }
             if parts.count >= 3 { profile.software.build = Int(parts.last ?? "") }
         }
         if let current = FileOps.child(profile.software.jarName, of: paths.root), FileOps.exists(current) {
             try FileOps.move(current, to: paths.jarArchive.appendingPathComponent(profile.software.jarName))
         }
-        guard let archived = FileOps.child(name, of: paths.jarArchive), let target = FileOps.child(name, of: paths.root) else { throw LeafError("That isn't a jar name.") }
+        guard let archived = FileOps.child(name, of: paths.jarArchive), let target = FileOps.child(name, of: paths.root) else { throw AppError("That isn't a jar name.") }
         try FileOps.move(archived, to: target)
         profile.software.jarName = name
     }
@@ -1399,7 +1399,7 @@ public final class ServerController: Identifiable {
     public func installUpdate(for plugin: InstalledPlugin) async throws {
         guard let candidate = records[plugin.key]?.available else { return }
         guard let link = candidate.downloadURL else {
-            throw LeafError("\(plugin.name) can't be downloaded automatically. Get it from its page.")
+            throw AppError("\(plugin.name) can't be downloaded automatically. Get it from its page.")
         }
         setActivity("Downloading \(plugin.name) \(candidate.version)…", progress: 0)
         defer { setActivity(nil) }
@@ -1424,17 +1424,17 @@ public final class ServerController: Identifiable {
     public func addPlugin(source: PluginSource) async throws {
         let check = try await PluginSources.check(source, mc: profile.software.gameVersion, flavor: profile.software.flavor)
         guard let candidate = check.candidate else {
-            throw LeafError(check.skippedNote ?? "No compatible release found for \(profile.software.mcVersion).")
+            throw AppError(check.skippedNote ?? "No compatible release found for \(profile.software.mcVersion).")
         }
         guard let link = candidate.downloadURL else {
-            throw LeafError(check.skippedNote ?? "This plugin can't be downloaded automatically.")
+            throw AppError(check.skippedNote ?? "This plugin can't be downloaded automatically.")
         }
         setActivity("Downloading \(candidate.version)…", progress: 0)
         defer { setActivity(nil) }
         let (name, descriptor, _) = try await fetchPlugin(link: link, candidate: candidate, expectedName: nil)
         if plugins.contains(where: { $0.key == descriptor.name.lowercased() }) {
             try? FileManager.default.removeItem(at: paths.staged.appendingPathComponent("plugins/\(name)"))
-            throw LeafError("\(descriptor.name) is already installed. Set its source from the plugin's details instead.")
+            throw AppError("\(descriptor.name) is already installed. Set its source from the plugin's details instead.")
         }
         var record = PluginRecord()
         record.source = source
@@ -1483,11 +1483,11 @@ public final class ServerController: Identifiable {
     }
 
     public func restorePlugin(fileName: String) async throws {
-        guard state.canStart else { throw LeafError("Stop the server first.") }
+        guard state.canStart else { throw AppError("Stop the server first.") }
         try beginBusy("Restoring a plugin")
         defer { endBusy() }
         let archived = paths.pluginArchive.appendingPathComponent(fileName)
-        guard let descriptor = await PluginYAML.read(jar: archived) else { throw LeafError("That jar can't be read.") }
+        guard let descriptor = await PluginYAML.read(jar: archived) else { throw AppError("That jar can't be read.") }
         if let current = plugins.first(where: { $0.key == descriptor.name.lowercased() }) {
             try FileOps.move(paths.plugins.appendingPathComponent(current.fileName), to: paths.pluginArchive.appendingPathComponent(current.fileName))
         }
@@ -1543,10 +1543,10 @@ public final class ServerController: Identifiable {
     @discardableResult
     public func saveConfig(_ file: ConfigFile, text: String) throws -> SaveOutcome {
         let problems = ConfigValidator.problems(text, format: file.format)
-        if let first = problems.first { throw LeafError(first.description) }
+        if let first = problems.first { throw AppError(first.description) }
         if !state.canStart {
             if case let .lockedWhileRunning(hint) = file.policy {
-                throw LeafError("The server rewrites this file while running, so edits would be lost. \(hint)")
+                throw AppError("The server rewrites this file while running, so edits would be lost. \(hint)")
             }
             try ConfigStage(paths: paths).stage(file.path, text: text)
             enqueue(PendingChange(kind: .config(path: file.path), summary: "Update \(file.title)"))
@@ -1636,11 +1636,11 @@ public final class ServerController: Identifiable {
     /// Takes a consistent backup. While running, saving is paused so the world doesn't change underneath it.
     @discardableResult
     public func backupNow(trigger: String = "manual", scope: BackupScope? = nil) async throws -> BackupRecord {
-        guard !backingUp else { throw LeafError("A backup is already running.") }
-        guard state == .running || state.canStart else { throw LeafError("Wait until the server has finished starting or stopping.") }
+        guard !backingUp else { throw AppError("A backup is already running.") }
+        guard state == .running || state.canStart else { throw AppError("Wait until the server has finished starting or stopping.") }
         // Observed: Folia has no save-off or save-all, so a running world can't be held still.
         if state == .running, profile.software.flavor == .folia {
-            throw LeafError("Folia can't pause saving, so it can only be backed up while stopped. Stop the server, then back up.")
+            throw AppError("Folia can't pause saving, so it can only be backed up while stopped. Stop the server, then back up.")
         }
         backingUp = true
         defer { backingUp = false }
@@ -1680,7 +1680,7 @@ public final class ServerController: Identifiable {
             if case .skip(let why) = rule.decide(connected: false, missingSince: profile.backup.driveMissingSince, now: Date(),
                                                   driveName: DriveCheck.name(Backups.destination(profile))) {
                 backupDriveMissing(why)
-                throw LeafError("This backup was skipped. " + why)
+                throw AppError("This backup was skipped. " + why)
             }
         }
         var capPlans: [String: (plan: BackupCaps.Plan, cap: DriveCap, folders: [URL])] = [:]
@@ -1702,7 +1702,7 @@ public final class ServerController: Identifiable {
             guard let chosen = SmartBackup.choose(checked, fallback: own) else {
                 let why = (checked + [own]).map { "\($0.path): \($0.reason)" }.joined(separator: " ")
                 if !capPlans.isEmpty || (checked + [own]).contains(where: { $0.reason.contains(" cap ") }) { capSkipped(why) }
-                throw LeafError("No storage has room for this backup. " + why)
+                throw AppError("No storage has room for this backup. " + why)
             }
             let skipped = checked.prefix { $0.path != chosen.path }.map { "\($0.path): \($0.reason)" }
             lastBackupWhere = chosen.path + (skipped.isEmpty ? "" : ". Passed over: " + skipped.joined(separator: " "))
@@ -1724,7 +1724,7 @@ public final class ServerController: Identifiable {
             let own = capChecked(SmartBackup.Target(path: (into ?? Backups.destination(profile)).path, usable: true, reason: "Ready."))
             if !own.usable {
                 capSkipped(own.reason)
-                throw LeafError("This backup was skipped, so the drive stays under its cap. \(own.reason)")
+                throw AppError("This backup was skipped, so the drive stays under its cap. \(own.reason)")
             }
         }
         let writeTo = into ?? Backups.destination(profile)
@@ -1948,7 +1948,7 @@ public final class ServerController: Identifiable {
     }
 
     public func restoreBackup(_ record: BackupRecord) async throws {
-        guard state.canStart else { throw LeafError("Stop the server before restoring a backup.") }
+        guard state.canStart else { throw AppError("Stop the server before restoring a backup.") }
         try beginBusy("Restoring a backup")
         defer { endBusy() }
         // Making the safety copy runs retention, which could otherwise remove the very backup being restored.
@@ -2026,7 +2026,7 @@ public final class ServerController: Identifiable {
     func stopAndWait() async throws {
         if state == .running || state == .starting { stop() }
         for _ in 0..<(180 * 4) where state.isLive { try? await Task.sleep(for: .milliseconds(250)) }
-        guard state.canStart else { throw LeafError("The server didn't stop, so nothing was changed.") }
+        guard state.canStart else { throw AppError("The server didn't stop, so nothing was changed.") }
     }
 
     /// Accepts the upgrade. Its restore point goes back to being an ordinary backup under the retention rules.
@@ -2046,7 +2046,7 @@ public final class ServerController: Identifiable {
         guard let upgrade = activeUpgrade else { return }
         let folder = URL(fileURLWithPath: upgrade.backupFolder, isDirectory: true)
         guard let record = Backups.list(profile, in: folder).first(where: { $0.fileName == upgrade.backupFile }) else {
-            throw LeafError("The restore point \(upgrade.backupFile) wasn't found in \(folder.path). If it's on an external drive, check it's connected. Nothing was changed.")
+            throw AppError("The restore point \(upgrade.backupFile) wasn't found in \(folder.path). If it's on an external drive, check it's connected. Nothing was changed.")
         }
         try await Backups.verify(record, in: folder, expectingWorlds: upgrade.worlds)
         try await stopAndWait()
@@ -2082,7 +2082,7 @@ public final class ServerController: Identifiable {
     public func resumeShelved(_ entry: ShelvedUpgrade) async throws {
         let folder = Backups.shelf(profile)
         guard let record = Backups.list(profile, in: folder).first(where: { $0.fileName == entry.fileName }) else {
-            throw LeafError("That shelved upgrade's file is missing from \(folder.path).")
+            throw AppError("That shelved upgrade's file is missing from \(folder.path).")
         }
         try await Backups.verify(record, in: folder, expectingWorlds: [])
         try await stopAndWait()
@@ -2145,9 +2145,9 @@ public final class ServerController: Identifiable {
     }
 
     private func requireMultiverse() throws -> Int {
-        guard state == .running else { throw LeafError("Start the server first: Multiverse does this work from inside it.") }
-        guard let major = multiverseMajor else { throw LeafError("Multiverse-Core isn't installed.") }
-        guard worldOperation?.finished ?? true else { throw LeafError("Another world action is still running.") }
+        guard state == .running else { throw AppError("Start the server first: Multiverse does this work from inside it.") }
+        guard let major = multiverseMajor else { throw AppError("Multiverse-Core isn't installed.") }
+        guard worldOperation?.finished ?? true else { throw AppError("Another world action is still running.") }
         return major
     }
 
@@ -2166,48 +2166,48 @@ public final class ServerController: Identifiable {
 
     public func createWorld(_ world: NewWorld) async throws {
         let major = try requireMultiverse()
-        guard Multiverse.isValidName(world.name) else { throw LeafError("World names can use letters, numbers, - and _.") }
-        guard Multiverse.isValidSeed(world.seed) else { throw LeafError("Seeds can use letters, numbers, - and _.") }
+        guard Multiverse.isValidName(world.name) else { throw AppError("World names can use letters, numbers, - and _.") }
+        guard Multiverse.isValidSeed(world.seed) else { throw AppError("Seeds can use letters, numbers, - and _.") }
         await runWorldCommand("Creating \(world.name)", command: Multiverse.createCommand(world, major: major), success: Multiverse.successText(.create, major: major), timeout: .seconds(300))
     }
 
     public func importWorld(_ name: String, environment: WorldEnvironment) async throws {
         let major = try requireMultiverse()
-        guard Multiverse.isValidName(name) else { throw LeafError("Multiverse can't import a world with that name.") }
+        guard Multiverse.isValidName(name) else { throw AppError("Multiverse can't import a world with that name.") }
         await runWorldCommand("Importing \(name)", command: Multiverse.importCommand(name, environment: environment), success: Multiverse.successText(.importWorld, major: major), timeout: .seconds(300))
     }
 
     public func loadWorld(_ name: String) async throws {
         let major = try requireMultiverse()
-        guard Multiverse.isValidName(name) else { throw LeafError("Multiverse can't safely be given a world named that. World names can use letters, numbers, - and _.") }
+        guard Multiverse.isValidName(name) else { throw AppError("Multiverse can't safely be given a world named that. World names can use letters, numbers, - and _.") }
         await runWorldCommand("Loading \(name)", command: Multiverse.loadCommand(name), success: Multiverse.successText(.load, major: major))
     }
 
     public func unloadWorld(_ world: WorldEntry) async throws {
         let major = try requireMultiverse()
-        guard !world.isCore else { throw LeafError("The server's own worlds can't be unloaded.") }
-        guard Multiverse.isValidName(world.name) else { throw LeafError("Multiverse can't safely be given a world named that. World names can use letters, numbers, - and _.") }
+        guard !world.isCore else { throw AppError("The server's own worlds can't be unloaded.") }
+        guard Multiverse.isValidName(world.name) else { throw AppError("Multiverse can't safely be given a world named that. World names can use letters, numbers, - and _.") }
         await runWorldCommand("Unloading \(world.name)", command: Multiverse.unloadCommand(world.name, removePlayers: multiverseRemovesPlayers), success: Multiverse.successText(.unload, major: major))
     }
 
     /// Stops Multiverse managing a world. Its folder stays.
     public func removeWorldFromMultiverse(_ world: WorldEntry) async throws {
         let major = try requireMultiverse()
-        guard !world.isCore else { throw LeafError("The server's own worlds can't be removed.") }
-        guard Multiverse.isValidName(world.name) else { throw LeafError("Multiverse can't safely be given a world named that. World names can use letters, numbers, - and _.") }
+        guard !world.isCore else { throw AppError("The server's own worlds can't be removed.") }
+        guard Multiverse.isValidName(world.name) else { throw AppError("Multiverse can't safely be given a world named that. World names can use letters, numbers, - and _.") }
         await runWorldCommand("Removing \(world.name) from Multiverse", command: Multiverse.removeCommand(world.name, removePlayers: multiverseRemovesPlayers), success: Multiverse.successText(.remove, major: major))
     }
 
     public func cloneWorld(_ world: WorldEntry, to target: String) async throws {
         let major = try requireMultiverse()
-        guard Multiverse.isValidName(target), Multiverse.isValidName(world.name) else { throw LeafError("World names can use letters, numbers, - and _.") }
+        guard Multiverse.isValidName(target), Multiverse.isValidName(world.name) else { throw AppError("World names can use letters, numbers, - and _.") }
         await runWorldCommand("Copying \(world.name) to \(target)", command: Multiverse.cloneCommand(world.name, to: target), success: Multiverse.successText(.clone, major: major), timeout: .seconds(600))
     }
 
     public func modifyWorld(_ world: WorldEntry, property: String, value: String) async throws {
         let major = try requireMultiverse()
         guard Multiverse.isValidName(world.name), value.range(of: #"^[A-Za-z0-9_ .:'&-]*\z"#, options: .regularExpression) != nil else {
-            throw LeafError("That value contains characters that can't be sent safely.")
+            throw AppError("That value contains characters that can't be sent safely.")
         }
         await runWorldCommand("Setting \(property) on \(world.name)", command: Multiverse.modifyCommand(world.name, property: property, value: value, major: major), success: Multiverse.successText(.modify, major: major), timeout: .seconds(15))
     }
@@ -2215,8 +2215,8 @@ public final class ServerController: Identifiable {
     /// Permanently deletes a world, after an automatic backup. A failed backup stops the delete.
     public func deleteWorld(_ world: WorldEntry) async throws {
         let major = try requireMultiverse()
-        guard !world.isCore else { throw LeafError("The server's own worlds can't be deleted here.") }
-        guard Multiverse.isValidName(world.name) else { throw LeafError("Multiverse can't delete a world with that name.") }
+        guard !world.isCore else { throw AppError("The server's own worlds can't be deleted here.") }
+        guard Multiverse.isValidName(world.name) else { throw AppError("Multiverse can't delete a world with that name.") }
         try await backupNow(trigger: "before-world-delete", scope: .worlds)
 
         worldOperation = WorldOperation(title: "Deleting \(world.name)", firstLineID: nextLineID)

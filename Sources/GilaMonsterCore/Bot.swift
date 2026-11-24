@@ -16,7 +16,7 @@ struct ProtocolTable: Sendable {
         let versionFile = folder.appendingPathComponent("version.json")
         if !FileOps.exists(packets) || !FileOps.exists(versionFile) {
             try FileOps.ensureDir(folder)
-            guard let build = try await SoftwareCatalog.latestBuild(.vanilla, mc: mc) else { throw LeafError("No vanilla \(mc).") }
+            guard let build = try await SoftwareCatalog.latestBuild(.vanilla, mc: mc) else { throw AppError("No vanilla \(mc).") }
             let jar = folder.appendingPathComponent("vanilla.jar")
             try await HTTP.download(HTTP.url(build.downloadURL), to: jar, expect: build.hashes)
             // The generator clears its output folder, so it gets one of its own.
@@ -24,13 +24,13 @@ struct ProtocolTable: Sendable {
             let output = folder.appendingPathComponent("generated", isDirectory: true)
             let r = try await Tool.run(java, ["-DbundlerMainClass=net.minecraft.data.Main", "-jar", jar.path, "--reports", "--output", output.path], cwd: folder)
             let made = output.appendingPathComponent("reports/packets.json")
-            guard FileOps.exists(made) else { throw LeafError("Data generator failed: \(r.err.prefix(300)) \(r.out.suffix(300))") }
+            guard FileOps.exists(made) else { throw AppError("Data generator failed: \(r.err.prefix(300)) \(r.out.suffix(300))") }
             try FileOps.move(made, to: packets)
             try FileOps.writeAtomic(v.out, to: versionFile)
         }
         let version = (try JSONSerialization.jsonObject(with: Data(contentsOf: versionFile)) as? [String: Any])?["protocol_version"] as? Int
         guard let version, let root = try JSONSerialization.jsonObject(with: Data(contentsOf: packets)) as? [String: [String: [String: [String: Any]]]] else {
-            throw LeafError("Couldn't read the packet table for \(mc).")
+            throw AppError("Couldn't read the packet table for \(mc).")
         }
         var ids: [String: Int32] = [:]
         for (state, directions) in root {
@@ -74,7 +74,7 @@ final class Bot: @unchecked Sendable {
         let result = withUnsafePointer(to: &address) {
             $0.withMemoryRebound(to: sockaddr.self, capacity: 1) { connect(fd, $0, socklen_t(MemoryLayout<sockaddr_in>.size)) }
         }
-        guard result == 0 else { throw LeafError("\(name) couldn't connect to port \(port).") }
+        guard result == 0 else { throw AppError("\(name) couldn't connect to port \(port).") }
 
         // Handshake, then ask to log in.
         var handshake = Self.varInt(Int32(table.version))

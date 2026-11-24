@@ -317,20 +317,20 @@ public enum ResourcePacks {
         let target = unpacked.appendingPathComponent(digest, isDirectory: true)
         if FileOps.exists(target.appendingPathComponent(".done")) { return target }
         let sizes = try await Tool.run("/usr/bin/unzip", ["-Zt", zip.path])
-        guard sizes.ok else { throw LeafError("\(zip.lastPathComponent) isn't a zip file that can be read.") }
+        guard sizes.ok else { throw AppError("\(zip.lastPathComponent) isn't a zip file that can be read.") }
         if let total = bytes(inSummary: sizes.out), total > unpackLimit {
-            throw LeafError("\(zip.lastPathComponent) would unpack to \(Format.bytes(total)), which is more than a resource pack should be.")
+            throw AppError("\(zip.lastPathComponent) would unpack to \(Format.bytes(total)), which is more than a resource pack should be.")
         }
         try await clear(target)
         try FileOps.ensureDir(target)
         let result = try await Tool.run("/usr/bin/unzip", ["-q", "-o", zip.path, "-d", target.path, "-x", "__MACOSX/*"], timeout: 300)
         // unzip exits 1 for warnings such as odd path separators, which still unpack.
-        guard result.code <= 1 else { throw LeafError("Couldn't unpack \(zip.lastPathComponent). \(result.err.prefix(200))") }
+        guard result.code <= 1 else { throw AppError("Couldn't unpack \(zip.lastPathComponent). \(result.err.prefix(200))") }
         // The sizes a zip declares can lie, so what actually arrived is measured too (K158 audit).
         let real = Int64(listing(target).reduce(0) { $0 + FileOps.size(target.appendingPathComponent($1)) })
         if real > unpackLimit {
             try? await clear(target)
-            throw LeafError("\(zip.lastPathComponent) unpacked to \(Format.bytes(real)), more than a resource pack should be, so it was removed.")
+            throw AppError("\(zip.lastPathComponent) unpacked to \(Format.bytes(real)), more than a resource pack should be, so it was removed.")
         }
         // Observed: real packs can store read-only folders, which then can't be cleared or rebuilt from.
         _ = try await Tool.run("/bin/chmod", ["-R", "u+rwX", target.path])
@@ -338,7 +338,7 @@ public enum ResourcePacks {
         let names = try await Tool.run("/usr/bin/unzip", ["-Z1", zip.path])
         let wanted = names.out.split(separator: "\n").filter { !$0.hasSuffix("/") && !$0.hasPrefix("__MACOSX") && !$0.hasSuffix(".DS_Store") && !$0.contains("../") }.count
         let found = listing(target).count
-        guard found >= wanted else { throw LeafError("\(zip.lastPathComponent) only partly unpacked: \(found) of \(wanted) files.") }
+        guard found >= wanted else { throw AppError("\(zip.lastPathComponent) only partly unpacked: \(found) of \(wanted) files.") }
         try FileOps.writeAtomic("ok", to: target.appendingPathComponent(".done"))
         return target
     }
@@ -375,18 +375,18 @@ public enum ResourcePacks {
     static func read(_ zip: URL, version: String) async throws -> (info: PackVersion, root: URL) {
         let top = try await unpack(zip)
         let files = listing(top)
-        guard let prefix = root(of: files) else { throw LeafError("\(zip.lastPathComponent) has no pack.mcmeta, so it isn't a resource pack.") }
+        guard let prefix = root(of: files) else { throw AppError("\(zip.lastPathComponent) has no pack.mcmeta, so it isn't a resource pack.") }
         // Observed: a source project can hold many packs side by side, and picking one would quietly drop the rest.
         let roots = files.filter { ($0 == "pack.mcmeta" || $0.hasSuffix("/pack.mcmeta")) && !$0.hasPrefix("__MACOSX") }.map { String($0.dropLast("pack.mcmeta".count)) }
         let shallowest = roots.map { $0.components(separatedBy: "/").count }.min() ?? 0
         let level = roots.filter { $0.components(separatedBy: "/").count == shallowest }
         if level.count > 1 {
             let names = level.prefix(4).compactMap { $0.split(separator: "/").last.map(String.init) }.joined(separator: ", ")
-            throw LeafError("\(zip.lastPathComponent) holds \(level.count) separate packs (\(names)…), so it looks like a project's source rather than one pack. Use its built pack, or zip just the one you want.")
+            throw AppError("\(zip.lastPathComponent) holds \(level.count) separate packs (\(names)…), so it looks like a project's source rather than one pack. Use its built pack, or zip just the one you want.")
         }
         let packRoot = prefix.isEmpty ? top : top.appendingPathComponent(prefix, isDirectory: true)
         let meta = (try? JSONSerialization.jsonObject(with: Data(contentsOf: packRoot.appendingPathComponent("pack.mcmeta")))) as? [String: Any]
-        guard let pack = meta?["pack"] as? [String: Any] else { throw LeafError("\(zip.lastPathComponent) has a pack.mcmeta that can't be read.") }
+        guard let pack = meta?["pack"] as? [String: Any] else { throw AppError("\(zip.lastPathComponent) has a pack.mcmeta that can't be read.") }
         let format = formatNumber(pack["pack_format"]) ?? formatNumber(pack["min_format"])
         let own = listing(packRoot)
         return (PackVersion(file: zip.lastPathComponent, version: version, sha1: try Hashing.digests(of: zip).sha1, added: Date(), size: FileOps.size(zip), format: format, description: describe(pack["description"]), fileCount: own.count, imageCount: own.filter { $0.lowercased().hasSuffix(".png") && $0.hasPrefix("assets/") }.count), packRoot)
@@ -549,7 +549,7 @@ public enum ResourcePacks {
     @discardableResult
     public static func download(_ source: PackSource, update: PackUpdate? = nil, mc: String?) async throws -> LibraryPack {
         guard let found = try await (update != nil ? update : latest(source, mc: mc)) else {
-            throw LeafError("No release found at \(source.title)\(mc.map { " for Minecraft \($0)" } ?? ""). Try one made for another version, or add the file by hand.")
+            throw AppError("No release found at \(source.title)\(mc.map { " for Minecraft \($0)" } ?? ""). Try one made for another version, or add the file by hand.")
         }
         let work = folder.appendingPathComponent(".download-\(UUID().uuidString)", isDirectory: true)
         try FileOps.ensureDir(work)
@@ -808,7 +808,7 @@ public enum ResourcePacks {
     /// Builds one pack from a recipe. The same recipe and sources give a byte-identical file, and so the same SHA-1.
     public static func combine(_ recipe: PackRecipe) async throws -> PackBuild {
         let sources = try await sources(recipe)
-        guard !sources.isEmpty else { throw LeafError("Choose at least one pack to include.") }
+        guard !sources.isEmpty else { throw AppError("Choose at least one pack to include.") }
         let lock = try await lock(recipe, sources: sources)
         let work = folder.appendingPathComponent(".building-\(UUID().uuidString)", isDirectory: true)
         try FileOps.ensureDir(work)
@@ -895,7 +895,7 @@ public enum ResourcePacks {
         // Fixed times and a fixed order: nothing changed means the same SHA-1, so nobody uploads for nothing.
         let script = #"chmod -R u=rwX,go=rX . && find . -exec touch -t 200001010000 {} + && find . -type f | LC_ALL=C sort | zip -X -q "$0" -@"#
         let zipped = try await Tool.run("/bin/sh", ["-c", script, part.path], cwd: work)
-        guard zipped.ok else { throw LeafError("Couldn't make the zip. \(zipped.err.prefix(200))") }
+        guard zipped.ok else { throw AppError("Couldn't make the zip. \(zipped.err.prefix(200))") }
         let sha1 = try Hashing.digests(of: part).sha1
         let size = FileOps.size(part)
         if size > clientLimit { warnings.append("At \(Format.bytes(size)), this may be too large for players' games to accept.") }
@@ -932,9 +932,9 @@ public enum ResourcePacks {
     /// Fetches what it can and verifies it. A pack already here by hash needs no download.
     public static func importRecipe(_ data: Data, mc: String?) async throws -> RecipeImport {
         guard let file = try? JSONStore.decoder.decode(RecipeExport.self, from: data), file.kind.hasSuffix("-pack-recipe") else {
-            throw LeafError("That isn't a GilaMonster recipe.")
+            throw AppError("That isn't a GilaMonster recipe.")
         }
-        guard file.formatVersion <= 1 else { throw LeafError("That recipe was made by a newer GilaMonster.") }
+        guard file.formatVersion <= 1 else { throw AppError("That recipe was made by a newer GilaMonster.") }
         var out = RecipeImport(recipe: file.recipe)
         var idMap: [String: String] = [:]
         for wanted in file.packs {
@@ -1001,9 +1001,9 @@ public enum ResourcePacks {
     /// The new text of server.properties. A new pack needs a new id too, or players may keep the old one.
     public static func applying(url: String, sha1: String, required: Bool, to properties: String) throws -> String {
         guard let parsed = URL(string: url), ["http", "https"].contains(parsed.scheme?.lowercased() ?? ""), parsed.host != nil else {
-            throw LeafError("That needs to be a full web address, starting with https://, that players' games can download from.")
+            throw AppError("That needs to be a full web address, starting with https://, that players' games can download from.")
         }
-        guard sha1.range(of: "^[0-9a-fA-F]{40}$", options: .regularExpression) != nil else { throw LeafError("That SHA-1 doesn't look right. It should be 40 characters.") }
+        guard sha1.range(of: "^[0-9a-fA-F]{40}$", options: .regularExpression) != nil else { throw AppError("That SHA-1 doesn't look right. It should be 40 characters.") }
         var doc = PropertiesDocument(properties)
         doc.set("resource-pack", url)
         doc.set("resource-pack-sha1", sha1.lowercased())
@@ -1031,7 +1031,7 @@ public struct VanillaAssets: Codable, Equatable, Sendable {
         let file = cache.appendingPathComponent("\(mc).json")
         if let data = try? Data(contentsOf: file), let saved = try? JSONStore.decoder.decode(VanillaAssets.self, from: data) { return saved }
         let manifest = try await HTTP.decode(Manifest.self, HTTP.url("https://piston-meta.mojang.com/mc/game/version_manifest_v2.json"))
-        guard let version = manifest.versions.first(where: { $0.id == mc }) else { throw LeafError("Mojang doesn't list Minecraft \(mc).") }
+        guard let version = manifest.versions.first(where: { $0.id == mc }) else { throw AppError("Mojang doesn't list Minecraft \(mc).") }
         let details = try await HTTP.decode(Details.self, HTTP.url(version.url))
         let work = cache.appendingPathComponent(".download-\(UUID().uuidString)", isDirectory: true)
         try FileOps.ensureDir(work)
@@ -1039,7 +1039,7 @@ public struct VanillaAssets: Codable, Equatable, Sendable {
         let jar = work.appendingPathComponent("client.jar")
         try await HTTP.download(HTTP.url(details.downloads.client.url), to: jar, expect: ExpectedHashes(sha1: details.downloads.client.sha1))
         let names = try await Tool.run("/usr/bin/unzip", ["-Z1", jar.path])
-        guard names.ok else { throw LeafError("Couldn't read Minecraft \(mc)'s file list.") }
+        guard names.ok else { throw AppError("Couldn't read Minecraft \(mc)'s file list.") }
         let info = try await Tool.run("/usr/bin/unzip", ["-p", jar.path, "version.json"])
         let parsed = (try? JSONSerialization.jsonObject(with: Data(info.out.utf8))) as? [String: Any]
         let packVersion = parsed?["pack_version"] as? [String: Any]

@@ -78,6 +78,7 @@ strip -x "$app/Contents/MacOS/gilamonster-session" 2>/dev/null || true
 
 [ -f brand/AppIcon.icns ] || swift scripts/brand-kit.swift brand/kit
 cp brand/AppIcon.icns "$app/Contents/Resources/AppIcon.icns"
+cp brand/MenuBarTemplate.png brand/MenuBarTemplate@2x.png "$app/Contents/Resources/"
 
 cat > "$app/Contents/Info.plist" <<PLIST
 <?xml version="1.0" encoding="UTF-8"?>

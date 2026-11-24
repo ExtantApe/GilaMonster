@@ -31,11 +31,11 @@ struct InviteTicketView: View {
             Spacer(minLength: 0)
             Text("Keep this to yourself: anyone with the code can use it first.").font(.system(size: 12))
         }
-        .foregroundStyle(Color.black)
+        .foregroundStyle(Color.black)  // theme-exempt: a printed ticket is black on white paper
         .padding(28)
         .frame(width: Self.size.width, height: Self.size.height, alignment: .topLeading)
-        .background(Color.white)
-        .overlay { Rectangle().strokeBorder(Color.black, style: StrokeStyle(lineWidth: 1, dash: [4, 4])) }
+        .background(Color.white)  // theme-exempt: printed
+        .overlay { Rectangle().strokeBorder(Color.black, style: StrokeStyle(lineWidth: 1, dash: [4, 4])) }  // theme-exempt: printed
         .environment(\.colorScheme, .light)
         .accessibilityElement(children: .ignore)
         .accessibilityLabel(ticket.text())

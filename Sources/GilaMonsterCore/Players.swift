@@ -276,7 +276,7 @@ public enum PlayerSnapshots {
             "--include", "plugins/Multiverse-Inventories/groups/*/\(name).json",
         ])
         // tar reports each pattern that didn't match, which is normal: only one layout applies.
-        guard result.ok || result.err.contains("Not found in archive") else { throw LeafError("Couldn't read that backup. \(result.err.prefix(200))") }
+        guard result.ok || result.err.contains("Not found in archive") else { throw AppError("Couldn't read that backup. \(result.err.prefix(200))") }
 
         var dat: URL?
         if let walker = FileManager.default.enumerator(at: work, includingPropertiesForKeys: nil) {
@@ -289,7 +289,7 @@ public enum PlayerSnapshots {
                 containers.append("\(kind)/\(c.lastPathComponent)/\(name).json")
             }
         }
-        guard dat != nil || !containers.isEmpty else { throw LeafError("\(name) has no saved data in that backup.") }
+        guard dat != nil || !containers.isEmpty else { throw AppError("\(name) has no saved data in that backup.") }
 
         let target = folder(profile).appendingPathComponent(uuid).appendingPathComponent("\(stamp(record.date))-backup", isDirectory: true)
         if FileOps.exists(target) { try FileManager.default.removeItem(at: target) }

@@ -9,7 +9,7 @@ enum PageID: String, CaseIterable, Identifiable, Hashable {
     case overview, console, history, players, allowlist, worlds, plugins, software, lab, configs, resourcePacks, links, advisor, launch, backups, changes, cleanup
     var id: String { rawValue }
     /// The module a page belongs to. Nil for the essentials, which are always there.
-    var module: LeafModule? {
+    var module: AppModule? {
         switch self {
         case .worlds: .worlds
         case .players, .allowlist: .players
@@ -280,6 +280,8 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
     /// `GILAMONSTER_SNAPSHOT=<folder>`, for checking screens nobody has clicked yet. Starts nothing.
     @MainActor private func snapshotIfAsked() {
         guard let folder = ProcessInfo.processInfo.environment["GILAMONSTER_SNAPSHOT"], let model = Self.model else { return }
+        // GILAMONSTER_SNAPSHOT_THEME=bold|quiet picks the theme for this run, without saving it.
+        if let name = ProcessInfo.processInfo.environment["GILAMONSTER_SNAPSHOT_THEME"], let flavor = Palette.Flavor(rawValue: name) { Theme.flavor = flavor }
         NSApp.setActivationPolicy(.accessory)
         NSApp.windows.forEach { $0.close() }
         Task { @MainActor in
@@ -292,6 +294,7 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
                     model.page = page
                     let host = NSHostingView(rootView: RootView(model: model).tint(Theme.accent))
                     if ProcessInfo.processInfo.environment["GILAMONSTER_SNAPSHOT_LIGHT"] != nil { host.appearance = NSAppearance(named: .aqua) }
+                    if ProcessInfo.processInfo.environment["GILAMONSTER_SNAPSHOT_DARK"] != nil { host.appearance = NSAppearance(named: .darkAqua) }
                     let window = NSWindow(contentRect: NSRect(x: -6000, y: -6000, width: 1280, height: 1000), styleMask: [.borderless], backing: .buffered, defer: false)
                     window.isReleasedWhenClosed = false
                     window.contentView = host
@@ -341,6 +344,7 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
             for (name, view) in quitDialogs + serverDialogs {
                     let host = NSHostingView(rootView: view.tint(Theme.accent).background(Theme.background))
                     if ProcessInfo.processInfo.environment["GILAMONSTER_SNAPSHOT_LIGHT"] != nil { host.appearance = NSAppearance(named: .aqua) }
+                    if ProcessInfo.processInfo.environment["GILAMONSTER_SNAPSHOT_DARK"] != nil { host.appearance = NSAppearance(named: .darkAqua) }
                     let size = host.fittingSize
                     host.frame = NSRect(origin: .zero, size: NSSize(width: max(size.width, 320), height: max(min(size.height, 1100), 200)))
                     let window = NSWindow(contentRect: NSRect(x: -6000, y: -6000, width: host.frame.width, height: host.frame.height), styleMask: [.borderless], backing: .buffered, defer: false)
@@ -499,6 +503,7 @@ struct GilaMonsterApp: App {
     @NSApplicationDelegateAdaptor(AppDelegate.self) private var delegate
     @State private var model: AppModel
     @AppStorage("appearance") private var appearance = "auto"
+    @AppStorage(ThemeChoice.key) private var themeFlavor = Palette.Flavor.bold.rawValue
 
     init() {
         // GILAMONSTER_SAMPLE_TICKET=<file.png>: draws a ticket with made-up data and quits, to look at the layout.
@@ -522,6 +527,7 @@ struct GilaMonsterApp: App {
     var body: some Scene {
         Window("GilaMonster", id: "main") {
             RootView(model: model)
+                .id(themeFlavor)  // a new theme redraws everything, since colors are read when drawn
                 .frame(minWidth: 1120, minHeight: 640)
                 .tint(Theme.accent)
                 .preferredColorScheme(scheme)
@@ -533,7 +539,7 @@ struct GilaMonsterApp: App {
             if AdvisorTrial.isOn {
                 Text("This trial has no settings.").padding(40)
             } else {
-                SettingsView(model: model).tint(Theme.accent).preferredColorScheme(scheme)
+                SettingsView(model: model).tint(Theme.accent).preferredColorScheme(scheme).id(themeFlavor)
             }
         }
 
@@ -577,7 +583,8 @@ struct ServerCommands: Commands {
     }
 }
 
-/// The menu bar leaf. While a session's ask waits for the owner, it shows how many (K679).
+/// The menu bar mark: Brand's template, with a dot while a server runs. While a session's ask waits for the owner,
+/// it shows how many (K679).
 struct MenuBarLabel: View {
     let model: AppModel
     private let service = SessionAccessService.shared
@@ -586,15 +593,32 @@ struct MenuBarLabel: View {
         let waiting = service.waiting.count
         if waiting > 0 {
             HStack(spacing: 2) {
-                Image(systemName: "leaf.circle.fill")
+                Image(nsImage: Self.mark(dot: false))
                 Text("\(waiting)").monospacedDigit()
             }
             .accessibilityElement(children: .ignore)
             .accessibilityLabel("GilaMonster, \(waiting) \(waiting == 1 ? "request" : "requests") waiting for you")
         } else {
-            Image(systemName: model.anyLive ? "leaf.fill" : "leaf")
+            Image(nsImage: Self.mark(dot: model.anyLive))
                 .accessibilityLabel(model.anyLive ? "GilaMonster, server running" : "GilaMonster")
         }
+    }
+
+    /// The template from brand/ (copied into the app by build-app.sh), drawn as a template so macOS colors it for the
+    /// menu bar. A running server adds a dot in its lower right corner, in the same template color.
+    static func mark(dot: Bool) -> NSImage {
+        let base = NSImage(named: "MenuBarTemplate") ?? NSImage(systemSymbolName: "square.fill", accessibilityDescription: nil) ?? NSImage()
+        let size = NSSize(width: 18, height: 18)
+        let image = NSImage(size: size, flipped: false) { rect in
+            base.draw(in: rect)
+            if dot {
+                NSColor.black.setFill()
+                NSBezierPath(ovalIn: NSRect(x: rect.maxX - 6, y: 0, width: 6, height: 6)).fill()
+            }
+            return true
+        }
+        image.isTemplate = true
+        return image
     }
 }
 
@@ -643,8 +667,18 @@ struct SettingsView: View {
     @Bindable var model: AppModel
     @State private var serversFolder = AppPaths.servers.path
     @AppStorage("appearance") private var appearance = "auto"
+    @AppStorage(ThemeChoice.key) private var themeFlavor = Palette.Flavor.bold.rawValue
     var body: some View {
         Form {
+            Picker("Theme", selection: Binding(get: { Palette.Flavor(rawValue: themeFlavor) ?? .bold }, set: { flavor in
+                Theme.flavor = flavor
+                themeFlavor = flavor.rawValue
+            })) {
+                Text("Bold").tag(Palette.Flavor.bold)
+                Text("Quiet").tag(Palette.Flavor.quiet)
+            }
+            .pickerStyle(.segmented)
+            Hint("Bold uses the red-orange and turquoise strongly. Quiet keeps them for what matters. Both meet the same contrast rules, in light and dark.")
             Picker("Appearance", selection: $appearance) {
                 Text("Match System").tag("auto")
                 Text("Light").tag("light")
@@ -667,7 +701,7 @@ struct SettingsView: View {
             }
             Hint("Add your own log rules as JSON files in that folder. See the README for the format.")
             Section {
-                ForEach(LeafModule.allCases) { module in
+                ForEach(AppModule.allCases) { module in
                     Toggle(isOn: Binding(get: { Modules.shared.isOn(module) }, set: { on in
                         Modules.shared.set(module, on: on)
                         // Off means off straight away, including a check that's already running.

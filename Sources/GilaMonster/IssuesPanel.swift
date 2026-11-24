@@ -39,7 +39,7 @@ struct IssuesPanel: View {
 
             if items.isEmpty {
                 EmptyMessage(
-                    icon: "leaf",
+                    icon: "checkmark.circle",
                     title: showing == .open ? "Nothing to report" : "Nothing here",
                     detail: "Warnings and errors from the server are catalogued here as they appear.")
                 Spacer()

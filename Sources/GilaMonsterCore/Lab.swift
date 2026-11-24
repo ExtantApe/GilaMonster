@@ -290,7 +290,7 @@ public final class LabController {
         let software = other.profile.software
         let found: SoftwareBuild?
         if let chosen { found = chosen } else { found = try await SoftwareCatalog.latestBuild(software.flavor, mc: software.mcVersion) }
-        guard let build = found else { throw LeafError("Couldn't find \(software.flavor.title) \(software.mcVersion) to download.") }
+        guard let build = found else { throw AppError("Couldn't find \(software.flavor.title) \(software.mcVersion) to download.") }
         var sources: [PluginSource] = [], jars: [URL] = []
         var leftOut: [String] = []
         for plugin in other.plugins where plugin.enabled {
@@ -308,7 +308,7 @@ public final class LabController {
 
     /// Clears the Lab and builds it again from the recipe. Returns notes about anything it couldn't include.
     private func rebuild(_ spec: LabSpec) async throws -> (controller: ServerController, notes: [LabCheck]) {
-        guard eulaAccepted else { throw LeafError("The Minecraft EULA has to be accepted before the lab can run a server.") }
+        guard eulaAccepted else { throw AppError("The Minecraft EULA has to be accepted before the lab can run a server.") }
         // Jars first: the Lab's own may be among them, about to be cleared.
         try? FileManager.default.removeItem(at: LabFiles.scratch)
         try FileOps.ensureDir(LabFiles.scratch)
@@ -372,9 +372,9 @@ public final class LabController {
     private func clearFolder() async throws {
         let root = LabFiles.root
         if let server {
-            guard !server.state.isLive else { throw LeafError("Stop the lab first.") }
+            guard !server.state.isLive else { throw AppError("Stop the lab first.") }
             await server.detectExternalServer()
-            if case .external = server.state { throw LeafError("The Lab is running outside GilaMonster. Stop it first.") }
+            if case .external = server.state { throw AppError("The Lab is running outside GilaMonster. Stop it first.") }
         }
         guard FileOps.exists(root) else { return }
         guard let onDisk = ServerController.readProfile(root: root), LabFiles.isLab(root: root, profile: onDisk) else {
@@ -401,14 +401,14 @@ public final class LabController {
     private func boot(_ c: ServerController) async throws {
         await prepareJava(c)
         await c.start()
-        if !c.blockers.isEmpty { throw LeafError(c.blockers.map(\.title).joined(separator: ", ")) }
+        if !c.blockers.isEmpty { throw AppError(c.blockers.map(\.title).joined(separator: ", ")) }
         for _ in 0..<(bootLimit * 4) {
             if c.state == .running || c.state.canStart { break }
             try? await Task.sleep(for: .milliseconds(250))
         }
         guard c.state == .running else {
             let lines = c.console.filter { $0.level >= .warn }.suffix(3).map(\.text).joined(separator: " ")
-            throw LeafError("It didn't finish starting. \(lines)")
+            throw AppError("It didn't finish starting. \(lines)")
         }
     }
 
@@ -861,14 +861,14 @@ public final class LabController {
 
     /// A lab seeded on the server's current version, then moved to the new one with updated plugins.
     private func stationUpgrade(_ model: ServerController) async throws {
-        guard let build = state.target else { throw LeafError("Choose a version first.") }
+        guard let build = state.target else { throw AppError("Choose a version first.") }
         say("Reading \(model.profile.name)'s plugin list…")
         let current = try await Self.spec(copying: model)
         var checks = current.leftOut.map { LabCheck($0, .skipped) }
         say("Building a lab on \(current.build.label), the version you're on now…")
         checks += try await rebuild(current).notes
         var route = "New seed on \(current.build.label), then moved it to \(build.label)"
-        guard let lab = server else { throw LeafError("There's no lab.") }
+        guard let lab = server else { throw AppError("There's no lab.") }
         do {
             say("Moving to \(build.label) with updated plugins…")
             try await upgrade(lab, to: build, adding: current, model: model, notes: &checks)
@@ -883,7 +883,7 @@ public final class LabController {
 
     /// Wiped, new on the target version, seeded, with the same checks.
     private func stationFresh(_ model: ServerController) async throws {
-        guard let build = state.target else { throw LeafError("Choose a version first.") }
+        guard let build = state.target else { throw AppError("Choose a version first.") }
         say("Building a fresh lab…")
         var spec = try await Self.spec(copying: model)
         spec.build = build
@@ -902,7 +902,7 @@ public final class LabController {
 
     /// Run only after fresh passes, so a failure can only be the settings.
     private func stationFreshSettings(_ model: ServerController) async throws {
-        guard let build = state.target else { throw LeafError("Choose a version first.") }
+        guard let build = state.target else { throw AppError("Choose a version first.") }
         var spec = try await Self.spec(copying: model)
         spec.build = build
         say("Building a fresh lab on \(build.label)…")
@@ -923,7 +923,7 @@ public final class LabController {
 
     private func upgrade(_ lab: ServerController, to build: SoftwareBuild, adding spec: LabSpec, model: ServerController, notes: inout [LabCheck]) async throws {
         try await lab.installSoftware(build)
-        if let held = lab.pending.compactMap(\.conflict).first { throw LeafError(held) }
+        if let held = lab.pending.compactMap(\.conflict).first { throw AppError(held) }
         await lab.refreshPlugins()
         // Jars copied from the real server arrive without knowing where they came from, so updates need telling.
         for plugin in lab.plugins where !lab.record(for: plugin).source.isSet {
@@ -966,7 +966,7 @@ public final class LabController {
 
     /// Keeps a copy of this run's lab, named so it can be recognized later. Only while stopped, so nothing changes mid-copy.
     private func pack(_ lab: ServerController, note: String) async throws {
-        guard lab.state.canStart else { throw LeafError("The lab was still running.") }
+        guard lab.state.canStart else { throw AppError("The lab was still running.") }
         try FileOps.ensureDir(LabFiles.saves)
         let now = Date()
         var name = LabFiles.saveName(date: now, software: lab.profile.software, note: note)
@@ -979,9 +979,9 @@ public final class LabController {
         let part = file.appendingPathExtension("part")
         defer { try? FileManager.default.removeItem(at: part) }
         let packed = try await Tool.run("/usr/bin/tar", ["-czf", part.path, "--exclude", "./.gilamonster/backups", "--exclude", "./.gilamonster/staged", "--exclude", "./logs", "-C", lab.paths.root.path, "."])
-        guard packed.ok else { throw LeafError("Couldn't save the lab. \(packed.err.prefix(200))") }
+        guard packed.ok else { throw AppError("Couldn't save the lab. \(packed.err.prefix(200))") }
         let listed = try await Tool.run("/usr/bin/tar", ["-tzf", part.path])
-        guard listed.ok, listed.out.contains("server.properties"), listed.out.contains(".gilamonster/server.json") else { throw LeafError("The saved file didn't read back correctly.") }
+        guard listed.ok, listed.out.contains("server.properties"), listed.out.contains(".gilamonster/server.json") else { throw AppError("The saved file didn't read back correctly.") }
         try FileOps.move(part, to: file)
         await lab.refreshPlugins()
         let record = LabSave(fileName: name, date: now, note: note, software: lab.profile.software.label, plugins: lab.plugins.filter(\.enabled).map(\.name), size: FileOps.size(file))

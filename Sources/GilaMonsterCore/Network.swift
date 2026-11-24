@@ -18,19 +18,19 @@ public enum HTTP {
 
     public static func url(_ text: String) throws -> URL {
         guard let u = URL(string: text), u.scheme == "https" || u.scheme == "http" else {
-            throw LeafError("Not a valid web address: \(text)")
+            throw AppError("Not a valid web address: \(text)")
         }
         return u
     }
 
     @discardableResult
     static func check(_ response: URLResponse, _ url: URL) throws -> HTTPURLResponse {
-        guard let http = response as? HTTPURLResponse else { throw LeafError("No HTTP response from \(url.host ?? "server").") }
+        guard let http = response as? HTTPURLResponse else { throw AppError("No HTTP response from \(url.host ?? "server").") }
         guard (200..<300).contains(http.statusCode) else {
             switch http.statusCode {
-            case 404: throw LeafError("Not found at \(url.host ?? "server") (404). Check the source details.")
-            case 403, 429: throw LeafError("\(url.host ?? "The server") is limiting requests (\(http.statusCode)). Try again later.")
-            default: throw LeafError("\(url.host ?? "The server") answered with status \(http.statusCode).")
+            case 404: throw AppError("Not found at \(url.host ?? "server") (404). Check the source details.")
+            case 403, 429: throw AppError("\(url.host ?? "The server") is limiting requests (\(http.statusCode)). Try again later.")
+            default: throw AppError("\(url.host ?? "The server") answered with status \(http.statusCode).")
             }
         }
         return http
@@ -91,7 +91,7 @@ public enum HTTP {
         let http = try check(response, url)
         let digests = try Hashing.digests(of: temp)
         guard expect.verify(digests) else {
-            throw LeafError("The download from \(url.host ?? "the server") failed its checksum, so it was discarded.")
+            throw AppError("The download from \(url.host ?? "the server") failed its checksum, so it was discarded.")
         }
         try FileOps.move(temp, to: destination)
         return (digests, http.suggestedFilename)

@@ -614,7 +614,7 @@ struct AdvisorPage: View {
             if center.lastCheck(server) == nil {
                 EmptyMessage(icon: "sparkle.magnifyingglass", title: "No checks yet", detail: "Press Check Now, and suggestions will appear here.")
             } else {
-                EmptyMessage(icon: "leaf", title: "Nothing waiting", detail: "There are no suggestions to read right now.")
+                EmptyMessage(icon: "tray", title: "Nothing waiting", detail: "There are no suggestions to read right now.")
             }
         } else {
             ForEach(items) { item in AdvisorCard(item: item, server: server) }

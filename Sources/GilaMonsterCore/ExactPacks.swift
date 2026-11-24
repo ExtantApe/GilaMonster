@@ -19,12 +19,12 @@ extension ResourcePacks {
     @discardableResult
     public static func addExact(_ file: URL, name: String) async throws -> PackBuild {
         let key = slug(name)
-        guard !name.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty else { throw LeafError("Give it a name.") }
-        guard !recipeNames().contains(key) else { throw LeafError("A recipe already has that name. Choose another.") }
-        guard let handle = try? FileHandle(forReadingFrom: file) else { throw LeafError("That file can't be read.") }
+        guard !name.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty else { throw AppError("Give it a name.") }
+        guard !recipeNames().contains(key) else { throw AppError("A recipe already has that name. Choose another.") }
+        guard let handle = try? FileHandle(forReadingFrom: file) else { throw AppError("That file can't be read.") }
         let magic = try handle.read(upToCount: 4) ?? Data()
         try? handle.close()
-        guard magic == Data([0x50, 0x4B, 0x03, 0x04]) else { throw LeafError("That isn't a zip file.") }
+        guard magic == Data([0x50, 0x4B, 0x03, 0x04]) else { throw AppError("That isn't a zip file.") }
         let out = builds.appendingPathComponent(key, isDirectory: true)
         try FileOps.ensureDir(out)
         // Hashed after copying, so the SHA-1 is of the bytes that will be served.

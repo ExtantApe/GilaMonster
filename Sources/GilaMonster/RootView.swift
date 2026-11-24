@@ -672,7 +672,7 @@ struct AddServerSheet: View {
             do {
                 if mode == .new {
                     if !FileOps.children(folder).filter({ !$0.lastPathComponent.hasPrefix(".") }).isEmpty {
-                        throw LeafError("\(folder.lastPathComponent) already has files in it. To use a server that's already there, choose Use an Existing Folder.")
+                        throw AppError("\(folder.lastPathComponent) already has files in it. To use a server that's already there, choose Use an Existing Folder.")
                     }
                     try FileOps.ensureDir(folder)
                 }
@@ -681,7 +681,7 @@ struct AddServerSheet: View {
                     controller.profile.software.flavor = flavor
                     if flavor.canDownload {
                         guard let build = try await SoftwareCatalog.latestBuild(flavor, mc: version, channels: GameVersion(version)?.isStableRelease == true ? ["STABLE"] : ["STABLE", "BETA", "ALPHA"]) else {
-                            throw LeafError("No download is available for \(flavor.title) \(version) yet.")
+                            throw AppError("No download is available for \(flavor.title) \(version) yet.")
                         }
                         model.add(controller)
                         dismiss()

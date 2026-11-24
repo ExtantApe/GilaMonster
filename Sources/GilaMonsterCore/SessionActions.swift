@@ -84,7 +84,7 @@ public struct SessionPermission: Codable, Equatable, Sendable {
 
     public static func save(_ p: SessionPermission, meta: URL) throws {
         guard p.standing == false || p.childrenMayPlay == false else {
-            throw LeafError("A server where children may play can't have standing permission.")
+            throw AppError("A server where children may play can't have standing permission.")
         }
         try JSONStore.save(p, to: file(meta: meta))
     }
@@ -108,7 +108,7 @@ extension ServerController {
     /// For the app only. Refused while children may play.
     public func setStandingPermission(_ on: Bool) throws {
         var p = sessionPermission
-        if on && p.childrenMayPlay { throw LeafError("A server where children may play can't have standing permission.") }
+        if on && p.childrenMayPlay { throw AppError("A server where children may play can't have standing permission.") }
         guard p.standing != on else { return }
         p.standing = on
         try SessionPermission.save(p, meta: paths.meta)
@@ -119,7 +119,7 @@ extension ServerController {
     /// Removes a recipe's address from this server. The old address stops working straight away.
     public func removeHostedRecipe(_ name: String) throws {
         var settings = packHostSettings
-        guard settings.recipes.removeValue(forKey: ResourcePacks.slug(name)) != nil else { throw LeafError("\(name) has no pack address here.") }
+        guard settings.recipes.removeValue(forKey: ResourcePacks.slug(name)) != nil else { throw AppError("\(name) has no pack address here.") }
         packHostSettings = settings
     }
 }
@@ -360,7 +360,7 @@ extension SessionAccessService {
                 } else if !s.joiningOnly {
                     out["decision"] = "Anyone with the address gets it."
                 } else if player.isEmpty || !asks {
-                    out["decision"] = "Only a whitelisted player joining now, or online, gets it. Packmule's link check gets it with the pack-check token. Everyone else gets 404."
+                    out["decision"] = "Only a player on the allowlist, joining now or online, gets it. Packmule's link check gets it with the pack-check token. Everyone else gets 404."
                 } else {
                     let yes = PackGate.wouldAdmit(name: player, root: server.paths.root)
                     out["player"] = player

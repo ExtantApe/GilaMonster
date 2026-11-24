@@ -671,13 +671,13 @@ public enum UpdateDecision {
 
     /// The check every download goes through, whatever its source.
     public static func inspect(_ d: PluginDescriptor?, expectedName: String?, mc: GameVersion?, compat: Compatibility) throws -> Compatibility {
-        guard let d else { throw LeafError("That jar has no plugin.yml, so it isn't a Bukkit or Paper plugin.") }
+        guard let d else { throw AppError("That jar has no plugin.yml, so it isn't a Bukkit or Paper plugin.") }
         if let expectedName, d.name.lowercased() != expectedName.lowercased() {
-            throw LeafError("That jar calls itself \(d.name), not \(expectedName). It may be the wrong file; check the source's pattern.")
+            throw AppError("That jar calls itself \(d.name), not \(expectedName). It may be the wrong file; check the source's pattern.")
         }
         guard let mc else { return compat }
         if let raw = d.apiVersion, let api = GameVersion(raw) {
-            if api > mc { throw LeafError("\(d.name) \(d.version) needs Minecraft \(raw) or newer. This server runs \(mc), so it wasn't installed.") }
+            if api > mc { throw AppError("\(d.name) \(d.version) needs Minecraft \(raw) or newer. This server runs \(mc), so it wasn't installed.") }
             if compat.verdict == .unknown { return Compatibility(.likely, "Its api-version (\(raw)) suits this server.") }
         }
         return compat
