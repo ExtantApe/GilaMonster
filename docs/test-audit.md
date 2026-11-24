@@ -3,6 +3,12 @@
 Each audit lists what GilaMonster promises, which checks prove each promise, and the gaps. Run the checks with `swift run gilamonster-check` (offline, made-up data, about 80 seconds). The `--real-*`, `--lab` and `--sandbox` runs boot real Paper and are listed apart.
 
 
+## 2026-11-24: the full-review release (0.5.0)
+- Promises: lists past their limits are cut with a way to see the rest and lose nothing; long errors keep one sentence as the title and the whole text in the detail; names stay on one line; Need More Time extends an ask by a minute, three times at most, and never allows it; the click guard holds pointer clicks only; text size stays between 9 and 32 points; no page is wider than its window with heavy data.
+- Covered: `overflowChecks` (callout split, slice, limits, matching, which worlds load at startup, changes grouped by kind, console words, text size, reading the snapshot report); the Need More Time group in `sessionActionChecks` (three extensions work and the fourth is refused, the wait grows, the answer is still no, nothing changes); the click guard in `sessionAskPlacementChecks`; `gilamonster-check --snapshot` for the heavy fixture in Bold and Quiet, light and dark.
+- Gaps skipped (and why): everything VoiceOver says (announcements, the ask panel taking focus, chart descriptors, hints) because it can't be run from the suite and wasn't tried by hand; the Show More and Show All buttons and the collapsed Not loaded group as clicks (state and slicing are checked, the views are seen in the pictures only); Command-plus and Command-minus as key presses; the theme change keeping an open sheet open.
+- Not in the default run: `--snapshot` needs a debug GUI build and several minutes, so it runs before a release, not with every `gilamonster-check`.
+
 ## 2026-11-24: Quit question (K728, 0.4.1)
 - Promises: a quit with servers running names each one, says the pack downloads and session access stop too, and keeps everything running on Return.
 - Covered: wording for one server, several, servers left running, and with or without the pack host and session access (`quitWordingChecks`); the alert's button order and default read from the source in the same group.

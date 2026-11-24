@@ -349,7 +349,7 @@ struct ServerToolbar: ToolbarContent {
             } else {
                 Button { server.stop() } label: { Label("Stop", systemImage: "stop.fill") }
                     .disabled(server.state != .running && server.state != .starting)
-                    .helped("Stop the server (⌘.)")
+                    .helped("Stop the server (⌃⌘.)")
             }
             Button { server.restart() } label: { Label("Restart", systemImage: "arrow.clockwise") }
                 .disabled(server.state != .running)

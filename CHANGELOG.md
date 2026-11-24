@@ -2,6 +2,20 @@
 
 ## Unreleased
 
+## 0.5.0 (unreleased)
+
+The full-review release. Tested with the full check suite (3727 checks, 68 of them new), the heavy-data overflow check (`--snapshot`, 9 more checks, passed) and, for layout, pictures of every page drawn off screen from made-up servers, normal and heavy, in Bold and Quiet, light and dark. VoiceOver, Voice Control and the keyboard were not run by hand: the accessibility changes come from a code review and are checked only where a check can reach them (the rules, not the speech). The ask panel's focus and the announcements are not tested.
+
+- **Long lists split up.** The allowlist gets a **Search names** field past 12 entries and shows the first 25 matches, then **Show All (N)**. Turned-away shows 5, then Show More. Worlds are grouped into **Loaded (N)** and a collapsed **Not loaded (N)**, with a filter past 10 worlds. Loaded means the server loads it at startup (its own worlds, and Multiverse worlds set to autoload); GilaMonster doesn't ask the running server, so a world unloaded by hand still shows as Loaded. Changes are grouped by kind with counts, 8 per group, then Show More. Plugin Links shows 10 recent sign-ins, then Show More, and counts who is signed in. Sheriff and WelcomeWagon profiles and questions are two cards, six showing, and several settings problems share one callout with three showing.
+- **Long names stay on one line.** Names on allowlist, world, change, invite and player rows keep one line, cut in the middle, with the whole name on hover. Facts, such as those on the Performance card, stack label over value when the card is narrower than about 280 pt. A long error used as a callout title keeps its first sentence; the rest goes under Show Details.
+- **The session ask panel can take the keyboard.** Opened from the menu bar or a notification click, it becomes the key window and focus lands on the first Deny, which is also what Return does. A new ask that arrives by itself still doesn't take focus from whatever you're typing; VoiceOver announces it. **Need More Time** adds a minute to an ask, three times at most, and allows nothing. The 0.8 second click guard now applies to pointer clicks only, so a key press isn't held up.
+- **VoiceOver announcements** for notices, warnings, problems and done messages that appear after a page has opened, and for a job starting and ending. The first second of a page stays quiet, because VoiceOver reads the page then.
+- **Text size** for the console and the file editor, Command-plus and Command-minus. Typed commands show **Command:** ahead of the text, so they differ from the app's lines by words as well as color. Both text views have accessibility labels.
+- **Tooltips reach VoiceOver** as hints. Plugin update badges say **Update 1.2.3**. The backup storage Remove button's spoken name starts with Remove. Charts have a descriptor VoiceOver can explore, and the players chart has a solid line over its wash. Callout borders are solid, the icon picker's border meets the control outline contrast, sheet titles are headings, and the first field in a sheet has the cursor. The Players list shows the word online.
+- **Stop is Control-Command-period** (it was Command-period). A theme change redraws only the page content, so open sheets and the window stay as they are. The Lab's Optional label uses the caption size.
+- **No-overflow check.** `gilamonster-check --snapshot` draws every page with the heavy fixture in four looks and fails if any page is wider than its window. `scripts/snapshot-fixtures.sh` makes the made-up servers (normal and heavy) and keeps the pictures where you point it.
+- Left alone: the window's minimum width is still 1120 pt.
+
 ## 0.4.1 (2026-11-24)
 
 Tested with the full check suite (3659 checks). The new Quit question has been checked in code and wording, but hasn't been seen on screen yet.
