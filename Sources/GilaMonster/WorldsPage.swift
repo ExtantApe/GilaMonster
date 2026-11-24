@@ -47,7 +47,7 @@ struct WorldsPage: View {
     /// Worlds in two groups: the ones that load at startup, and the rest, collapsed. A filter appears past ten worlds.
     @ViewBuilder private var worldLists: some View {
         let all = server.worlds
-        let filtering = all.count > Overflow.Limit.worldsFilterFrom
+        let filtering = Overflow.showsWorldsFilter(worlds: all.count)
         let shown = filtering ? Overflow.matching(all, filter) { "\($0.title) \($0.name)" } : all
         let loaded = shown.filter(Overflow.loadsAtStartup)
         let notLoaded = shown.filter { !Overflow.loadsAtStartup($0) }

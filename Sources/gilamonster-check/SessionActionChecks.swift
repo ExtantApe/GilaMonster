@@ -126,6 +126,17 @@ import Security
     check(waited >= 0.3 + 3 * 0.4 - 0.05, "the wait grew by each extension (\(String(format: "%.2f", waited)) s)")
     check(service.waiting.isEmpty, "nothing is left waiting afterwards")
     check(!service.extend(UUID()), "extending an ask that isn't waiting does nothing")
+    // After more time was asked for, Allow and Deny still do what they say.
+    service.approvalExtension = 0.1
+    service.onAsk = { a in service.extend(a.id); service.resolve(a.id, allow: false) }
+    r = await call("hosting-add", ["recipe": "made-up-recipe"])
+    check(r["ok"] as? Bool == false && error(r).contains("said no"), "Deny after Need More Time is a no")
+    check(server.packHostSettings.recipes["made-up-recipe"] == nil, "and nothing changed")
+    service.onAsk = { a in service.extend(a.id); service.resolve(a.id, allow: true) }
+    r = await call("hosting-add", ["recipe": "made-up-recipe"])
+    check(r["ok"] as? Bool == true && server.packHostSettings.recipes["made-up-recipe"] != nil, "Allow after Need More Time goes ahead")
+    try? server.removeHostedRecipe("made-up-recipe")
+    check(service.waiting.isEmpty, "and nothing is left waiting")
     service.approvalExtension = 60
     service.approvalWait = 0.3
     service.onAsk = { a in asked.append(a); if let reply { service.resolve(a.id, allow: reply) } }

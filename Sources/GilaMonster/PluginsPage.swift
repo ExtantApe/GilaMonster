@@ -90,7 +90,7 @@ struct PluginsPage: View {
         } else if server.pending.contains(where: { $0.target == "plugin:\(p.key)" || $0.target == "file:\(p.fileName)" }) {
             Badge(text: "Waiting for restart", tone: .warning, icon: "clock.fill")
         } else if let available = record.available {
-            Badge(text: "Update \(available.version)", tone: available.compatibility.verdict == .unknown ? .neutral : .info, icon: "arrow.down.circle.fill")
+            Badge(text: Overflow.updateBadge(available.version), tone: available.compatibility.verdict == .unknown ? .neutral : .info, icon: "arrow.down.circle.fill")
                 .helped("\(available.compatibility.verdict.title): \(available.compatibility.reason)")
         } else if record.lastError != nil {
             Badge(text: "Check failed", tone: .warning).helped(record.lastError ?? "")

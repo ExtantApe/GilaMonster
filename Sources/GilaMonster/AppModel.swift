@@ -299,7 +299,9 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
                 for page in PageID.allCases {
                     model.selectedID = server.id
                     model.page = page
-                    let host = NSHostingView(rootView: RootView(model: model).tint(Theme.accent))
+                    // GILAMONSTER_SNAPSHOT_FORCE_WIDE=1 makes every page too wide on purpose, to prove the report catches it.
+                    let wide = ProcessInfo.processInfo.environment["GILAMONSTER_SNAPSHOT_FORCE_WIDE"] != nil
+                    let host = NSHostingView(rootView: AnyView(RootView(model: model).tint(Theme.accent).frame(minWidth: wide ? 1700 : 0)))
                     if ProcessInfo.processInfo.environment["GILAMONSTER_SNAPSHOT_LIGHT"] != nil { host.appearance = NSAppearance(named: .aqua) }
                     if ProcessInfo.processInfo.environment["GILAMONSTER_SNAPSHOT_DARK"] != nil { host.appearance = NSAppearance(named: .darkAqua) }
                     let window = NSWindow(contentRect: NSRect(x: -6000, y: -6000, width: 1280, height: 1000), styleMask: [.borderless], backing: .buffered, defer: false)
@@ -320,7 +322,7 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
                     windows.append(window)
                 }
             }
-            let report = (["checked \(pagesChecked) pages"] + overflowing).joined(separator: "\n") + "\n"
+            let report = (["checked \(pagesChecked) of \(drawn.count * PageID.allCases.count) pages"] + overflowing).joined(separator: "\n") + "\n"
             try? report.write(to: URL(fileURLWithPath: folder).appendingPathComponent("overflow-report.txt"), atomically: true, encoding: .utf8)
             // The dialogs too, which otherwise only appear after a click.
             // The quit question needs no server (D215).

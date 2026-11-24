@@ -152,7 +152,7 @@ struct AllowlistPage: View {
     }
 
     private var listCard: some View {
-        let searching = entries.count > Overflow.Limit.allowlistSearchFrom
+        let searching = Overflow.showsAllowlistSearch(entries: entries.count)
         let matches = searching ? Overflow.matching(entries, search) { $0.name } : entries
         let cut = Overflow.slice(matches, limit: Overflow.Limit.allowlistShown, expanded: showAllEntries)
         return Card(title: "On the allowlist (\(entries.count))", systemImage: "list.bullet") {

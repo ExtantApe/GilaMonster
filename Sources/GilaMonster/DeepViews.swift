@@ -241,7 +241,7 @@ struct PlayersPage: View {
                     .accessibilityLabel(server.players.contains(player.title) ? "Online" : "Offline")
                 Text(player.title).foregroundStyle(Theme.ink).rowName(player.title)
                 Spacer(minLength: 4)
-                if server.players.contains(player.title) { Text("online").font(.caption).foregroundStyle(Theme.muted).fixedSize() }
+                if let mark = Overflow.onlineMark(server.players.contains(player.title)) { Text(mark).font(.caption).foregroundStyle(Theme.muted).fixedSize() }
             }
             .accessibilityElement(children: .combine)
             .tag(player.id)

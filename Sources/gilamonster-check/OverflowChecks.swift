@@ -89,16 +89,39 @@ import Foundation
     equal(ConsoleLine(id: 2, text: "[GilaMonster] Stopping", level: .info, origin: .wrapper).displayText, "[GilaMonster] Stopping", "the app's own lines keep their prefix, once")
     equal(ConsoleLine(id: 3, text: "Stopping", level: .info, origin: .wrapper).displayText, "[GilaMonster] Stopping", "and get one if they lack it")
     equal(ConsoleLine(id: 4, text: "[12:00:00 INFO]: Done", level: .info, origin: .server).displayText, "[12:00:00 INFO]: Done", "the server's lines are untouched")
-    equal(TextZoom.larger(TextZoom.range.upperBound), TextZoom.range.upperBound, "text can't grow past the top of its range")
-    equal(TextZoom.smaller(TextZoom.range.lowerBound), TextZoom.range.lowerBound, "or shrink past the bottom")
+    equal(TextZoom.larger(32), 32, "text can't grow past 32 points")
+    equal(TextZoom.smaller(9), 9, "or shrink past 9")
     equal(TextZoom.larger(12), 13, "larger steps by one point")
-    equal(TextZoom.clamped(500), TextZoom.range.upperBound, "a stored value out of range is brought back")
+    equal(TextZoom.smaller(12), 11, "smaller steps by one point")
+    equal(TextZoom.clamped(500), 32, "a stored value out of range is brought back to 32")
+    equal(TextZoom.clamped(-5), 9, "and one below it to 9")
+    equal(TextZoom.larger(31.5), 32, "a step that would pass the top stops at it")
+    equal(TextZoom.standard, 12, "the standard size is 12")
 
     section("Overflow: the snapshot report")
-    let clean = Overflow.readReport("checked 31 pages\n")
-    check(clean.pages == 31 && clean.overflowing.isEmpty, "a clean report: 31 pages, none overflowing")
-    let bad = Overflow.readReport("checked 31 pages\nOVERFLOW worlds: fitting width 1400 is over the window's 1280\n")
-    check(bad.pages == 31 && bad.overflowing.count == 1, "an overflowing page is reported")
-    equal(Overflow.readReport("").pages, 0, "an empty report counts as not having run")
-    equal(Overflow.readReport("garbage").pages, 0, "so does one that isn't a report")
+    let clean = Overflow.readReport("checked 17 of 17 pages\n")
+    check(clean.pages == 17 && clean.expected == 17 && clean.overflowing.isEmpty, "a clean report: 17 of 17 pages, none overflowing")
+    let bad = Overflow.readReport("checked 17 of 17 pages\nOVERFLOW worlds: fitting width 1400 is over the window's 1280\n")
+    check(bad.pages == 17 && bad.overflowing.count == 1, "an overflowing page is reported")
+    let short = Overflow.readReport("checked 9 of 17 pages\n")
+    check(short.pages != short.expected, "a run that drew 9 of 17 pages is visibly short")
+    check(Overflow.readReport("").expected == 0 && Overflow.readReport("garbage").expected == 0 && Overflow.readReport("checked 31 pages\n").expected == 0,
+          "an empty report, garbage and the old form all count as not having run")
+
+    section("Overflow: when the search and filter appear")
+    check(!Overflow.showsAllowlistSearch(entries: 12) && Overflow.showsAllowlistSearch(entries: 13), "the allowlist search appears past 12 entries, not at 12")
+    check(!Overflow.showsAllowlistSearch(entries: 0), "and not on an empty list")
+    check(!Overflow.showsWorldsFilter(worlds: 10) && Overflow.showsWorldsFilter(worlds: 11), "the worlds filter appears past 10 worlds, not at 10")
+
+    section("Overflow: words and shortcuts the views use")
+    equal(Overflow.updateBadge("1.2.3"), "Update 1.2.3", "an update badge reads Update and the version")
+    equal(Overflow.onlineMark(true), "online", "an online player's row says online")
+    check(Overflow.onlineMark(false) == nil, "an offline player's row doesn't")
+    equal(Overflow.quietAfterPageChange, 1, "announcements stay quiet for 1 second after a page change")
+    let root = URL(fileURLWithPath: #filePath).deletingLastPathComponent().deletingLastPathComponent().deletingLastPathComponent()
+    let app = (try? String(contentsOf: root.appendingPathComponent("Sources/GilaMonster/AppModel.swift"), encoding: .utf8)) ?? ""
+    let appLines = app.split(separator: "\n").map(String.init)
+    let stopAt = appLines.firstIndex { $0.contains("Button(\"Stop\")") }
+    let stopLine = stopAt.map { appLines[$0...min($0 + 1, appLines.count - 1)].joined(separator: " ") } ?? ""
+    check(stopLine.contains(#".keyboardShortcut(".", modifiers: [.command, .control])"#), "Stop's shortcut is Control-Command-period (read from the menu source)")
 }

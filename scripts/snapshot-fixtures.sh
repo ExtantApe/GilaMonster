@@ -53,6 +53,7 @@ swift build --product GilaMonster >/dev/null
 for theme in ${THEMES:-bold quiet}; do
     for look in ${LOOKS:-light dark}; do
         dir="$out/$kind/$theme-$look"; mkdir -p "$dir"
+        rm -f "$dir/overflow-report.txt"   # a run that draws nothing must not pass on an old report
         var=GILAMONSTER_SNAPSHOT_LIGHT; [[ $look == dark ]] && var=GILAMONSTER_SNAPSHOT_DARK
         env GILAMONSTER_HOME="$home" GILAMONSTER_SERVERS="$servers" GILAMONSTER_SNAPSHOT="$dir" GILAMONSTER_SNAPSHOT_FIRST=1 \
             GILAMONSTER_SNAPSHOT_THEME=$theme "$var=1" perl -e 'alarm 900; exec @ARGV' .build/debug/GilaMonster >/dev/null 2>&1 || true

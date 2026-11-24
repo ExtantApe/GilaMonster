@@ -9,9 +9,9 @@ import SwiftUI
     private static var recent: [String: Date] = [:]
     /// What's already on a page when it opens is read by VoiceOver as the page; only what appears afterwards is
     /// announced. The first moments of a page, and of the app, are quiet.
-    private static var quietUntil = Date().addingTimeInterval(2)
+    private static var quietUntil = Date().addingTimeInterval(Overflow.quietAtLaunch)
 
-    static func pageChanged() { quietUntil = Date().addingTimeInterval(1) }
+    static func pageChanged() { quietUntil = Date().addingTimeInterval(Overflow.quietAfterPageChange) }
 
     /// `force` skips the quiet moment, for things the owner just did or that need saying now.
     static func say(_ text: String, urgent: Bool = false, force: Bool = false) {

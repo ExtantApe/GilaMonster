@@ -88,16 +88,32 @@ public enum Overflow {
         }
     }
 
-    /// Reads the snapshot's overflow-report.txt: how many pages it drew, and the pages that were wider than the window.
-    /// A report with no "checked N pages" line, or with N of zero, counts as not having run.
-    public static func readReport(_ text: String) -> (pages: Int, overflowing: [String]) {
+    /// Reads the snapshot's overflow-report.txt: "checked N of M pages", where M is every page the run was asked to
+    /// draw, then one OVERFLOW line for each page wider than the window. A report that isn't in that form counts as
+    /// not having run (0 of 0), and the check then fails: N must equal M, and M must be more than zero.
+    public static func readReport(_ text: String) -> (pages: Int, expected: Int, overflowing: [String]) {
         let lines = text.split(separator: "\n").map(String.init)
-        let pages = lines.compactMap { line -> Int? in
-            guard line.hasPrefix("checked "), line.hasSuffix(" pages") else { return nil }
-            return Int(line.dropFirst(8).dropLast(6))
-        }.first ?? 0
-        return (pages, lines.filter { $0.hasPrefix("OVERFLOW ") })
+        var pages = 0, expected = 0
+        for line in lines where line.hasPrefix("checked ") && line.hasSuffix(" pages") {
+            let parts = line.dropFirst(8).dropLast(6).split(separator: " ")
+            if parts.count == 3, parts[1] == "of", let n = Int(parts[0]), let m = Int(parts[2]) { pages = n; expected = m }
+        }
+        return (pages, expected, lines.filter { $0.hasPrefix("OVERFLOW ") })
     }
+
+    /// Whether the allowlist shows its search field.
+    public static func showsAllowlistSearch(entries: Int) -> Bool { entries > Limit.allowlistSearchFrom }
+    /// Whether the Worlds page shows its filter.
+    public static func showsWorldsFilter(worlds: Int) -> Bool { worlds > Limit.worldsFilterFrom }
+
+    /// Seconds after a page opens, or the app starts, when announcements stay quiet: VoiceOver reads the page then.
+    public static let quietAfterPageChange: TimeInterval = 1
+    public static let quietAtLaunch: TimeInterval = 2
+
+    /// Words the views use that checks hold.
+    public static func updateBadge(_ version: String) -> String { "Update \(version)" }
+    public static let onlineWord = "online"
+    public static func onlineMark(_ online: Bool) -> String? { online ? onlineWord : nil }
 
     /// The limits each list uses, in one place (from Brand's review, 2026-11-23).
     public enum Limit {
