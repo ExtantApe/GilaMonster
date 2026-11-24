@@ -38,7 +38,7 @@ struct InvitesCard: View {
                     }
                 }
             case .ready(let version, let invitesWork, let publicURL, let problems, let lobby)?:
-                ForEach(problems, id: \.self) { Callout(tone: .warning, title: "WelcomeWagon's settings", detail: $0) }
+                ProblemList(tone: .warning, what: "WelcomeWagon's settings", problems: problems)
                 if let lobby {
                     Fact(label: "Lobby", value: lobby ? "On: new players arrive in WelcomeWagon's lobby" : "Off: players arrive at the usual spawn")
                 }
@@ -70,14 +70,8 @@ struct InvitesCard: View {
         }
         Hint("WelcomeWagon checks the name with Mojang when the invite is made.")
         if let profiles {
-            Text("Profiles").font(.callout.weight(.semibold)).foregroundStyle(Theme.ink)
-            if profiles.isEmpty { Hint("Sheriff has no profiles set up, so the invite gives lobby-only access.") }
-            ForEach(profiles) { profile in
-                Toggle(profile.label, isOn: Binding(get: { chosen.contains(profile.id) }, set: { on in
-                    if on { chosen.insert(profile.id) } else { chosen.remove(profile.id) }
-                    questions = []; answered = []
-                }))
-                .toggleStyle(.checkbox)
+            ProfileChoiceCard(profiles: profiles, chosen: $chosen, empty: "Sheriff has no profiles set up, so the invite gives lobby-only access.") {
+                questions = []; answered = []
             }
             // Always one line here, so the button below doesn't jump as boxes are ticked.
             if !profiles.isEmpty {
@@ -86,15 +80,7 @@ struct InvitesCard: View {
         } else {
             Hint("Without Sheriff, an invite gives lobby-only access.")
         }
-        if !questions.isEmpty {
-            Callout(tone: .warning, title: "Sheriff asks first", detail: "No invite has been made yet. Tick each one to go ahead.")
-            ForEach(questions, id: \.id) { q in
-                Toggle(q.question, isOn: Binding(get: { answered.contains(q.id) }, set: { on in
-                    if on { answered.insert(q.id) } else { answered.remove(q.id) }
-                }))
-                .toggleStyle(.checkbox)
-            }
-        }
+        QuestionsCard(questions: questions, answered: $answered, intro: "No invite has been made yet. Tick each one to go ahead.")
         if let problem { Callout(tone: .danger, title: problem) }
         Button(working ? "Making…" : questions.isEmpty ? "Make Invite" : "Go Ahead", action: create)
             .buttonStyle(.themedPrimary)

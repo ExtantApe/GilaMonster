@@ -510,3 +510,21 @@ struct ProblemList: View {
         }
     }
 }
+
+extension View {
+    /// A name in a row: one line, the middle cut when it's too long, the whole name on hover.
+    func rowName(_ full: String) -> some View {
+        lineLimit(1).truncationMode(.middle).help(full).layoutPriority(1)
+    }
+}
+
+/// A heading for a group of rows inside a page.
+struct GroupHeading: View {
+    let text: String
+    var help: String?
+    init(_ text: String, help: String? = nil) { self.text = text; self.help = help }
+    var body: some View {
+        Text(text).font(.headline).foregroundStyle(Theme.ink).accessibilityAddTraits(.isHeader)
+            .help(help ?? "").accessibilityHint(help ?? "")
+    }
+}

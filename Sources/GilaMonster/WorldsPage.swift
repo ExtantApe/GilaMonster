@@ -13,16 +13,14 @@ struct WorldsPage: View {
     @State private var removing: WorldEntry?
     @State private var renaming: WorldEntry?
     @State private var deleting: WorldEntry?
+    @State private var filter = ""
+    @State private var showNotLoaded = false
 
     var body: some View {
         Page(title: "Worlds", subtitle: subtitle) {
             multiverseStatus
             if let operation = server.worldOperation { OperationCard(server: server, operation: operation) }
-            ForEach(server.worlds) { world in
-                WorldRow(
-                    server: server, world: world, onImport: { importing = world }, onEdit: { editing = world },
-                    onClone: { cloning = world }, onRemove: { removing = world }, onDelete: { deleting = world }, onRename: { renaming = world })
-            }
+            worldLists
             Hint("Backups include every world, wherever it's stored. A world's folder name and environment can't be changed after it's created.")
         }
         .task { await server.refreshWorlds() }
@@ -37,6 +35,38 @@ struct WorldsPage: View {
             Button("Remove") { server.attempt { try await server.removeWorldFromMultiverse(world) } }
         } message: { _ in
             Text("Multiverse stops loading it. Its folder and all its data stay on disk, and you can import it again later.")
+        }
+    }
+
+    private func row(_ world: WorldEntry) -> some View {
+        WorldRow(
+            server: server, world: world, onImport: { importing = world }, onEdit: { editing = world },
+            onClone: { cloning = world }, onRemove: { removing = world }, onDelete: { deleting = world }, onRename: { renaming = world })
+    }
+
+    /// Worlds in two groups: the ones that load at startup, and the rest, collapsed. A filter appears past ten worlds.
+    @ViewBuilder private var worldLists: some View {
+        let all = server.worlds
+        let filtering = all.count > Overflow.Limit.worldsFilterFrom
+        let shown = filtering ? Overflow.matching(all, filter) { "\($0.title) \($0.name)" } : all
+        let loaded = shown.filter(Overflow.loadsAtStartup)
+        let notLoaded = shown.filter { !Overflow.loadsAtStartup($0) }
+        if filtering {
+            TextField("Filter worlds", text: $filter).textFieldStyle(.roundedBorder).frame(maxWidth: 260)
+                .accessibilityLabel("Filter worlds by name")
+            if shown.isEmpty { Hint("No world matches \u{201C}\(filter)\u{201D}.") }
+        }
+        if !loaded.isEmpty || all.isEmpty || notLoaded.isEmpty {
+            if !notLoaded.isEmpty || filtering { GroupHeading("Loaded (\(loaded.count))", help: "Worlds the server loads when it starts.") }
+            ForEach(loaded) { row($0) }
+        }
+        if !notLoaded.isEmpty {
+            DisclosureGroup(isExpanded: Binding(get: { showNotLoaded || !filter.isEmpty }, set: { showNotLoaded = $0 })) {
+                VStack(spacing: 10) { ForEach(notLoaded) { row($0) } }.padding(.top, 6)
+            } label: {
+                Text("Not loaded (\(notLoaded.count))").font(.headline).foregroundStyle(Theme.ink)
+            }
+            .accessibilityHint("Folders Multiverse doesn't load at startup, or that are missing")
         }
     }
 
@@ -143,8 +173,8 @@ private struct WorldRow: View {
         Card {
             HStack(alignment: .firstTextBaseline, spacing: 8) {
                 Image(systemName: icon).foregroundStyle(Theme.accent).accessibilityHidden(true)
-                Text(world.title).font(.headline).foregroundStyle(Theme.ink)
-                if world.title != world.name, world.multiverse?.alias.isEmpty == false { Text(world.name).font(.callout).foregroundStyle(Theme.muted) }
+                Text(world.title).font(.headline).foregroundStyle(Theme.ink).rowName(world.title)
+                if world.title != world.name, world.multiverse?.alias.isEmpty == false { Text(world.name).font(.callout).foregroundStyle(Theme.muted).rowName(world.name) }
                 Spacer()
                 badges
             }

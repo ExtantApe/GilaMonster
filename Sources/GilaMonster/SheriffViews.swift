@@ -34,28 +34,10 @@ struct SheriffApproval: View {
                         Hint("Also gets \(labels(current.throughOtherGroups)) through another group, which Sheriff can't change here.")
                     }
                 }
-                Text("Profiles").font(.callout.weight(.semibold)).foregroundStyle(Theme.ink)
-                if profiles.isEmpty { Hint("Sheriff has no profiles set up. Approving gives lobby-only access until an admin adds some.") }
-                ForEach(profiles) { profile in
-                    VStack(alignment: .leading, spacing: 2) {
-                        Toggle(profile.label, isOn: Binding(get: { chosen.contains(profile.id) }, set: { on in
-                            if on { chosen.insert(profile.id) } else { chosen.remove(profile.id) }
-                            questions = []; answered = []; result = nil
-                        }))
-                        .toggleStyle(.checkbox)
-                        .accessibilityHint(detail(profile))
-                        Hint(detail(profile)).padding(.leading, 20)
-                    }
+                ProfileChoiceCard(profiles: profiles, chosen: $chosen, empty: "Sheriff has no profiles set up. Approving gives lobby-only access until an admin adds some.", showDetail: true) {
+                    questions = []; answered = []; result = nil
                 }
-                if !questions.isEmpty {
-                    Callout(tone: .warning, title: "Sheriff asks first", detail: "Nothing has changed yet. Tick each one to go ahead.")
-                    ForEach(questions, id: \.id) { q in
-                        Toggle(q.question, isOn: Binding(get: { answered.contains(q.id) }, set: { on in
-                            if on { answered.insert(q.id) } else { answered.remove(q.id) }
-                        }))
-                        .toggleStyle(.checkbox)
-                    }
-                }
+                QuestionsCard(questions: questions, answered: $answered, intro: "Nothing has changed yet. Tick each one to go ahead.")
                 if let problem { Callout(tone: .danger, title: problem) }
                 if let result { Callout(tone: .good, title: result) }
                 HStack {
@@ -73,14 +55,6 @@ struct SheriffApproval: View {
         if !questions.isEmpty { return "Go Ahead" }
         if current?.whitelisted == false { return "Approve \(name)" }
         return "Save Profiles"
-    }
-
-    private func detail(_ p: SheriffProfile) -> String {
-        var parts: [String] = []
-        if !p.worlds.isEmpty { parts.append("Worlds: \(p.worlds.joined(separator: ", "))") }
-        if let circle = p.circle { parts.append("Chat circle: \(circle)") }
-        if let first = p.description.first { parts.append(first) }
-        return parts.isEmpty ? "No worlds or circle of its own." : parts.joined(separator: ". ")
     }
 
     private func labels(_ ids: [String]) -> String {
@@ -122,6 +96,82 @@ struct SheriffApproval: View {
                 problem = "Sheriff didn't answer in 15 seconds. The change may still have happened, so this shows what Sheriff has now."
                 await read()
             }
+        }
+    }
+}
+
+/// Sheriff's profiles as a card of ticks, six showing and the rest behind Show More.
+struct ProfileChoiceCard: View {
+    let profiles: [SheriffProfile]
+    @Binding var chosen: Set<String>
+    let empty: String
+    var showDetail = false
+    var changed: () -> Void = {}
+    @State private var expanded = false
+
+    static func detail(_ p: SheriffProfile) -> String {
+        var parts: [String] = []
+        if !p.worlds.isEmpty { parts.append("Worlds: \(p.worlds.joined(separator: ", "))") }
+        if let circle = p.circle { parts.append("Chat circle: \(circle)") }
+        if let first = p.description.first { parts.append(first) }
+        return parts.isEmpty ? "No worlds or circle of its own." : parts.joined(separator: ". ")
+    }
+
+    var body: some View {
+        let cut = Overflow.slice(profiles, limit: Overflow.Limit.profiles, expanded: expanded)
+        let hiddenTicked = profiles.dropFirst(cut.shown.count).filter { chosen.contains($0.id) }.count
+        VStack(alignment: .leading, spacing: 6) {
+            Text(profiles.isEmpty ? "Profiles" : "Profiles (\(profiles.count))").font(.headline).foregroundStyle(Theme.ink)
+                .accessibilityAddTraits(.isHeader)
+            if profiles.isEmpty { Hint(empty) }
+            ForEach(cut.shown) { profile in
+                VStack(alignment: .leading, spacing: 2) {
+                    Toggle(profile.label, isOn: Binding(get: { chosen.contains(profile.id) }, set: { on in
+                        if on { chosen.insert(profile.id) } else { chosen.remove(profile.id) }
+                        changed()
+                    }))
+                    .toggleStyle(.checkbox)
+                    .accessibilityHint(Self.detail(profile))
+                    if showDetail { Hint(Self.detail(profile)).padding(.leading, 20) }
+                }
+            }
+            ShowMoreButton(hidden: cut.hidden, expanded: $expanded)
+            if hiddenTicked > 0 { Hint("\(hiddenTicked) more ticked below.") }
+        }
+        .padding(12)
+        .frame(maxWidth: .infinity, alignment: .leading)
+        .background(Theme.raised, in: RoundedRectangle(cornerRadius: Theme.cardRadius))
+        .accessibilityElement(children: .contain)
+    }
+}
+
+/// Sheriff's questions, one tick each, in a card of their own. Nothing shows when there are none.
+struct QuestionsCard: View {
+    let questions: [ConfirmQuestion]
+    @Binding var answered: Set<String>
+    let intro: String
+    @State private var expanded = false
+
+    var body: some View {
+        if !questions.isEmpty {
+            let cut = Overflow.slice(questions, limit: Overflow.Limit.profiles, expanded: expanded)
+            VStack(alignment: .leading, spacing: 6) {
+                Label("Sheriff asks first (\(questions.count))", systemImage: Tone.warning.icon)
+                    .font(.headline).foregroundStyle(Theme.ink).accessibilityAddTraits(.isHeader)
+                Hint(intro)
+                ForEach(cut.shown, id: \.id) { q in
+                    Toggle(q.question, isOn: Binding(get: { answered.contains(q.id) }, set: { on in
+                        if on { answered.insert(q.id) } else { answered.remove(q.id) }
+                    }))
+                    .toggleStyle(.checkbox)
+                }
+                ShowMoreButton(hidden: cut.hidden, expanded: $expanded)
+            }
+            .padding(12)
+            .frame(maxWidth: .infinity, alignment: .leading)
+            .background(Tone.warning.wash, in: RoundedRectangle(cornerRadius: Theme.cardRadius))
+            .overlay { RoundedRectangle(cornerRadius: Theme.cardRadius).strokeBorder(Tone.warning.color.opacity(0.6), lineWidth: 1) }
+            .accessibilityElement(children: .contain)
         }
     }
 }

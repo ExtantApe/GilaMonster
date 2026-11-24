@@ -15,6 +15,8 @@ struct AllowlistPage: View {
     @State private var working = false
     @State private var pendingWarnings: [String] = []
     @State private var showAllAttempts = false
+    @State private var search = ""
+    @State private var showAllEntries = false
     @State private var removing: AllowlistEntry?
     @State private var editing: AllowlistEntry?
     @State private var conflictA = ""
@@ -130,7 +132,7 @@ struct AllowlistPage: View {
             ForEach(waiting) { change in
                 VStack(alignment: .leading, spacing: 4) {
                     HStack {
-                        Text(change.name).font(.body.weight(.semibold)).foregroundStyle(Theme.ink)
+                        Text(change.name).font(.body.weight(.semibold)).foregroundStyle(Theme.ink).rowName(change.name)
                         Hint(change.summary)
                         Spacer()
                         if change.problem != nil {
@@ -150,11 +152,20 @@ struct AllowlistPage: View {
     }
 
     private var listCard: some View {
-        Card(title: "On the allowlist (\(entries.count))", systemImage: "list.bullet") {
+        let searching = entries.count > Overflow.Limit.allowlistSearchFrom
+        let matches = searching ? Overflow.matching(entries, search) { $0.name } : entries
+        let cut = Overflow.slice(matches, limit: Overflow.Limit.allowlistShown, expanded: showAllEntries)
+        return Card(title: "On the allowlist (\(entries.count))", systemImage: "list.bullet") {
             if entries.isEmpty { Hint("Nobody yet.") }
-            ForEach(entries) { entry in
+            if searching {
+                TextField("Search names", text: $search).textFieldStyle(.roundedBorder).frame(maxWidth: 260)
+                    .accessibilityLabel("Search names on the allowlist")
+                if matches.isEmpty { Hint("No name matches \u{201C}\(search)\u{201D}.") }
+                else if !search.isEmpty { Hint("\(matches.count) of \(entries.count) match.") }
+            }
+            ForEach(cut.shown) { entry in
                 HStack {
-                    Text(entry.name).foregroundStyle(Theme.ink).textSelection(.enabled)
+                    Text(entry.name).foregroundStyle(Theme.ink).textSelection(.enabled).rowName(entry.name)
                     Spacer()
                     if server.hasSheriff {
                         Button("Profiles…") { sheriffEditing = entry }.buttonStyle(.themed).disabled(sheriffProfiles == nil)
@@ -166,6 +177,10 @@ struct AllowlistPage: View {
                     Button("Remove…") { removing = entry }.buttonStyle(.themed).disabled(server.state.isLive && !running)
                         .accessibilityLabel("Remove \(entry.name)")
                 }
+            }
+            if cut.hidden > 0 || showAllEntries {
+                Button(showAllEntries ? "Show Fewer" : "Show All (\(matches.count))") { showAllEntries.toggle() }
+                    .buttonStyle(.link).font(.callout)
             }
             if server.hasSheriff, sheriffProfiles == nil { Hint("Profiles can be changed once GilaMonster can reach Sheriff.") }
             else if server.hasLuckPerms, !server.hasSheriff, !running { Hint("Groups can only be changed while the server runs.") }

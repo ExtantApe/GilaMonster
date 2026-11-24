@@ -12,6 +12,7 @@ struct LinksPage: View {
     @State private var editing: PluginLinkRow?
     @State private var pageSettings = LinksPageSettings()
     @State private var log: [SignInEvent] = []
+    @State private var showAllSignIns = false
 
     var body: some View {
         Page(title: "Plugin Links", subtitle: "What's on this server, and where to read about each plugin.") {
@@ -142,10 +143,10 @@ struct LinksPage: View {
             Hint("GilaMonster only listens on this Mac. Getting it to players needs HTTPS that ends on this Mac, set up in Caddy with a tunnel. See the README.")
             mapSection
             if let web = server.linksWeb, !web.signedIn.isEmpty {
-                Text("Signed in now").font(.callout.weight(.semibold)).foregroundStyle(Theme.ink)
+                Text("Signed in now (\(web.signedIn.count))").font(.callout.weight(.semibold)).foregroundStyle(Theme.ink)
                 ForEach(web.signedIn) { session in
                     HStack {
-                        Text(session.name).foregroundStyle(Theme.ink)
+                        Text(session.name).foregroundStyle(Theme.ink).rowName(session.name)
                         Hint("Until \(session.expires.formatted(date: .omitted, time: .shortened))")
                         Spacer()
                         Button("Sign Out") {
@@ -158,10 +159,12 @@ struct LinksPage: View {
                 }
             }
             if !log.isEmpty {
-                Text("Recent sign-ins").font(.callout.weight(.semibold)).foregroundStyle(Theme.ink)
-                ForEach(log) { event in
+                let cut = Overflow.slice(log, limit: Overflow.Limit.recentSignIns, expanded: showAllSignIns)
+                Text("Recent sign-ins (\(log.count))").font(.callout.weight(.semibold)).foregroundStyle(Theme.ink)
+                ForEach(cut.shown) { event in
                     Hint("\(event.date.formatted(date: .abbreviated, time: .shortened)): \(event.name), \(event.kind.title)")
                 }
+                ShowMoreButton(hidden: cut.hidden, expanded: $showAllSignIns)
                 Hint("Keeps the account, the time and what happened, for 30 days. No addresses or browsing.")
             }
         }

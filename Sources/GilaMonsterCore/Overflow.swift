@@ -40,6 +40,54 @@ public enum Overflow {
         return items.filter { text($0).range(of: q, options: [.caseInsensitive, .diacriticInsensitive]) != nil }
     }
 
+    /// Worlds the server loads when it starts: its own worlds, and Multiverse worlds that autoload. Everything else
+    /// (a folder Multiverse doesn't know, a missing folder, a world set not to autoload) is "Not loaded". GilaMonster
+    /// doesn't ask the running server what it has loaded, so a world unloaded by hand still shows as Loaded.
+    public static func loadsAtStartup(_ world: WorldEntry) -> Bool {
+        if world.folderMissing { return false }
+        if world.isCore || world.isMain { return true }
+        guard let mv = world.multiverse else { return false }
+        return mv.autoLoad
+    }
+
+    /// The groups the Changes page lists, in this order. Plugin installs, removals and toggles are one group.
+    public enum ChangeGroup: Int, CaseIterable, Sendable {
+        case software, plugins, configs, players
+        public var title: String {
+            switch self {
+            case .software: "Software"
+            case .plugins: "Plugins"
+            case .configs: "Settings and files"
+            case .players: "Player restores"
+            }
+        }
+        public var symbol: String {
+            switch self {
+            case .software: "shippingbox"
+            case .plugins: "puzzlepiece.extension"
+            case .configs: "doc.text"
+            case .players: "person.crop.circle.badge.clock"
+            }
+        }
+    }
+
+    public static func group(of change: PendingChange) -> ChangeGroup {
+        switch change.kind {
+        case .software: .software
+        case .pluginInstall, .pluginRemove, .pluginToggle: .plugins
+        case .config: .configs
+        case .playerRestore: .players
+        }
+    }
+
+    /// Changes grouped by kind, empty groups left out, each keeping its order.
+    public static func grouped(_ changes: [PendingChange]) -> [(group: ChangeGroup, changes: [PendingChange])] {
+        ChangeGroup.allCases.compactMap { g in
+            let mine = changes.filter { group(of: $0) == g }
+            return mine.isEmpty ? nil : (g, mine)
+        }
+    }
+
     /// The limits each list uses, in one place (from Brand's review, 2026-11-23).
     public enum Limit {
         public static let allowlistSearchFrom = 12, allowlistShown = 25

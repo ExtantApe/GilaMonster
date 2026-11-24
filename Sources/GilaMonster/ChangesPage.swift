@@ -4,6 +4,7 @@ import SwiftUI
 /// What's waiting for a restart, and when that restart happens.
 struct ChangesPage: View {
     @Bindable var server: ServerController
+    @State private var expandedGroups = Set<Int>()
     @State private var restartTime = Date().addingTimeInterval(1800)
 
     var body: some View {
@@ -26,16 +27,24 @@ struct ChangesPage: View {
                     Text("Launch settings changed").foregroundStyle(Theme.ink)
                 }
             }
-            ForEach(server.pending) { change in
-                VStack(alignment: .leading, spacing: 4) {
-                    HStack {
-                        Image(systemName: icon(change)).foregroundStyle(Theme.accent).accessibilityHidden(true)
-                        Text(change.summary).foregroundStyle(Theme.ink)
-                        Spacer()
-                        Button("Discard") { server.discard(change) }.buttonStyle(.themed)
+            ForEach(Overflow.grouped(server.pending), id: \.group) { section in
+                let expanded = Binding(get: { expandedGroups.contains(section.group.rawValue) },
+                                       set: { if $0 { expandedGroups.insert(section.group.rawValue) } else { expandedGroups.remove(section.group.rawValue) } })
+                let cut = Overflow.slice(section.changes, limit: Overflow.Limit.changesPerGroup, expanded: expanded.wrappedValue)
+                GroupHeading("\(section.group.title) (\(section.changes.count))")
+                ForEach(cut.shown) { change in
+                    VStack(alignment: .leading, spacing: 4) {
+                        HStack {
+                            Image(systemName: icon(change)).foregroundStyle(Theme.accent).accessibilityHidden(true)
+                            Text(change.summary).foregroundStyle(Theme.ink).rowName(change.summary)
+                            Spacer()
+                            Button("Discard") { server.discard(change) }.buttonStyle(.themed)
+                                .accessibilityLabel("Discard \(change.summary)")
+                        }
+                        if let conflict = change.conflict { Callout(tone: .warning, title: conflict) }
                     }
-                    if let conflict = change.conflict { Callout(tone: .warning, title: conflict) }
                 }
+                ShowMoreButton(hidden: cut.hidden, expanded: expanded)
             }
             if server.state.canStart, !server.pending.isEmpty {
                 Button("Apply Now") { Task { await server.applyPending() } }.buttonStyle(.themedPrimary)
