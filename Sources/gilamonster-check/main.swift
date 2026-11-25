@@ -99,7 +99,7 @@ try FileManager.default.createDirectory(at: scratch, withIntermediateDirectories
 // program gets a throwaway keychain file instead (see KeyVaultChecks.swift).
 PrivacyKey.defaultVault = { CheckVault.shared }
 // Real-server runs leave hundreds of MB here, so every exit deletes it, and says so if it can't.
-atexit { cleanUpScratch() }
+atexit { cleanUpScratch(); settleScratchSuites() }
 
 // ... --shutdown-sandbox <folder> --i-accept-the-minecraft-eula  A throwaway server for the K650 shutdown test.
 if let flag = CommandLine.arguments.firstIndex(of: "--shutdown-sandbox"), flag + 1 < CommandLine.arguments.count {
@@ -179,6 +179,7 @@ if CommandLine.arguments.contains("--connections") {
     overflowChecks()
     inviteTicketChecks()
     await packPublishChecks()
+    scratchDefaultsChecks()
     // --live: also asks this Mac's own playit agent, read-only, and prints only health and summaries.
     if CommandLine.arguments.contains("--live") {
         section("Connections: this Mac's real agents (read-only)")
@@ -1627,9 +1628,8 @@ do {
         equal(a.sorted.first?.plugin, "ActionHealth", "the plugin in the stack trace gets the blame")
     }
     do { // The Advisor on a fresh install: nothing can send until every yes is given, in any order.
-        let suite = "gilamonster-check-\(UUID().uuidString)"
-        let fresh = UserDefaults(suiteName: suite)!
-        defer { fresh.removePersistentDomain(forName: suite) }
+        let (fresh, suite) = scratchDefaults("advisor")!
+        defer { removeScratchSuite(suite) }
         let consents = AdvisorConsent(defaults: fresh)
         let store = Modules.shared
         let modulesFile = AppPaths.home.appendingPathComponent("modules.json")
@@ -6157,6 +6157,7 @@ func residentBytes() -> UInt64 {
 }
 
 try? await Task.sleep(for: .seconds(1))
+scratchDefaultsChecks()
 cleanUpScratch()
 print("\n\(passed) passed, \(failures.count) failed")
 for failure in failures { print("  - \(failure)") }

@@ -79,7 +79,9 @@ final class AppModel {
     let lab: LabController
     /// Asks for the EULA before something that needs the Lab, then carries on with it.
     var labSetup: LabSetupRequest?
-    var selectedID: UUID? { didSet { UserDefaults.standard.set(selectedID?.uuidString, forKey: "selectedServer") } }
+    /// A snapshot run draws every server in turn and must leave the saved choice alone (D226).
+    var selectedID: UUID? { didSet { if !Self.isSnapshot { UserDefaults.standard.set(selectedID?.uuidString, forKey: "selectedServer") } } }
+    nonisolated static var isSnapshot: Bool { ProcessInfo.processInfo.environment["GILAMONSTER_SNAPSHOT"] != nil }
     var page: PageID = .overview
     /// Opened from the toolbar while nothing is open, to look at ignored issues. Not saved: the panel goes back to
     /// showing itself only when there's something open (UX audit finding 2).
@@ -113,7 +115,7 @@ final class AppModel {
         self.lab = lab
         if let found = lab.server, !opened.contains(where: { $0.id == found.id }) { opened.append(found) }
         servers = opened
-        selectedID = UserDefaults.standard.string(forKey: "selectedServer").flatMap(UUID.init) ?? servers.first?.id
+        selectedID = (Self.isSnapshot ? nil : UserDefaults.standard.string(forKey: "selectedServer").flatMap(UUID.init)) ?? servers.first?.id
         // Only servers with "Start when GilaMonster opens" on, which is off by default (owner, 2026-11-16).
         for server in LaunchStart.servers(servers, advisorTrial: AdvisorTrial.isOn,
                                           snapshot: ProcessInfo.processInfo.environment["GILAMONSTER_SNAPSHOT"] != nil) {

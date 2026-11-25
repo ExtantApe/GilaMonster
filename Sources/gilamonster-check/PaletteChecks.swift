@@ -97,9 +97,8 @@ import GilaMonsterCore
 /// and anything else saved reads as Bold. Both flavors are held to WCAG by paletteChecks.
 @MainActor func themeChoiceChecks() {
     section("Theme setting: Bold by default, and remembered")
-    let suite = "gilamonster-check.theme.\(UUID().uuidString)"
-    guard let defaults = UserDefaults(suiteName: suite) else { check(false, "a scratch settings domain"); return }
-    defer { defaults.removePersistentDomain(forName: suite) }
+    guard let (defaults, suite) = scratchDefaults("theme") else { check(false, "a scratch settings domain"); return }
+    defer { removeScratchSuite(suite) }
     equal(ThemeChoice.load(defaults), .bold, "nothing saved means Bold")
     ThemeChoice.save(.quiet, defaults)
     equal(ThemeChoice.load(defaults), .quiet, "Quiet is remembered")
