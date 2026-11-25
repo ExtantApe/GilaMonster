@@ -3,6 +3,11 @@
 Each audit lists what GilaMonster promises, which checks prove each promise, and the gaps. Run the checks with `swift run gilamonster-check` (offline, made-up data, about 80 seconds). The `--real-*`, `--lab` and `--sandbox` runs boot real Paper and are listed apart.
 
 
+## 2026-11-25: case-variant adds on offline servers (K755)
+- Promises: on an offline server, a name spelled with other capitals than one on the allowlist, in player files or in Multiverse-Inventories files is refused by every add path, naming both spellings, with nothing typed, sent or queued; exact spellings, other names and online servers pass.
+- Covered: gilamonster-check main.swift, the K755 block (PlayerMerge.addRefusal on each source; requestAccess, sheriffApply and createInvite refuse with the same words; waitingAccess empty; console empty; online passes).
+- Gaps skipped (and why): Sheriff's own check on the server side belongs to Sheriff's repo (filed for the Games lead); on-screen sheets not driven.
+
 ## 2026-11-25: case-clash merges (K161) and checks that clean up (K744)
 - Promises: a merge never writes one player's Multiverse-Inventories files onto another's, because files are named by player and a Mac's disk folds capitals; a refused merge names both spellings, says nothing changed, and changes nothing (no file, no archive, the server isn't stopped); the checks remove every settings domain and file they make, and the snapshot run doesn't write the app's saved server choice.
 - Covered: the K161 group in main.swift (a merge into a spelling another player uses, with both names in the words; apply throws the same words; every inventory file unchanged and no archive; two spellings of one name; a stray file with another spelling and no player; a clean merge and the same name twice allowed; no plugin, no clash); `scratchDefaultsChecks` (runs at the end of the full suite and of `--connections`: no file of a domain this run made is left); an atexit hook also removes them if a run dies.

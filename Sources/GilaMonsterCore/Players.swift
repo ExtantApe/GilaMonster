@@ -394,6 +394,30 @@ public enum PlayerMerge {
         return "Merging into \(newName) would use the same Multiverse-Inventories files as \(other), because this Mac's disk treats \(newName) and \(other) as one name. \(stop) Turning on online mode, or renaming one of them on the server, avoids this."
     }
 
+    /// Why a name can't be added to an offline server's allowlist: someone already there spells it with different
+    /// capitals. On an offline server `Steve` and `steve` are two players, and on this Mac's disk files named by player
+    /// are one file. Looks at the allowlist, the player files and Multiverse-Inventories' files. Online servers and
+    /// exact spellings pass. Owner, 2026-11-25: "Yes, offline too (Recommended)" (K755).
+    public static func addRefusal(name: String, paths: ServerPaths) -> String? {
+        let text = (try? String(contentsOf: paths.properties, encoding: .utf8)) ?? ""
+        guard PropertiesDocument(text).value("online-mode") == "false" else { return nil }
+        let wanted = name.lowercased()
+        var spellings = Set<String>()
+        if let data = try? Data(contentsOf: paths.root.appendingPathComponent("whitelist.json")),
+           let items = try? JSONSerialization.jsonObject(with: data) as? [[String: Any]] {
+            for item in items { if let n = item["name"] as? String { spellings.insert(n) } }
+        }
+        for player in PlayerFiles.list(paths) { if let n = player.name { spellings.insert(n) } }
+        let inventories = PlayerPaths(paths).inventories
+        for kind in ["worlds", "groups"] {
+            for container in FileOps.children(inventories.appendingPathComponent(kind)) {
+                for file in FileOps.children(container) where file.pathExtension == "json" { spellings.insert(file.deletingPathExtension().lastPathComponent) }
+            }
+        }
+        guard let other = spellings.filter({ $0.lowercased() == wanted && $0 != name }).sorted().first else { return nil }
+        return "\(name) differs from \(other), already on this server, only in capital letters. This server is offline, so they'd be two players whose files this Mac treats as one, and \(name) wasn't added. Nothing was changed. Use the spelling \(other), or turn on online mode."
+    }
+
     /// Profiles that look like the same person.
     public static func suggestions(_ paths: ServerPaths) -> [MergeSuggestion] {
         let p = PlayerPaths(paths)

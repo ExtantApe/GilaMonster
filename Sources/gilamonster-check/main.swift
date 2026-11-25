@@ -1728,6 +1728,30 @@ do {
         try? FileManager.default.removeItem(at: root.appendingPathComponent("plugins/Multiverse-Inventories"))
         equal(PlayerMerge.refusal(plan("Alex", "Riley"), paths: paths), nil, "without Multiverse-Inventories there are no shared files to clash")
     }
+    do { // K755: on an offline server, a name someone there spells with other capitals isn't added, by any path.
+        let root = folder("case-add")
+        write("online-mode=false\n", root.appendingPathComponent("server.properties"))
+        write(#"[{"name":"steve","uuid":"aaaaaaaa-0000-4000-8000-000000000001"}]"#, root.appendingPathComponent("whitelist.json"))
+        let paths = ServerPaths(root: root)
+        let refused = PlayerMerge.addRefusal(name: "Steve", paths: paths)
+        check(refused?.contains("Steve") == true && refused?.contains("steve") == true && refused?.contains("Nothing was changed") == true, "an allowlist spelling with other capitals is refused, naming both: \(refused ?? "allowed")")
+        equal(PlayerMerge.addRefusal(name: "steve", paths: paths), nil, "the exact spelling passes")
+        equal(PlayerMerge.addRefusal(name: "Alex", paths: paths), nil, "a different name passes")
+        write(#"{"who":"x"}"#, root.appendingPathComponent("plugins/Multiverse-Inventories/groups/main/rILEY.json"))
+        check(PlayerMerge.addRefusal(name: "Riley", paths: paths)?.contains("rILEY") == true, "an inventory file with other capitals counts too")
+        let c = ServerController(root: root, profile: ServerProfile())
+        defer { c.stopTicker() }
+        c.accessAllowsOffline = true
+        defer { c.accessAllowsOffline = false }
+        let viaScreen = await c.requestAccess(AccessChange(uuid: "bbbbbbbb-0000-4000-8000-000000000002", name: "Steve", addGroups: []))
+        equal(viaScreen, refused, "Players → Add refuses with the same words")
+        check(c.waitingAccess.isEmpty, "and queues nothing for later")
+        equal(await c.sheriffApply(uuid: "bbbbbbbb-0000-4000-8000-000000000002", name: "Steve", add: [], remove: []), .failed(refused ?? ""), "approving through Sheriff refuses before Sheriff is asked")
+        if case .failed(let why) = await c.createInvite(name: "Steve", profiles: [], days: 7) { equal(why, refused ?? "", "and so does a WelcomeWagon invite") } else { check(false, "invite refused") }
+        check(c.console.isEmpty, "nothing was typed")
+        write("online-mode=true\n", root.appendingPathComponent("server.properties"))
+        equal(PlayerMerge.addRefusal(name: "Steve", paths: paths), nil, "an online server tells them apart by account, so it passes")
+    }
     do { // Plugin links: a known source fills one in, and nothing else does.
         for bad in ["javascript:alert(1)", "file:///etc/passwd", "ftp://example.com", "https://", "not a link", "https://user:pass@example.com/", "https://me@example.com/", "https://example.com/" + String(repeating: "a", count: 3000), ""] {
             equal(PluginLinks.clean(bad), nil, "not a link: \(bad.prefix(40))")

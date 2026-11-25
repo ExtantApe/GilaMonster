@@ -265,6 +265,7 @@ extension ServerController {
         }
         guard AccountLookup.dashed(change.uuid) != nil else { return "That account's ID isn't valid." }
         guard AccountLookup.isValidName(change.name) else { return "That account's name isn't valid." }
+        if change.addToAllowlist, let clash = PlayerMerge.addRefusal(name: change.name, paths: paths) { return clash }
         let settings = playerAccessSettings
         for group in change.addGroups + change.removeGroups {
             guard LuckPermsText.isValidGroup(group) else { return "\(group) isn't a valid group name." }

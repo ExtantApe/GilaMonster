@@ -129,6 +129,7 @@ extension ServerController {
         guard AccountLookup.isValidName(name) else { return .failed("That account's name isn't valid.") }
         // "none" means an empty list to Sheriff, so it can never be a profile here.
         guard (add + remove).allSatisfy({ $0 != "none" }) else { return .failed("A profile can't be called “none”.") }
+        if let clash = PlayerMerge.addRefusal(name: name, paths: paths) { return .failed(clash) }
         func list(_ ids: [String]) -> CommandArg { ids.isEmpty ? .word("none") : .list(ids.map { .word($0) }) }
         let reply = await commands.run("sheriff", ["apply"], [.uuid(dashed), .player(name), list(add), list(remove), .bool(true), .word("gilamonster")], yes: yes)
         switch reply.outcome {

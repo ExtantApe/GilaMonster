@@ -111,6 +111,7 @@ extension ServerController {
         guard AccountLookup.isValidName(name) else { return .failed("That can't be a Minecraft name.") }
         guard (1...30).contains(days) else { return .failed("An invite lasts from 1 to 30 days.") }
         guard profiles.allSatisfy({ $0 != "none" }) else { return .failed("A profile can't be called “none”.") }
+        if let clash = PlayerMerge.addRefusal(name: name, paths: paths) { return .failed(clash) }
         let list: CommandArg = profiles.isEmpty ? .word("none") : .list(profiles.map { .word($0) })
         let reply = await commands.run("welcomewagon", ["invite", "create"], [.player(name), list, .duration(days, .d)], yes: yes)
         switch reply.outcome {
