@@ -524,6 +524,8 @@ extension ServerController {
 
     /// Merges two profiles, after a verified restore point.
     public func mergePlayers(_ plan: MergePlan) async throws {
+        // Before the server is stopped or anything is made, so a refused merge costs nothing.
+        if let why = PlayerMerge.refusal(plan, paths: paths) { throw AppError(why) }
         let wasRunning = state == .running
         try beginBusy("Merging players")
         defer { endBusy() }

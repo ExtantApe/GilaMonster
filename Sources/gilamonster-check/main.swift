@@ -1695,6 +1695,39 @@ do {
         write("online-mode=false\n", collide.appendingPathComponent("server.properties"))
         check(PlayerMerge.caseCollisions(ServerPaths(root: collide), players: []).isEmpty, "nothing to warn about with no players")
     }
+    do { // K161: a merge that would put one player's inventory files on another's is refused, with both spellings, changing nothing.
+        let root = folder("case-refuse")
+        let ids = ["Alex": "aaaaaaaa-0000-4000-8000-000000000001", "Riley": "bbbbbbbb-0000-4000-8000-000000000002", "riley": "cccccccc-0000-4000-8000-000000000003", "Sam": "dddddddd-0000-4000-8000-000000000004"]
+        write("online-mode=false\nlevel-name=world\n", root.appendingPathComponent("server.properties"))
+        write("[" + ids.map { #"{"name":"\#($0.key)","uuid":"\#($0.value)"}"# }.joined(separator: ",") + "]", root.appendingPathComponent("usercache.json"))
+        for id in ids.values { write("", root.appendingPathComponent("world/playerdata/\(id).dat")) }
+        let inv = root.appendingPathComponent("plugins/Multiverse-Inventories/worlds/mining")
+        write(#"{"who":"alex"}"#, inv.appendingPathComponent("Alex.json")); write(#"{"who":"riley"}"#, inv.appendingPathComponent("riley.json"))
+        let paths = ServerPaths(root: root)
+        func plan(_ from: String, _ to: String) -> MergePlan { MergePlan(from: PlayerRef(uuid: ids[from] ?? "", name: from), to: PlayerRef(uuid: ids[to] ?? "", name: to)) }
+        func snapshot() -> [String: String] { Dictionary(uniqueKeysWithValues: FileOps.children(inv).map { ($0.lastPathComponent, (try? String(contentsOf: $0, encoding: .utf8)) ?? "") }) }
+        let before = snapshot()
+        let archive = root.appendingPathComponent("archive")
+        let intoRiley = PlayerMerge.refusal(plan("Alex", "Riley"), paths: paths)
+        check(intoRiley?.contains("Riley") == true && intoRiley?.contains("riley") == true, "merging into a name another player spells differently is refused, naming both: \(intoRiley ?? "allowed")")
+        check(intoRiley?.contains("Nothing was changed") == true, "and says nothing was changed")
+        var threw = false
+        do { try PlayerMerge.apply(plan("Alex", "Riley"), paths: paths, archive: archive) } catch { threw = (error as? AppError)?.message == intoRiley }
+        check(threw, "apply refuses with the same words")
+        equal(snapshot(), before, "a refused merge leaves every inventory file as it was")
+        check(!FileOps.exists(archive), "and makes no archive")
+        let caseOnly = PlayerMerge.refusal(plan("Riley", "riley"), paths: paths)
+        check(caseOnly?.contains("Riley") == true && caseOnly?.contains("riley") == true && caseOnly?.contains("capital") == true, "two spellings of one name aren't merged here: \(caseOnly ?? "allowed")")
+        write(#"{"who":"x"}"#, inv.appendingPathComponent("Sammy.json"))
+        write(#"{"who":"stray"}"#, inv.appendingPathComponent("sAM.json"))
+        check(PlayerMerge.refusal(plan("Alex", "Sam"), paths: paths)?.contains("sAM") == true, "a leftover file with another spelling counts too, even with no player behind it")
+        try? FileManager.default.removeItem(at: inv.appendingPathComponent("sAM.json"))
+        equal(PlayerMerge.refusal(plan("Alex", "Sam"), paths: paths), nil, "a merge with no clash goes ahead")
+        equal(PlayerMerge.refusal(plan("Sam", "Sam"), paths: paths), nil, "the same name twice isn't a clash")
+        write("online-mode=false\n", root.appendingPathComponent("server.properties"))
+        try? FileManager.default.removeItem(at: root.appendingPathComponent("plugins/Multiverse-Inventories"))
+        equal(PlayerMerge.refusal(plan("Alex", "Riley"), paths: paths), nil, "without Multiverse-Inventories there are no shared files to clash")
+    }
     do { // Plugin links: a known source fills one in, and nothing else does.
         for bad in ["javascript:alert(1)", "file:///etc/passwd", "ftp://example.com", "https://", "not a link", "https://user:pass@example.com/", "https://me@example.com/", "https://example.com/" + String(repeating: "a", count: 3000), ""] {
             equal(PluginLinks.clean(bad), nil, "not a link: \(bad.prefix(40))")

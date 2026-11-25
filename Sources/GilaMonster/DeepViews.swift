@@ -522,6 +522,8 @@ struct MergeSheet: View {
                     comparison(current)
                     Hint("Statistics are added together, and advancements from both are kept.")
                 }
+                let refusal = PlayerMerge.refusal(current, paths: server.paths)
+                if let refusal { Callout(tone: .warning, title: "This merge can't be done here", detail: refusal) }
                 let conflicts = PlayerMerge.conflicts(current, paths: server.paths)
                 if !conflicts.isEmpty {
                     Text("Both have an inventory in these worlds or groups").font(.callout.weight(.semibold)).foregroundStyle(Theme.ink)
@@ -547,7 +549,7 @@ struct MergeSheet: View {
                     dismiss()
                     server.attempt { try await server.mergePlayers(plan) }
                 }
-                .buttonStyle(.themedPrimary).disabled(plan == nil)
+                .buttonStyle(.themedPrimary).disabled(plan == nil || plan.flatMap { PlayerMerge.refusal($0, paths: server.paths) } != nil)
             }
         }
         .padding(20)

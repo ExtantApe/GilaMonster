@@ -365,6 +365,35 @@ public enum PlayerMerge {
         return Dictionary(grouping: names) { $0.lowercased() }.values.filter { $0.count > 1 }.map { $0.sorted() }.sorted { $0[0] < $1[0] }
     }
 
+    /// Why a merge can't go ahead: it would write one player's Multiverse-Inventories files onto another's. Files there are
+    /// named by player, and a Mac's disk treats `Steve.json` and `steve.json` as one file. Names the spellings and nothing
+    /// else, changes nothing, and never picks a side (K161).
+    public static func refusal(_ plan: MergePlan, paths: ServerPaths) -> String? {
+        guard let oldName = plan.from.name, let newName = plan.to.name, oldName != newName else { return nil }
+        let p = PlayerPaths(paths)
+        guard p.hasInventoriesPlugin else { return nil }
+        let stop = "Nothing was changed."
+        if oldName.lowercased() == newName.lowercased() {
+            return "\(oldName) and \(newName) differ only in capital letters, so on this Mac their Multiverse-Inventories files are the same file and merging them could lose one player's inventory. \(stop) Turning on online mode, or renaming one of them on the server, avoids this."
+        }
+        let wanted = newName.lowercased()
+        var spellings = Set(PlayerFiles.list(paths).compactMap { player -> String? in
+            guard let name = player.name, name.lowercased() == wanted, name != newName,
+                  ![plan.from.uuid.lowercased(), plan.to.uuid.lowercased()].contains(player.uuid.lowercased()) else { return nil }
+            return name
+        })
+        for kind in ["worlds", "groups"] {
+            for container in FileOps.children(p.inventories.appendingPathComponent(kind)) {
+                for file in FileOps.children(container) where file.pathExtension == "json" {
+                    let name = file.deletingPathExtension().lastPathComponent
+                    if name.lowercased() == wanted, name != newName { spellings.insert(name) }
+                }
+            }
+        }
+        guard let other = spellings.sorted().first else { return nil }
+        return "Merging into \(newName) would use the same Multiverse-Inventories files as \(other), because this Mac's disk treats \(newName) and \(other) as one name. \(stop) Turning on online mode, or renaming one of them on the server, avoids this."
+    }
+
     /// Profiles that look like the same person.
     public static func suggestions(_ paths: ServerPaths) -> [MergeSuggestion] {
         let p = PlayerPaths(paths)
@@ -454,6 +483,7 @@ public enum PlayerMerge {
 
     /// Applies with the server stopped. The profile merged away is kept in `archive`, not deleted.
     public static func apply(_ plan: MergePlan, paths: ServerPaths, archive: URL) throws {
+        if let why = refusal(plan, paths: paths) { throw AppError(why) }
         let p = PlayerPaths(paths)
         try FileOps.ensureDir(archive)
         let from = plan.from.uuid, to = plan.to.uuid
