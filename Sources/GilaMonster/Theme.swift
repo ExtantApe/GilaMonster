@@ -31,6 +31,20 @@ enum Theme {
     static let up = dynamic(Palette.up)
     static let starting = dynamic(Palette.starting)
     static let meter = dynamic(Palette.meter)
+    /// A stopped server, and players who are away.
+    static let stopped = dynamic(Palette.stopped)
+    // The basalt spine (K786): its ground, words, bead fills and outlines, badge pills, the lizard's tile and focus.
+    static let spine = dynamic(Palette.side)
+    static let spineInk = dynamic(Palette.sideInk)
+    static let spineMuted = dynamic(Palette.sideMuted)
+    static let beadIdle = dynamic(Palette.beadIdle)
+    static let beadEdge = dynamic(Palette.beadEdge)
+    static let beadOn = dynamic(Palette.beadOn)
+    static let beadRing = dynamic(Palette.selMark)
+    static let pill = dynamic(Palette.pill)
+    static let onPill = dynamic(Palette.onPill)
+    static let lizardTile = dynamic(Palette.sel)
+    static let spineFocus = dynamic(Palette.sideFocus)
     static let info = dynamic(Palette.info)
     static let infoWash = dynamic(Palette.infoWash)
     /// Plugin source badge colours, by SourceKind raw value: (tint, icon accent).
@@ -56,6 +70,16 @@ enum Theme {
             }
             return nsColor(swatch.hex(mode, flavor))
         })
+    }
+
+    /// A fixed art color (the pixel lizard, the bead band, made-up faces). Decoration only, never text, and the same in
+    /// every appearance, as the icon is.
+    static func art(_ hex: UInt32) -> Color { Color(nsColor: nsColor(hex)) }
+
+    /// Lilita One (SIL OFL 1.1, brand/fonts/lilitaone) for the one status sentence and player names. Falls back to the
+    /// rounded system face if the font couldn't be loaded, so text is never lost.
+    static func display(_ size: CGFloat) -> Font {
+        BrandFonts.lilitaLoaded ? .custom(BrandFonts.lilita, size: size) : .system(size: size, weight: .bold, design: .rounded)
     }
 
     private static func nsColor(_ hex: UInt32) -> NSColor {
@@ -153,7 +177,7 @@ struct Card<Content: View>: View {
                 }
                 .accessibilityAddTraits(.isHeader)
             }
-            if let subtitle { Text(subtitle).font(.callout).foregroundStyle(Theme.muted).fixedSize(horizontal: false, vertical: true) }
+            if let subtitle { Text(subtitle).font(.body).foregroundStyle(Theme.muted).fixedSize(horizontal: false, vertical: true) }
             content
         }
         .padding(14)
@@ -240,9 +264,9 @@ struct Badge: View {
 
     var body: some View {
         Label {
-            Text(text).font(.caption.weight(.medium)).foregroundStyle(Theme.ink).lineLimit(1).truncationMode(.tail).help(text)
+            Text(text).font(.body.weight(.medium)).foregroundStyle(Theme.ink).lineLimit(1).truncationMode(.tail).help(text)
         } icon: {
-            Image(systemName: icon ?? tone.icon).font(.caption).foregroundStyle(tone.color)
+            Image(systemName: icon ?? tone.icon).font(.body).foregroundStyle(tone.color)
         }
         .labelStyle(.titleAndIcon)
         .padding(.horizontal, 8)
@@ -276,7 +300,7 @@ struct Callout<Actions: View>: View {
                         .textSelection(.enabled)
                     if long {
                         Button(expanded ? "Hide Details" : "Show Details") { expanded.toggle() }
-                            .buttonStyle(.disclosureLink(expanded ? "chevron.up" : "chevron.down")).font(.callout)
+                            .buttonStyle(.disclosureLink(expanded ? "chevron.up" : "chevron.down")).font(.body)
                             .accessibilityHint(expanded ? "Shows only the first lines" : "Shows the whole message")
                     }
                 }
@@ -348,7 +372,7 @@ struct Hint: View {
     let text: String
     init(_ text: String) { self.text = text }
     var body: some View {
-        Text(text).font(.callout).foregroundStyle(Theme.muted).fixedSize(horizontal: false, vertical: true)
+        Text(text).font(.body).foregroundStyle(Theme.muted).fixedSize(horizontal: false, vertical: true)
     }
 }
 
@@ -429,14 +453,14 @@ struct SourceBadges: View {
             let colors = Theme.sourceColors[source.kind.rawValue] ?? (Theme.raised, Theme.muted)
             HStack(spacing: 4) {
                 Label {
-                    Text(b.source).font(.caption.weight(.semibold)).foregroundStyle(Theme.ink).lineLimit(1).truncationMode(.tail).help(b.source)
+                    Text(b.source).font(.body.weight(.semibold)).foregroundStyle(Theme.ink).lineLimit(1).truncationMode(.tail).help(b.source)
                 } icon: {
-                    Image(systemName: source.kind.symbol).font(.caption).foregroundStyle(colors.accent)
+                    Image(systemName: source.kind.symbol).font(.body).foregroundStyle(colors.accent)
                 }
                 .labelStyle(.titleAndIcon)
                 .padding(.horizontal, 8).padding(.vertical, 3)
                 .background(colors.wash, in: Capsule())
-                Text(b.id).font(.caption.monospaced()).foregroundStyle(Theme.ink).lineLimit(1).truncationMode(.middle)
+                Text(b.id).font(.body.monospaced()).foregroundStyle(Theme.ink).lineLimit(1).truncationMode(.middle)
                     .padding(.horizontal, 8).padding(.vertical, 3)
                     .overlay { Capsule().strokeBorder(Theme.controlBorder, lineWidth: 1) }
             }
@@ -489,7 +513,7 @@ struct ShowMoreButton: View {
     var body: some View {
         if expanded || hidden > 0 {
             Button(expanded ? "Show Fewer" : "Show \(hidden) More") { expanded.toggle() }
-                .buttonStyle(.disclosureLink(expanded ? "chevron.up" : "chevron.down")).font(.callout)
+                .buttonStyle(.disclosureLink(expanded ? "chevron.up" : "chevron.down")).font(.body)
         }
     }
 }
@@ -587,7 +611,7 @@ struct DisclosureLinkStyle: ButtonStyle {
         var body: some View {
             HStack(spacing: 4) {
                 configuration.label.underline()
-                Image(systemName: symbol).font(.caption.weight(.semibold)).accessibilityHidden(true)
+                Image(systemName: symbol).font(.body.weight(.semibold)).accessibilityHidden(true)
             }
             .foregroundStyle(Theme.ink)
             .frame(minHeight: 24)

@@ -37,7 +37,7 @@ struct LabPage: View {
                         Spacer()
                         Text("Now \(server.profile.software.label)").foregroundStyle(Theme.muted)
                     }
-                    Text("Checks to run").font(.callout.weight(.semibold)).foregroundStyle(Theme.ink).padding(.top, 4)
+                    Text("Checks to run").font(.body.weight(.semibold)).foregroundStyle(Theme.ink).padding(.top, 4)
                         .accessibilityAddTraits(.isHeader)
                     ForEach(LabStation.allCases) { station in
                         LabStationRow(station: station, lab: lab, server: server, included: Binding(get: { included.contains(station) }, set: { on in
@@ -203,11 +203,11 @@ struct LabStationRow: View {
                 VStack(alignment: .leading, spacing: 2) {
                     HStack(spacing: 8) {
                         Text(station.title).font(.body.weight(.semibold)).foregroundStyle(Theme.ink)
-                        if station.isOptional { Text("Optional").font(.caption).foregroundStyle(Theme.muted) }
+                        if station.isOptional { Text("Optional").font(.body).foregroundStyle(Theme.muted) }
                     }
                     Hint(detailLine)
-                    if case .failed = light, let next = nextStep { Text(next).font(.callout).foregroundStyle(Theme.ink).fixedSize(horizontal: false, vertical: true) }
-                    if light == .running, let step = lab.step { Text(step).font(.callout).foregroundStyle(Theme.ink) }
+                    if case .failed = light, let next = nextStep { Text(next).font(.body).foregroundStyle(Theme.ink).fixedSize(horizontal: false, vertical: true) }
+                    if light == .running, let step = lab.step { Text(step).font(.body).foregroundStyle(Theme.ink) }
                 }
                 Spacer(minLength: 8)
                 StatusLight(light: light)
@@ -266,7 +266,7 @@ struct StatusLight: View {
             } else {
                 Image(systemName: icon).foregroundStyle(color).accessibilityHidden(true)
             }
-            Text(word).font(.callout.weight(.medium)).foregroundStyle(Theme.ink)
+            Text(word).font(.body.weight(.medium)).foregroundStyle(Theme.ink)
         }
         .frame(minWidth: 96, alignment: .trailing)
         .accessibilityElement(children: .combine)
@@ -315,7 +315,7 @@ struct StationDetails: View {
             ForEach(result.groups) { group in
                 VStack(alignment: .leading, spacing: 3) {
                     HStack {
-                        Text(group.title).font(.callout.weight(.semibold)).foregroundStyle(Theme.ink)
+                        Text(group.title).font(.body.weight(.semibold)).foregroundStyle(Theme.ink)
                         Badge(text: title(group.outcome), tone: tone(group.outcome))
                     }
                     Hint(group.plugins.joined(separator: ", "))

@@ -275,9 +275,9 @@ struct DynamicConfigForm: View {
                 collapsed = current
             } label: {
                 HStack {
-                    Image(systemName: open ? "chevron.down" : "chevron.right").font(.caption).foregroundStyle(Theme.muted).accessibilityHidden(true)
+                    Image(systemName: open ? "chevron.down" : "chevron.right").font(.body).foregroundStyle(Theme.muted).accessibilityHidden(true)
                     Text(section.name).font(.headline).foregroundStyle(Theme.ink).multilineTextAlignment(.leading)
-                    Text("\(section.fields.count)").font(.caption).foregroundStyle(Theme.muted)
+                    Text("\(section.fields.count)").font(.body).foregroundStyle(Theme.muted)
                     Spacer()
                 }
                 .padding(10)
@@ -342,7 +342,7 @@ struct ConfigFieldRow: View {
             }
             .labelsHidden().fixedSize()
         case .readOnly:
-            Text(field.value).font(.callout).foregroundStyle(Theme.muted).lineLimit(1)
+            Text(field.value).font(.body).foregroundStyle(Theme.muted).lineLimit(1)
                 .helped("Edit this in the Full File view")
         case .int, .number:
             TextField(field.title, text: Binding(get: { field.value }, set: { onChange($0) }))

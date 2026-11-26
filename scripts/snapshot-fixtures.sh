@@ -59,9 +59,30 @@ PY
     done
     echo "$s"
 }
+players() { # folder: made-up players with saved files and a small inventory, so the Players roster has rows (K786)
+    python3 -I - "$1" <<'PY'
+import gzip, json, os, struct, sys, time, uuid
+root = sys.argv[1]
+data = os.path.join(root, "world", "playerdata"); os.makedirs(data, exist_ok=True)
+def s(t): b = t.encode(); return struct.pack(">H", len(b)) + b
+def item(slot, iid, n): return b"\x01" + s("Slot") + struct.pack(">b", slot) + b"\x08" + s("id") + s(iid) + b"\x03" + s("count") + struct.pack(">i", n) + b"\x00"
+stuff = [(0, "minecraft:cobblestone", 64), (1, "minecraft:iron_pickaxe", 1), (2, "minecraft:bread", 12), (4, "minecraft:torch", 3), (7, "minecraft:oak_sapling", 1)]
+cache = []
+for i, name in enumerate(["MadeUpKid", "PixelPal", "CactusJo", "SandyB", "LizardLou"]):
+    pid = str(uuid.uuid5(uuid.NAMESPACE_DNS, name + ".example"))
+    inv = b"\x09" + s("Inventory") + b"\x0a" + struct.pack(">i", len(stuff)) + b"".join(item(*x) for x in stuff)
+    body = b"\x0a" + s("") + inv + b"\x03" + s("XpLevel") + struct.pack(">i", 7 + i) + b"\x00"
+    f = os.path.join(data, pid + ".dat")
+    with gzip.open(f, "wb") as out: out.write(body)
+    t = time.time() - 3600 * (i * 9 + 1); os.utime(f, (t, t))
+    cache.append({"uuid": pid, "name": name, "expiresOn": "2099-01-01 00:00:00 +0000"})
+json.dump(cache, open(os.path.join(root, "usercache.json"), "w"))
+PY
+}
 list=()
 if [[ "$kind" == normal ]]; then
     list+=("$(server "Made-up Server" 6 2 4 0)")
+    players "${list[0]}"
 else
     list+=("$(server "A Made-up Server With A Name Long Enough To Need Truncating" 60 30 80 12 30)")
     for n in 2 3 4 5 6 7 8; do list+=("$(server "Made-up Server Number $n With A Long Name" 3 1 2 0)"); done

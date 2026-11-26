@@ -188,7 +188,7 @@ final class SessionPrompts: NSObject, UNUserNotificationCenterDelegate, @uncheck
             p.hidesOnDeactivate = false
             p.collectionBehavior = [.canJoinAllSpaces, .fullScreenAuxiliary]
             p.setAccessibilityLabel("A session is asking")
-            p.contentView = NSHostingView(rootView: SessionAskList(service: .shared, focusFirst: true).padding(18).frame(width: 520).tint(Theme.accent))
+            p.contentView = NSHostingView(rootView: AskPanelLook { SessionAskList(service: .shared, focusFirst: true) }.tint(Theme.accent))
             panel = p
         }
         guard let panel else { return }
@@ -218,6 +218,21 @@ final class SessionPrompts: NSObject, UNUserNotificationCenterDelegate, @uncheck
     func hide() {
         panel?.orderOut(nil)
         if let attention { NSApp.cancelUserAttentionRequest(attention); self.attention = nil }
+    }
+}
+
+/// How the ask window looks (K786): a thin bead band across the top and the sand surface below it. Looks only: the list
+/// inside, its wording, buttons, focus and guard are SessionAskList's, unchanged.
+struct AskPanelLook<Content: View>: View {
+    @ViewBuilder var content: Content
+    var body: some View {
+        VStack(spacing: 0) {
+            BeadBandView(height: 6)
+            content.padding(.horizontal, 18).padding(.top, 14).padding(.bottom, 18)
+        }
+        // Wider than the old 520 pt, so Allow for Today fits beside Deny and Allow at the 13 pt text size.
+        .frame(width: 580)
+        .background(Theme.surface)
     }
 }
 
@@ -266,15 +281,15 @@ struct SessionAskList: View {
             ForEach(Array(service.waiting.enumerated()), id: \.element.id) { index, ask in
                 HStack(alignment: .firstTextBaseline) {
                     VStack(alignment: .leading, spacing: 2) {
-                        Text(ask.sentence).foregroundStyle(Theme.ink).fixedSize(horizontal: false, vertical: true)
+                        Text(ask.sentence).font(Theme.display(19)).foregroundStyle(Theme.ink).fixedSize(horizontal: false, vertical: true)
                         if let family = ask.action.todayFamily {
                             Text("Allow for Today covers \(family.words) on every server until midnight.")
-                                .font(.caption).foregroundStyle(Theme.muted).fixedSize(horizontal: false, vertical: true)
+                                .font(.body).foregroundStyle(Theme.muted).fixedSize(horizontal: false, vertical: true)
                         }
                         TimelineView(.periodic(from: .now, by: 1)) { context in
                             let left = max(0, Int(ask.deadline.timeIntervalSince(context.date).rounded(.up)))
                             Text("The name is the session's own. No answer in \(left / 60):\(String(format: "%02d", left % 60)) means no.")
-                                .font(.caption).monospacedDigit().foregroundStyle(Theme.muted).fixedSize(horizontal: false, vertical: true)
+                                .font(.body).monospacedDigit().foregroundStyle(Theme.muted).fixedSize(horizontal: false, vertical: true)
                                 // A second-by-second label would make VoiceOver chatter, so it says the minutes.
                                 .accessibilityLabel("The name is the session's own. No answer in about \(max(1, (left + 30) / 60)) minutes means no.")
                         }
@@ -302,12 +317,12 @@ struct SessionAskList: View {
                                 Announcer.say("One minute added, \(left - 1) left", force: true)
                             }
                         }
-                        .buttonStyle(.disclosureLink("plus")).font(.caption)
+                        .buttonStyle(.disclosureLink("plus")).font(.body)
                         .disabled(left <= 0)
                         .help("Waits another minute before the answer becomes no. Nothing is allowed by this.")
                         .accessibilityLabel("Need more time for: \(ask.sentence). Adds a minute, \(left) left. Nothing is allowed.")
                         if left <= 0 {
-                            Text("No more time can be added. No answer means no.").font(.caption).foregroundStyle(Theme.muted)
+                            Text("No more time can be added. No answer means no.").font(.body).foregroundStyle(Theme.muted)
                         }
                     }
                 }

@@ -82,7 +82,7 @@ final class AppModel {
     /// A snapshot run draws every server in turn and must leave the saved choice alone (D226).
     var selectedID: UUID? { didSet { if !Self.isSnapshot { UserDefaults.standard.set(selectedID?.uuidString, forKey: "selectedServer") } } }
     nonisolated static var isSnapshot: Bool { ProcessInfo.processInfo.environment["GILAMONSTER_SNAPSHOT"] != nil }
-    var page: PageID = .overview
+    var page: PageID = .overview { didSet { if let id = Sections.section(of: page.rawValue)?.id { lastPage[id] = page } } }
     /// Opened from the toolbar while nothing is open, to look at ignored issues. Not saved: the panel goes back to
     /// showing itself only when there's something open (UX audit finding 2).
     var issuesOpenedByHand = false
@@ -96,6 +96,42 @@ final class AppModel {
     var appUpdate: (version: String, url: URL)?
     var checkAppUpdates = UserDefaults.standard.object(forKey: "checkAppUpdates") as? Bool ?? true {
         didSet { UserDefaults.standard.set(checkAppUpdates, forKey: "checkAppUpdates") }
+    }
+
+    /// The page last open in each section, so a bead goes back to it (K786). Not saved between launches.
+    var lastPage: [String: PageID] = [:]
+
+    /// Sections with at least one page shown. Home is always there.
+    var shownSections: [Sections.Section] { Sections.all.filter { !pages(in: $0).isEmpty } }
+    /// The section the open page belongs to.
+    var currentSection: Sections.Section { Sections.section(of: visiblePage.rawValue) ?? Sections.all[0] }
+    /// A section's pages that are shown, in trail order.
+    func pages(in section: Sections.Section) -> [PageID] {
+        let visible = PageID.visible
+        return section.pages.compactMap { PageID(rawValue: $0.key) }.filter { visible.contains($0) }
+    }
+    /// Opens a section at the page last used there, or its first page.
+    func choose(_ section: Sections.Section) {
+        let keys = PageID.visible.map(\.rawValue)
+        if let key = Sections.landing(section, visible: keys, last: lastPage[section.id]?.rawValue), let target = PageID(rawValue: key) { page = target }
+    }
+    /// ⌃Tab and ⌃⇧Tab: the next or previous page on the trail, wrapping round.
+    func stepTrail(by offset: Int) {
+        let keys = pages(in: currentSection).map(\.rawValue)
+        if let key = Sections.step(from: visiblePage.rawValue, in: keys, by: offset), let target = PageID(rawValue: key) { page = target }
+    }
+    /// What's waiting on a page, shown as its badge.
+    func badge(for page: PageID, server: ServerController) -> Int {
+        switch page {
+        case .plugins: server.plugins.filter { server.record(for: $0).available != nil }.count
+        case .software: server.softwareUpdate == nil ? 0 : 1
+        case .changes: server.pending.count
+        case .advisor: AdvisorCenter.shared.count(server)
+        default: 0
+        }
+    }
+    func badges(_ server: ServerController) -> [String: Int] {
+        Dictionary(uniqueKeysWithValues: PageID.visible.map { ($0.rawValue, badge(for: $0, server: server)) })
     }
 
     var selected: ServerController? { listed.first { $0.id == selectedID } ?? listed.first }
@@ -298,7 +334,11 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
             // GILAMONSTER_SNAPSHOT_FIRST draws only the first server's pages (the others still show in the sidebar).
             let drawn = ProcessInfo.processInfo.environment["GILAMONSTER_SNAPSHOT_FIRST"] != nil ? Array(model.servers.prefix(1)) : model.servers
             for server in drawn where ProcessInfo.processInfo.environment["GILAMONSTER_SNAPSHOT_DIALOGS_ONLY"] == nil {
-                for page in PageID.allCases {
+                // Players is drawn a second time with a made-up player picked, when the fixture has one (K786).
+                let shots: [(page: PageID, pick: String?)] = PageID.allCases.map { ($0, nil) } + [(.players, "MadeUpKid")]
+                for (page, pick) in shots {
+                    PlayersPage.snapshotPick = pick
+                    if pick != nil, !server.knownPlayers.contains(where: { $0.title == pick }) { continue }
                     model.selectedID = server.id
                     model.page = page
                     // GILAMONSTER_SNAPSHOT_FORCE_WIDE=1 makes every page too wide on purpose, to prove the report catches it.
@@ -312,12 +352,12 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
                     window.orderBack(nil)
                     try? await Task.sleep(for: .seconds(page == .overview ? 5 : page == .resourcePacks ? 12 : 2.5))
                     host.layoutSubtreeIfNeeded()
-                    pagesChecked += 1
+                    if pick == nil { pagesChecked += 1 }
                     let fitting = host.fittingSize.width
                     if fitting > windowWidth + 0.5 { overflowing.append("OVERFLOW \(page.rawValue): fitting width \(Int(fitting.rounded())) is over the window's \(Int(windowWidth))") }
                     if let rep = host.bitmapImageRepForCachingDisplay(in: host.bounds) {
                         host.cacheDisplay(in: host.bounds, to: rep)
-                        let name = "\(server.profile.name.replacingOccurrences(of: " ", with: "-"))-\(page.rawValue).png"
+                        let name = "\(server.profile.name.replacingOccurrences(of: " ", with: "-"))-\(page.rawValue)\(pick == nil ? "" : "-selected").png"
                         try? rep.representation(using: .png, properties: [:])?.write(to: URL(fileURLWithPath: folder).appendingPathComponent(name))
                     }
                     window.orderOut(nil)
@@ -328,12 +368,15 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
             try? report.write(to: URL(fileURLWithPath: folder).appendingPathComponent("overflow-report.txt"), atomically: true, encoding: .utf8)
             // The dialogs too, which otherwise only appear after a click.
             // The quit question needs no server (D215).
-            let quitDialogs: [(String, AnyView)] = [
+            var quitDialogs: [(String, AnyView)] = [
                     ("quit-during-backup", AnyView(QuitDuringBackupView(state: QuitDuringBackupState(reason: .restart, progress: [
                         BackupProgress(server: "Made-up Server", written: 12_300_000_000, expected: 47_000_000_000, started: Date().addingTimeInterval(-600))]), choose: { _ in }))),
                     ("quit-during-backup-waiting", AnyView(QuitDuringBackupView(state: { let s = QuitDuringBackupState(reason: .user, progress: [
                         BackupProgress(server: "Made-up Server", written: 40_000_000_000, expected: 47_000_000_000, started: Date().addingTimeInterval(-1800))]); s.waiting = true; return s }(), choose: { _ in })))
             ]
+            // The Allow prompt, from a separate made-up service: the shared one is never touched (K786).
+            let askPreview = SessionAccessService.preview(caller: "helper", action: .stop, server: "Made-up Server", wait: 107)
+            quitDialogs.append(("allow-prompt", AnyView(AskPanelLook { SessionAskList(service: askPreview, focusFirst: true) })))
             var serverDialogs: [(String, AnyView)] = []
             if let server = model.servers.first(where: { !$0.isLab }) {
                 let build = PackVersion(file: "new.zip", version: "2.0", sha1: "abc", added: Date(), size: 1000, format: 75, description: "", fileCount: 3, imageCount: 1)
@@ -539,6 +582,7 @@ struct GilaMonsterApp: App {
             MainActor.assumeIsolated { InviteTicketSheet.writeSample(to: URL(fileURLWithPath: out)) }
             exit(0)
         }
+        BrandFonts.register()
         let model = AppModel()
         AppDelegate.model = model
         _model = State(initialValue: model)
@@ -606,9 +650,26 @@ struct ServerCommands: Commands {
             Button(model.showIssues ? "Hide Issues" : "Show Issues") { model.showIssues.toggle(); model.issuesOpenedByHand = model.showIssues }
                 .keyboardShortcut("i", modifiers: [.command, .option])
             Divider()
-            ForEach(Array(PageID.visible.prefix(9).enumerated()), id: \.element) { index, page in
-                Button(page.title) { model.page = page }
-                    .keyboardShortcut(KeyEquivalent(Character(String(index + 1))))
+            // The five sections on ⌘1 to ⌘5, in spine order (K786).
+            ForEach(Array(Sections.all.enumerated()), id: \.element.id) { index, section in
+                Button(section.title) { model.choose(section) }
+                    .keyboardShortcut(KeyEquivalent(Character(String(index + 1))), modifiers: .command)
+                    .disabled(model.pages(in: section).isEmpty)
+            }
+            Button("Next Page") { model.stepTrail(by: 1) }
+                .keyboardShortcut(.tab, modifiers: .control)
+            Button("Previous Page") { model.stepTrail(by: -1) }
+                .keyboardShortcut(.tab, modifiers: [.control, .shift])
+            // Each page by number, as ⌘1 to ⌘9 did before the sections took ⌘1 to ⌘5 (K786): now ⌥⌘1 to ⌥⌘9.
+            Menu("Go to Page") {
+                ForEach(Array(PageID.visible.enumerated()), id: \.element) { index, page in
+                    if index < 9 {
+                        Button(page.title) { model.page = page }
+                            .keyboardShortcut(KeyEquivalent(Character(String(index + 1))), modifiers: [.command, .option])
+                    } else {
+                        Button(page.title) { model.page = page }
+                    }
+                }
             }
         }
     }
@@ -743,7 +804,7 @@ struct SettingsView: View {
                         Label {
                             VStack(alignment: .leading, spacing: 2) {
                                 Text(module.title).foregroundStyle(Theme.ink)
-                                Text(module.summary).font(.caption).foregroundStyle(Theme.muted)
+                                Text(module.summary).font(.body).foregroundStyle(Theme.muted)
                             }
                         } icon: {
                             Image(systemName: module.icon).foregroundStyle(Theme.accent)
@@ -754,7 +815,7 @@ struct SettingsView: View {
                 Text("Features")
             } footer: {
                 Text("Turning one off hides it and stops its background work. Nothing it has saved is deleted, and turning it back on picks up where it left off.")
-                    .font(.caption).foregroundStyle(Theme.muted)
+                    .font(.body).foregroundStyle(Theme.muted)
             }
             SessionAccessSection()
         }

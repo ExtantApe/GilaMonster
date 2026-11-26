@@ -143,7 +143,7 @@ private struct OperationCard: View {
                 }
             }
             Text(output)
-                .font(.system(.caption, design: .monospaced)).foregroundStyle(Theme.ink).textSelection(.enabled)
+                .font(.system(.body, design: .monospaced)).foregroundStyle(Theme.ink).textSelection(.enabled)
                 .frame(maxWidth: .infinity, alignment: .leading)
                 .padding(8)
                 .background(Theme.raised, in: RoundedRectangle(cornerRadius: 6))
@@ -174,7 +174,7 @@ private struct WorldRow: View {
             HStack(alignment: .firstTextBaseline, spacing: 8) {
                 Image(systemName: icon).foregroundStyle(Theme.accent).accessibilityHidden(true)
                 Text(world.title).font(.headline).foregroundStyle(Theme.ink).rowName(world.title)
-                if world.title != world.name, world.multiverse?.alias.isEmpty == false { Text(world.name).font(.callout).foregroundStyle(Theme.muted).rowName(world.name) }
+                if world.title != world.name, world.multiverse?.alias.isEmpty == false { Text(world.name).font(.body).foregroundStyle(Theme.muted).rowName(world.name) }
                 Spacer()
                 badges
             }

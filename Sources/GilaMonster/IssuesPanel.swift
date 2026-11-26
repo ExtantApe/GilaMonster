@@ -94,10 +94,10 @@ struct IssueRow: View {
                     VStack(alignment: .leading, spacing: 2) {
                         Text(issue.title).font(.body.weight(.medium)).foregroundStyle(Theme.ink)
                             .multilineTextAlignment(.leading).lineLimit(expanded ? nil : 3)
-                        Text(meta).font(.caption).foregroundStyle(Theme.muted)
+                        Text(meta).font(.body).foregroundStyle(Theme.muted)
                     }
                     Spacer(minLength: 4)
-                    Image(systemName: expanded ? "chevron.down" : "chevron.right").font(.caption).foregroundStyle(Theme.muted).accessibilityHidden(true)
+                    Image(systemName: expanded ? "chevron.down" : "chevron.right").font(.body).foregroundStyle(Theme.muted).accessibilityHidden(true)
                 }
                 .contentShape(Rectangle())
             }
@@ -129,20 +129,20 @@ struct IssueRow: View {
         }
         if !issue.steps.isEmpty {
             VStack(alignment: .leading, spacing: 4) {
-                Text("What to try").font(.callout.weight(.semibold)).foregroundStyle(Theme.ink)
+                Text("What to try").font(.body.weight(.semibold)).foregroundStyle(Theme.ink)
                 ForEach(Array(issue.steps.enumerated()), id: \.offset) { index, step in
                     HStack(alignment: .firstTextBaseline, spacing: 6) {
                         Text("\(index + 1).").foregroundStyle(Theme.muted)
                         Text(step).foregroundStyle(Theme.ink).fixedSize(horizontal: false, vertical: true)
                     }
-                    .font(.callout)
+                    .font(.body)
                 }
             }
         }
         DisclosureGroup("Log output") {
             ScrollView(.horizontal) {
                 Text(([issue.sample] + issue.stack).joined(separator: "\n"))
-                    .font(.system(.caption, design: .monospaced))
+                    .font(.system(.body, design: .monospaced))
                     .foregroundStyle(Theme.ink)
                     .textSelection(.enabled)
                     .frame(maxWidth: .infinity, alignment: .leading)
@@ -150,7 +150,7 @@ struct IssueRow: View {
             }
             .background(Theme.raised, in: RoundedRectangle(cornerRadius: 6))
         }
-        .font(.callout)
+        .font(.body)
         .foregroundStyle(Theme.ink)
         if let attachment = issue.attachment {
             Button("Open Crash Report") { NSWorkspace.shared.open(URL(fileURLWithPath: attachment)) }.buttonStyle(.themed)

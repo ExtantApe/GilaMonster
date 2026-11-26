@@ -650,7 +650,7 @@ struct AdvisorPage: View {
                 Toggle(isOn: Binding(get: { center.isAutomatic(server) }, set: { center.setAutomatic(server, $0) })) {
                     VStack(alignment: .leading, spacing: 2) {
                         Text("Check by itself when something new goes wrong").foregroundStyle(Theme.ink)
-                        Text("At most every six hours, while GilaMonster is open. Quiet servers cost nothing.").font(.caption).foregroundStyle(Theme.muted)
+                        Text("At most every six hours, while GilaMonster is open. Quiet servers cost nothing.").font(.body).foregroundStyle(Theme.muted)
                     }
                 }
             }
@@ -688,7 +688,7 @@ private struct AdvisorCard: View {
                     Image(systemName: item.severity.tone.icon).foregroundStyle(item.severity.tone.color).accessibilityHidden(true)
                     VStack(alignment: .leading, spacing: 2) {
                         Text(verbatim: item.title).font(.body.weight(.semibold)).foregroundStyle(Theme.ink).textSelection(.enabled)
-                        Text("Written by AI · \(item.severity.label)").font(.caption).foregroundStyle(Theme.muted)
+                        Text("Written by AI · \(item.severity.label)").font(.body).foregroundStyle(Theme.muted)
                     }
                     Spacer(minLength: 0)
                 }
@@ -722,7 +722,7 @@ private struct AdvisorPreview: View {
             Hint("Nothing has been sent. This is everything \(server.profile.name) would share if a check ran now. Names like Player-1a2b3c4d are code names that only this Mac can translate.")
             ScrollView {
                 Text(verbatim: AdvisorCenter.shared.previews[server.paths.root.path] ?? "Reading…")
-                    .font(.system(.caption, design: .monospaced)).foregroundStyle(Theme.ink)
+                    .font(.system(.body, design: .monospaced)).foregroundStyle(Theme.ink)
                     .frame(maxWidth: .infinity, alignment: .leading).textSelection(.enabled).padding(10)
             }
             .background(Theme.surface, in: RoundedRectangle(cornerRadius: Theme.controlRadius))

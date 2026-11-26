@@ -22,24 +22,24 @@ struct SessionAccessSection: View {
                 settings.enabled = on
                 save()
             }))
-            if let error = service.error { Text(error).foregroundStyle(Theme.danger).font(.callout) }
+            if let error = service.error { Text(error).foregroundStyle(Theme.danger).font(.body) }
             if settings.enabled {
-                Text(service.isListening ? "Listening on this Mac only." : service.waitingForKeychain ? "Waiting for Keychain access. macOS may be asking you to allow GilaMonster." : "Not listening yet.").font(.callout).foregroundStyle(Theme.muted)
+                Text(service.isListening ? "Listening on this Mac only." : service.waitingForKeychain ? "Waiting for Keychain access. macOS may be asking you to allow GilaMonster." : "Not listening yet.").font(.body).foregroundStyle(Theme.muted)
             }
             VStack(alignment: .leading, spacing: 6) {
-                Text("Commands sessions may run").font(.callout.weight(.semibold)).foregroundStyle(Theme.ink)
+                Text("Commands sessions may run").font(.body.weight(.semibold)).foregroundStyle(Theme.ink)
                 Text("Exactly as written, or a pattern with typed slots: {world} is one of that server's worlds, {int} a whole number, {player} a player name. Nothing else can be added to a pattern. The list sorts itself.")
-                    .font(.caption).foregroundStyle(Theme.muted).fixedSize(horizontal: false, vertical: true)
-                if settings.commands.isEmpty { Text("None. Sessions can still read status and the log.").font(.callout).foregroundStyle(Theme.muted) }
+                    .font(.body).foregroundStyle(Theme.muted).fixedSize(horizontal: false, vertical: true)
+                if settings.commands.isEmpty { Text("None. Sessions can still read status and the log.").font(.body).foregroundStyle(Theme.muted) }
                 ForEach(CommandPattern.grouped(settings.commands, plugins: pluginNames), id: \.name) { group in
-                    Text(group.name).font(.caption.weight(.semibold)).foregroundStyle(Theme.muted).padding(.top, 4)
+                    Text(group.name).font(.body.weight(.semibold)).foregroundStyle(Theme.muted).padding(.top, 4)
                         .accessibilityAddTraits(.isHeader)
                     ForEach(group.entries, id: \.self) { command in
                         HStack(alignment: .firstTextBaseline) {
                             VStack(alignment: .leading, spacing: 2) {
                                 Text(command).font(.body.monospaced()).foregroundStyle(Theme.ink).textSelection(.enabled)
                                 if CommandPattern.isPattern(command) {
-                                    Text("For example: \(CommandPattern.example(command))").font(.caption.monospaced()).foregroundStyle(Theme.muted)
+                                    Text("For example: \(CommandPattern.example(command))").font(.body.monospaced()).foregroundStyle(Theme.muted)
                                 }
                             }
                             Spacer()
@@ -53,18 +53,18 @@ struct SessionAccessSection: View {
                         .onSubmit(add).accessibilityLabel("Command to add")
                     Button("Add", action: add).disabled(adding.trimmingCharacters(in: .whitespaces).isEmpty)
                 }
-                if let problem { Text(problem).foregroundStyle(Theme.danger).font(.callout) }
+                if let problem { Text(problem).foregroundStyle(Theme.danger).font(.body) }
             }
             if !service.waiting.isEmpty {
                 VStack(alignment: .leading, spacing: 6) {
-                    Text("Waiting for you").font(.callout.weight(.semibold)).foregroundStyle(Theme.ink)
+                    Text("Waiting for you").font(.body.weight(.semibold)).foregroundStyle(Theme.ink)
                     SessionAskList(service: service)
                 }
             }
             VStack(alignment: .leading, spacing: 8) {
-                Text("Starting, stopping and pack changes").font(.callout.weight(.semibold)).foregroundStyle(Theme.ink)
+                Text("Starting, stopping and pack changes").font(.body.weight(.semibold)).foregroundStyle(Theme.ink)
                 Text("Sessions can ask to start, stop or restart a server, publish a pack, change pack serving, or check a named player against the pack gate. Each ask opens a small GilaMonster window with Allow and Deny, shows a count on the menu bar leaf, and sends a notification when macOS allows one. No answer in 2 minutes means no, and nothing is done while a backup is being written.")
-                    .font(.caption).foregroundStyle(Theme.muted).fixedSize(horizontal: false, vertical: true)
+                    .font(.body).foregroundStyle(Theme.muted).fixedSize(horizontal: false, vertical: true)
                 ForEach(service.servers().filter { !$0.isLab }, id: \.profile.id) { server in
                     let mark = marks[server.profile.id] ?? server.sessionPermission
                     VStack(alignment: .leading, spacing: 4) {
@@ -80,17 +80,17 @@ struct SessionAccessSection: View {
                     }
                     .padding(.vertical, 2)
                 }
-                if let markError { Text(markError).foregroundStyle(Theme.danger).font(.callout) }
+                if let markError { Text(markError).foregroundStyle(Theme.danger).font(.body) }
             }
             Button("Make a New Token…") { confirmNewToken = true }
             VStack(alignment: .leading, spacing: 4) {
-                Text("Recent calls").font(.callout.weight(.semibold)).foregroundStyle(Theme.ink)
-                if log.isEmpty { Text("None yet.").font(.callout).foregroundStyle(Theme.muted) }
+                Text("Recent calls").font(.body.weight(.semibold)).foregroundStyle(Theme.ink)
+                if log.isEmpty { Text("None yet.").font(.body).foregroundStyle(Theme.muted) }
                 ForEach(log.prefix(30)) { entry in
                     HStack(alignment: .firstTextBaseline, spacing: 6) {
                         Image(systemName: entry.allowed ? "checkmark.circle.fill" : "xmark.octagon.fill")
                             .foregroundStyle(entry.allowed ? Theme.accent : Theme.danger).accessibilityHidden(true)
-                        Text(describe(entry)).font(.callout).foregroundStyle(Theme.ink).textSelection(.enabled)
+                        Text(describe(entry)).font(.body).foregroundStyle(Theme.ink).textSelection(.enabled)
                     }
                     .accessibilityElement(children: .combine)
                     .accessibilityLabel((entry.allowed ? "Allowed: " : "Refused: ") + describe(entry))
@@ -100,7 +100,7 @@ struct SessionAccessSection: View {
             Text("Session access")
         } footer: {
             Text("For assistant sessions on this Mac, through gilamonster-session. They can read each server's status and its recent log, with chat, addresses and player names taken out, run only the commands listed here, add packs and build recipes, and ask for the changes above. Anything running as your macOS account could use it, so keep the list short. Every call is recorded here, allowed or not.")
-                .font(.caption).foregroundStyle(Theme.muted)
+                .font(.body).foregroundStyle(Theme.muted)
         }
         .onAppear { reload(); reloadMarks() }
         .onChange(of: service.calls) { reload() }

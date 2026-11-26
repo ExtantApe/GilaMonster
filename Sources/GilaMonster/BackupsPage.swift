@@ -79,7 +79,7 @@ struct BackupsPage: View {
                 Stepper("At least \(server.profile.backup.smart.minimumGapMinutes) minutes apart", value: $server.profile.backup.smart.minimumGapMinutes, in: 5...1440, step: 5)
                 Stepper("During a long session, every \(server.profile.backup.smart.duringPlayHours) hours", value: $server.profile.backup.smart.duringPlayHours, in: 1...48)
                 Hint("Backs up only when the world has changed: after people have played, and at most once a day when it changes with nobody on.")
-                if let plan = server.backupPlan { Text("Now: \(plan)").font(.callout).foregroundStyle(Theme.ink) }
+                if let plan = server.backupPlan { Text("Now: \(plan)").font(.body).foregroundStyle(Theme.ink) }
             }
             Picker("How often", selection: $server.profile.backup.intervalHours) {
                 Text("Every hour").tag(1)
@@ -175,7 +175,7 @@ struct BackupsPage: View {
 
     /// Storage in the owner's order. The first that's connected and has room takes each routine backup.
     @ViewBuilder private var targetsSection: some View {
-        Text("Storage, in order").font(.callout.weight(.semibold)).foregroundStyle(Theme.ink)
+        Text("Storage, in order").font(.body.weight(.semibold)).foregroundStyle(Theme.ink)
         let targets = server.profile.backup.smart.targets
         let checked = SmartBackup.check(targets.map { Backups.targetFolder($0, for: server.profile).path }, needed: 0)
         ForEach(Array(targets.enumerated()), id: \.offset) { index, path in
@@ -307,7 +307,7 @@ private struct BackupRow: View {
                 }
                 Hint("\(Format.bytes(record.size)) · \(record.scope.title) · \(record.software) · \(triggerTitle)")
                 if let location = record.location {
-                    Text("In \((location as NSString).abbreviatingWithTildeInPath)").font(.caption).foregroundStyle(Theme.muted)
+                    Text("In \((location as NSString).abbreviatingWithTildeInPath)").font(.body).foregroundStyle(Theme.muted)
                         .lineLimit(1).truncationMode(.middle).textSelection(.enabled)
                 }
             }
@@ -344,7 +344,7 @@ struct DriveCapsSection: View {
 
     var body: some View {
         let drives = { _ = version; return server.driveUse() }()
-        Text("Space on each drive").font(.callout.weight(.semibold)).foregroundStyle(Theme.ink)
+        Text("Space on each drive").font(.body.weight(.semibold)).foregroundStyle(Theme.ink)
         ForEach(drives) { drive in
             VStack(alignment: .leading, spacing: 4) {
                 HStack(spacing: 8) {

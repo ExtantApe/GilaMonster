@@ -15,12 +15,12 @@ struct RenamePlanView: View {
                         Toggle(isOn: $item.selected) {
                             VStack(alignment: .leading, spacing: 1) {
                                 Text(item.description).foregroundStyle(Theme.ink)
-                                Text(item.location).font(.caption).foregroundStyle(Theme.muted).lineLimit(1).truncationMode(.middle)
+                                Text(item.location).font(.body).foregroundStyle(Theme.muted).lineLimit(1).truncationMode(.middle)
                             }
                         }
                         .toggleStyle(.checkbox)
                         ForEach(item.changes.prefix(6), id: \.self) { change in
-                            Text(change).font(.system(.caption, design: .monospaced)).foregroundStyle(Theme.ink).padding(.leading, 22)
+                            Text(change).font(.system(.body, design: .monospaced)).foregroundStyle(Theme.ink).padding(.leading, 22)
                         }
                         if item.changes.count > 6 { Hint("and \(item.changes.count - 6) more").padding(.leading, 22) }
                         if let warning = item.warning { Callout(tone: .warning, title: warning) }
@@ -28,14 +28,14 @@ struct RenamePlanView: View {
                 }
                 if !plan.notes.isEmpty {
                     Divider()
-                    Text("Can't be changed from here").font(.callout.weight(.semibold)).foregroundStyle(Theme.ink)
+                    Text("Can't be changed from here").font(.body.weight(.semibold)).foregroundStyle(Theme.ink)
                     ForEach(plan.notes, id: \.self) { Hint($0) }
                 }
                 if !plan.mentions.isEmpty {
                     Divider()
-                    Text("Also mention this name, and won't be changed").font(.callout.weight(.semibold)).foregroundStyle(Theme.ink)
+                    Text("Also mention this name, and won't be changed").font(.body.weight(.semibold)).foregroundStyle(Theme.ink)
                     ForEach(plan.mentions, id: \.self) {
-                        Text($0).font(.system(.caption, design: .monospaced)).foregroundStyle(Theme.muted)
+                        Text($0).font(.system(.body, design: .monospaced)).foregroundStyle(Theme.muted)
                     }
                 }
             }
@@ -211,51 +211,112 @@ struct TrialBanner: View {
 // MARK: - Players
 
 struct PlayersPage: View {
+    #if DEBUG
+    /// Debug snapshots only: the made-up player to pick when the page opens.
+    nonisolated(unsafe) static var snapshotPick: String?
+    #endif
     let server: ServerController
     @State private var selected: PlayerInfo?
     @State private var merging: MergeSuggestion?
+    @FocusState private var rosterFocused: Bool
 
     var body: some View {
-        HSplitView {
-            if !server.knownPlayers.isEmpty { list.frame(minWidth: 220, idealWidth: 260, maxWidth: 340) }
+        HStack(spacing: 0) {
+            if !server.knownPlayers.isEmpty {
+                roster.frame(width: 280)
+                Rectangle().fill(Theme.border).frame(width: 1).accessibilityHidden(true)
+            }
             Group {
                 if let selected {
-                    PlayerDetail(server: server, player: selected).id(selected.id)
+                    PlayerDetail(server: server, player: selected, online: server.players.contains(selected.title), back: { self.selected = nil }).id(selected.id)
                 } else {
                     overview
                 }
             }
             .frame(minWidth: 340, maxWidth: .infinity, maxHeight: .infinity)
         }
-        .task { await server.refreshPlayers() }
+        .task {
+            await server.refreshPlayers()
+            #if DEBUG
+            if let pick = Self.snapshotPick { selected = server.knownPlayers.first { $0.title == pick } }
+            #endif
+        }
         .sheet(item: $merging) { MergeSheet(server: server, suggestion: $0) }
     }
 
-    private var list: some View {
-        List(server.knownPlayers, selection: Binding(
-            get: { selected?.id },
-            set: { id in selected = server.knownPlayers.first { $0.id == id } })) { player in
-            HStack(spacing: 6) {
-                Image(systemName: server.players.contains(player.title) ? "circle.fill" : "circle")
-                    .font(.caption2).foregroundStyle(Theme.accent)
-                    .accessibilityLabel(server.players.contains(player.title) ? "Online" : "Offline")
-                Text(player.title).foregroundStyle(Theme.ink).rowName(player.title)
-                Spacer(minLength: 4)
-                if let mark = Overflow.onlineMark(server.players.contains(player.title)) { Text(mark).font(.caption).foregroundStyle(Theme.muted).fixedSize() }
+    /// The roster: On now, then Seen before, each row with a made-up face, the name, and the state as its shape and word.
+    /// The selected row gets an edge marker as well as its tint. ↑↓ move the selection when the roster has focus.
+    private var roster: some View {
+        let split = PlayerRoster.split(server.knownPlayers, online: server.players)
+        return ScrollView {
+            VStack(alignment: .leading, spacing: 4) {
+                rosterHeading("On now (\(split.onNow.count))")
+                if split.onNow.isEmpty { Text("Nobody is on right now.").foregroundStyle(Theme.muted).padding(.horizontal, 8) }
+                ForEach(split.onNow) { row($0, online: true) }
+                Rectangle().fill(Theme.border).frame(height: 1).padding(.vertical, 6).accessibilityHidden(true)
+                rosterHeading("Seen before (\(split.seenBefore.count))")
+                ForEach(split.seenBefore) { row($0, online: false) }
+                Text("Filled circle: on now. Square: away.").foregroundStyle(Theme.muted).padding(.horizontal, 8).padding(.top, 8)
             }
-            .accessibilityElement(children: .combine)
-            .tag(player.id)
+            .padding(12)
         }
-        .scrollContentBackground(.hidden)
+        .background(Theme.background)
         .overlay {
-            if server.knownPlayers.isEmpty {
-                EmptyMessage(icon: "person.2", title: "No players yet", detail: "Players appear here after they've joined.")
-            }
+            if rosterFocused { RoundedRectangle(cornerRadius: 6).strokeBorder(Theme.accent, lineWidth: 2).padding(3).accessibilityHidden(true) }
         }
+        .focusable()
+        .focusEffectDisabled()
+        .focused($rosterFocused)
+        .onKeyPress(.upArrow) { move(-1); return .handled }
+        .onKeyPress(.downArrow) { move(1); return .handled }
+        .onKeyPress(.escape) { selected = nil; return .handled }
+        .accessibilityElement(children: .contain)
+        .accessibilityLabel("Players")
+    }
+
+    private func rosterHeading(_ text: String) -> some View {
+        Text(text).font(.body.weight(.semibold)).foregroundStyle(Theme.ink).padding(.horizontal, 8).padding(.top, 2)
+            .accessibilityAddTraits(.isHeader)
+    }
+
+    private func row(_ player: PlayerInfo, online: Bool) -> some View {
+        let on = selected?.id == player.id
+        let glyph: PixelGlyph = online ? .up : .stopped
+        return HStack(spacing: 8) {
+            FaceView(name: player.title, size: 28)
+            Text(player.title).foregroundStyle(Theme.ink).rowName(player.title)
+            Spacer(minLength: 4)
+            GlyphView(glyph: glyph, size: 12)
+            Text(online ? "On now" : "Away").foregroundStyle(Theme.muted).fixedSize()
+        }
+        .padding(.vertical, 4).padding(.leading, 10).padding(.trailing, 8)
+        .background(on ? Theme.raised : Color.clear, in: RoundedRectangle(cornerRadius: 8))
+        .overlay(alignment: .leading) {
+            if on { UnevenRoundedRectangle(topLeadingRadius: 8, bottomLeadingRadius: 8).fill(Theme.popText).frame(width: 4).accessibilityHidden(true) }
+        }
+        .contentShape(Rectangle())
+        .onTapGesture { selected = player; rosterFocused = true }
+        .accessibilityElement(children: .ignore)
+        .accessibilityLabel("\(player.title), \(online ? "on now" : "away")")
+        .accessibilityAddTraits(on ? [.isButton, .isSelected] : .isButton)
+        .accessibilityAction { selected = player }
+    }
+
+    private func move(_ offset: Int) {
+        let order = PlayerRoster.order(server.knownPlayers, online: server.players)
+        guard !order.isEmpty else { return }
+        guard let current = selected, let at = order.firstIndex(where: { $0.id == current.id }) else {
+            selected = offset > 0 ? order.first : order.last
+            return
+        }
+        selected = order[min(max(0, at + offset), order.count - 1)]
     }
 
     private var overview: some View {
-        Page(title: "Players", subtitle: "Snapshots, inventory restores, name changes and who was on.") {
+        Page(title: "Players", subtitle: "Who has played here, their snapshots, and who is on right now.") {
+            if server.knownPlayers.isEmpty {
+                EmptyMessage(icon: "person.2", title: "No players yet", detail: "Players show up here after their first visit.")
+            }
             let collisions = PlayerMerge.caseCollisions(server.paths, players: server.knownPlayers)
             if !collisions.isEmpty {
                 Callout(tone: .warning, title: "These names can overwrite each other's inventories", detail: "\(collisions.map { $0.joined(separator: " and ") }.joined(separator: "; ")). This server is in offline mode, so they're separate players, but Multiverse-Inventories names its files by player, and a Mac's disk treats these as the same file. Turning on online mode or merging them avoids it.")
@@ -290,7 +351,7 @@ struct PlayersPage: View {
                     HStack {
                         Text(session.name).foregroundStyle(Theme.ink)
                         Spacer()
-                        Text(when(session)).font(.callout).foregroundStyle(Theme.muted)
+                        Text(when(session)).font(.body).foregroundStyle(Theme.muted)
                     }
                 }
             }
@@ -322,13 +383,30 @@ struct SnapshotSettings: View {
 struct PlayerDetail: View {
     let server: ServerController
     let player: PlayerInfo
+    var online = false
+    var back: (() -> Void)?
     @State private var snapshots: [PlayerSnapshot] = []
     @State private var restoring: PlayerSnapshot?
     @State private var viewing: PlayerSnapshot?
     @State private var backupChoice: String = ""
 
     var body: some View {
-        Page(title: player.title, subtitle: subtitle) {
+        ScrollView {
+            VStack(alignment: .leading, spacing: 14) {
+            HStack(alignment: .center, spacing: 14) {
+                FaceView(name: player.title, size: 64)
+                VStack(alignment: .leading, spacing: 3) {
+                    Text(player.title).font(Theme.display(26)).foregroundStyle(Theme.ink).rowName(player.title).accessibilityAddTraits(.isHeader)
+                    HStack(spacing: 5) {
+                        GlyphView(glyph: online ? .up : .stopped, size: 12)
+                        Text(online ? "On now" : "Away").font(.body.weight(.semibold)).foregroundStyle(Theme.ink)
+                    }
+                    .accessibilityElement(children: .combine)
+                    Text(subtitle).foregroundStyle(Theme.muted).lineLimit(1).truncationMode(.middle).help(subtitle).textSelection(.enabled)
+                }
+                Spacer(minLength: 8)
+                if let back { Button("All Players") { back() }.buttonStyle(.themed).helped("Back to the overview of every player (Escape in the list)") }
+            }
             HStack {
                 Button("Take Snapshot Now") {
                     server.attempt {
@@ -378,13 +456,17 @@ struct PlayerDetail: View {
                         }
                         ForEach(snapshot.containers.filter { $0.hasPrefix("worlds/") }, id: \.self) { container in
                             if let summary = PlayerFiles.summary(ofInventoryFile: folder.appendingPathComponent("inventories/\(container)")) {
-                                Text("In \(container.components(separatedBy: "/")[1])").font(.callout.weight(.semibold)).foregroundStyle(Theme.ink).padding(.top, 4)
+                                Text("In \(container.components(separatedBy: "/")[1])").font(.body.weight(.semibold)).foregroundStyle(Theme.ink).padding(.top, 4)
                                 InventoryView(summary: summary)
                             }
                         }
                     }
                 }
             }
+        }
+        .padding(20)
+        .frame(maxWidth: 980, alignment: .leading)
+        .frame(maxWidth: .infinity, alignment: .leading)
         }
         .onAppear(perform: reload)
         .task { await server.refreshStats() }
@@ -406,29 +488,35 @@ struct PlayerDetail: View {
     }
 }
 
+/// A player's items as slots, each with the item's name and its count in words, so nothing rests on a picture or a tint.
 struct InventoryView: View {
     let summary: InventorySummary
+    private let columns = [GridItem(.adaptive(minimum: 132), spacing: 6, alignment: .top)]
 
     var body: some View {
-        VStack(alignment: .leading, spacing: 4) {
+        VStack(alignment: .leading, spacing: 6) {
             if summary.items.isEmpty { Hint("Inventory is empty.") }
-            ForEach(summary.items) { row($0) }
+            LazyVGrid(columns: columns, alignment: .leading, spacing: 6) { ForEach(summary.items) { slot($0) } }
             if !summary.enderItems.isEmpty {
-                Text("Ender chest").font(.callout.weight(.semibold)).foregroundStyle(Theme.ink).padding(.top, 4)
-                ForEach(summary.enderItems) { row($0) }
+                Text("Ender chest").font(.body.weight(.semibold)).foregroundStyle(Theme.ink).padding(.top, 4)
+                LazyVGrid(columns: columns, alignment: .leading, spacing: 6) { ForEach(summary.enderItems) { slot($0) } }
             }
             if let level = summary.level { Hint("Level \(level)" + (summary.dimension.map { " · in \($0.replacingOccurrences(of: "minecraft:", with: ""))" } ?? "")) }
         }
     }
 
-    private func row(_ item: InventoryItem) -> some View {
-        HStack {
-            Text(item.title).foregroundStyle(Theme.ink)
-            Spacer()
-            Text("× \(item.count)").foregroundStyle(Theme.muted)
+    private func slot(_ item: InventoryItem) -> some View {
+        HStack(alignment: .firstTextBaseline, spacing: 4) {
+            Text(item.title).foregroundStyle(Theme.ink).lineLimit(2).fixedSize(horizontal: false, vertical: true)
+            Spacer(minLength: 2)
+            Text("× \(item.count)").monospacedDigit().foregroundStyle(Theme.ink).fixedSize()
         }
-        .font(.callout)
+        .padding(.horizontal, 8).padding(.vertical, 6)
+        .frame(maxWidth: .infinity, minHeight: 34, alignment: .leading)
+        .background(Theme.raised, in: RoundedRectangle(cornerRadius: 6))
+        .overlay { RoundedRectangle(cornerRadius: 6).strokeBorder(Theme.border, lineWidth: 1) }
         .accessibilityElement(children: .combine)
+        .accessibilityLabel("\(item.title), \(item.count)")
     }
 }
 
@@ -450,7 +538,7 @@ struct PlayerRestoreSheet: View {
                 Text("Everything: position, XP, health too").tag(false)
             }
             if !snapshot.containers.isEmpty {
-                Text("Worlds and groups (Multiverse-Inventories)").font(.callout.weight(.semibold)).foregroundStyle(Theme.ink)
+                Text("Worlds and groups (Multiverse-Inventories)").font(.body.weight(.semibold)).foregroundStyle(Theme.ink)
                 ForEach(snapshot.containers, id: \.self) { container in
                     Toggle(title(container), isOn: Binding(
                         get: { chosen.contains(container) },
@@ -526,7 +614,7 @@ struct MergeSheet: View {
                 if let refusal { Callout(tone: .warning, title: "This merge can't be done here", detail: refusal) }
                 let conflicts = PlayerMerge.conflicts(current, paths: server.paths)
                 if !conflicts.isEmpty {
-                    Text("Both have an inventory in these worlds or groups").font(.callout.weight(.semibold)).foregroundStyle(Theme.ink)
+                    Text("Both have an inventory in these worlds or groups").font(.body.weight(.semibold)).foregroundStyle(Theme.ink)
                     ForEach(conflicts, id: \.self) { container in
                         Picker(container, selection: Binding(get: { current.useOldContainer[container] ?? false }, set: { plan?.useOldContainer[container] = $0 })) {
                             Text("Keep \(current.to.title)'s").tag(false)
@@ -536,8 +624,8 @@ struct MergeSheet: View {
                 }
                 let others = PlayerMerge.otherFiles(uuid: current.from.uuid, paths: server.paths)
                 if !others.isEmpty {
-                    Text("Plugin files for the old profile, not changed").font(.callout.weight(.semibold)).foregroundStyle(Theme.ink)
-                    ForEach(others.prefix(8), id: \.self) { Text($0).font(.system(.caption, design: .monospaced)).foregroundStyle(Theme.muted) }
+                    Text("Plugin files for the old profile, not changed").font(.body.weight(.semibold)).foregroundStyle(Theme.ink)
+                    ForEach(others.prefix(8), id: \.self) { Text($0).font(.system(.body, design: .monospaced)).foregroundStyle(Theme.muted) }
                 }
                 Hint("The server stops while this happens. A restore point is made and verified first, and what's replaced is kept beside the backups. Permissions in LuckPerms and data in plugin databases can't be merged from here.")
             }
@@ -697,14 +785,14 @@ struct BackupDiffSheet: View {
                 section("Settings") {
                     ForEach(d.settings) { setting in
                         VStack(alignment: .leading, spacing: 1) {
-                            Text("\(setting.file): \(setting.key)").font(.callout).foregroundStyle(Theme.muted)
-                            Text("\(setting.before ?? "(not set)") → \(setting.after ?? "(removed)")").font(.system(.caption, design: .monospaced)).foregroundStyle(Theme.ink)
+                            Text("\(setting.file): \(setting.key)").font(.body).foregroundStyle(Theme.muted)
+                            Text("\(setting.before ?? "(not set)") → \(setting.after ?? "(removed)")").font(.system(.body, design: .monospaced)).foregroundStyle(Theme.ink)
                         }
                     }
                 }
             }
             if !d.otherSettingsFiles.isEmpty {
-                section("Other files that changed") { ForEach(d.otherSettingsFiles, id: \.self) { Text($0).font(.system(.caption, design: .monospaced)).foregroundStyle(Theme.ink) } }
+                section("Other files that changed") { ForEach(d.otherSettingsFiles, id: \.self) { Text($0).font(.system(.body, design: .monospaced)).foregroundStyle(Theme.ink) } }
             }
             if !d.worlds.isEmpty {
                 section("Worlds") { ForEach(d.worlds) { Text(describe($0)).foregroundStyle(Theme.ink) } }

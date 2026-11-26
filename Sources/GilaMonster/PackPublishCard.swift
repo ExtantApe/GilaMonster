@@ -52,7 +52,7 @@ struct PackPublishCard: View {
             }
             if let current = builds.first {
                 HStack {
-                    Text(current.url).font(.callout.monospaced()).foregroundStyle(Theme.ink).lineLimit(1).truncationMode(.middle).textSelection(.enabled)
+                    Text(current.url).font(.body.monospaced()).foregroundStyle(Theme.ink).lineLimit(1).truncationMode(.middle).textSelection(.enabled)
                     Button(copied == current.url ? "Copied" : "Copy Link") {
                         NSPasteboard.general.clearContents(); NSPasteboard.general.setString(current.url, forType: .string); copied = current.url
                     }
@@ -60,7 +60,7 @@ struct PackPublishCard: View {
                 }
                 Hint("Published \(current.publishedAt.formatted(.relative(presentation: .named))). SHA-1 \(current.sha1).")
                 if current.handedOff == true {
-                    Label(current.handOffNote ?? "Packmule uses this link.", systemImage: "checkmark.circle.fill").font(.callout).foregroundStyle(Theme.ink)
+                    Label(current.handOffNote ?? "Packmule uses this link.", systemImage: "checkmark.circle.fill").font(.body).foregroundStyle(Theme.ink)
                 } else {
                     if let waiting = configNotes[key] {
                         Callout(tone: .info, title: "Waiting for Packmule to load its config", detail: waiting)

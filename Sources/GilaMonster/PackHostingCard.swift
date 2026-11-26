@@ -88,13 +88,13 @@ struct PackHostingCard: View {
                 VStack(alignment: .leading, spacing: 2) {
                     Text("Only players joining this server").foregroundStyle(Theme.ink)
                     Text("A pack goes only to a game that names a player on the allowlist the server shows connecting in the last 5 minutes, or online now. Anyone else, a browser included, is told there's nothing there.")
-                        .font(.caption).foregroundStyle(Theme.muted).fixedSize(horizontal: false, vertical: true)
+                        .font(.body).foregroundStyle(Theme.muted).fixedSize(horizontal: false, vertical: true)
                 }
             }
             if settings.joiningOnly, let tokenPath = server.packCheckTokenPath {
                 LabeledContent("Packmule's token file") {
                     HStack {
-                        Text((tokenPath as NSString).abbreviatingWithTildeInPath).font(.callout.monospaced()).foregroundStyle(Theme.ink)
+                        Text((tokenPath as NSString).abbreviatingWithTildeInPath).font(.body.monospaced()).foregroundStyle(Theme.ink)
                             .lineLimit(1).truncationMode(.middle).textSelection(.enabled)
                         Button("Copy Path") { NSPasteboard.general.clearContents(); NSPasteboard.general.setString(tokenPath, forType: .string) }
                             .buttonStyle(.themed).accessibilityLabel("Copy the path of Packmule's token file")

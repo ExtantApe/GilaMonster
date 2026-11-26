@@ -29,7 +29,7 @@ struct InviteTicketView: View {
             Text("Type the code on that page and press Continue.").font(.system(size: 14))
             Text("Works once, until \(ticket.expires.formatted(date: .long, time: .shortened)).").font(.system(size: 14, weight: .semibold))
             Spacer(minLength: 0)
-            Text("Keep this to yourself: anyone with the code can use it first.").font(.system(size: 12))
+            Text("Keep this to yourself: anyone with the code can use it first.").font(.system(size: 13))
         }
         .foregroundStyle(Color.black)  // theme-exempt: a printed ticket is black on white paper
         .padding(28)
@@ -51,7 +51,7 @@ struct InviteTicketSheet: View {
     var body: some View {
         VStack(spacing: 14) {
             InviteTicketView(ticket: ticket)
-            if let problem { Text(problem).foregroundStyle(Theme.danger).font(.callout) }
+            if let problem { Text(problem).foregroundStyle(Theme.danger).font(.body) }
             HStack {
                 Button("Copy as Text") {
                     NSPasteboard.general.clearContents()

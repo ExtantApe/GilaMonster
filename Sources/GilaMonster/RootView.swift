@@ -125,21 +125,17 @@ struct ServerWindow: View {
     @State private var renaming = false
 
     var body: some View {
-        NavigationSplitView {
-            Sidebar(model: model, server: server, renaming: $renaming)
-                .navigationSplitViewColumnWidth(min: 200, ideal: 220, max: 280)
-        } detail: {
+        // The basalt spine on the left, and the trail of the section's pages across the top (K786).
+        HStack(spacing: 0) {
+            Spine(model: model, server: server, renaming: $renaming)
             VStack(spacing: 0) {
+                Trail(model: model, server: server)
                 banners
                 pageView
                     .frame(maxWidth: .infinity, maxHeight: .infinity)
                 ActivityBar(server: server)
             }
             .background(Theme.background)
-            .navigationTitle(server.profile.name)
-            .navigationSubtitle(server.profile.software.label)
-            .toolbar { ServerToolbar(model: model, server: server) }
-            .toolbarBackground(Theme.background, for: .windowToolbar)
             .inspector(isPresented: Binding(
                 get: { model.showIssues && (model.issuesOpenedByHand || server.issues.contains { $0.status == .open }) },
                 set: { shown in if !shown { model.showIssues = false; model.issuesOpenedByHand = false } }
@@ -148,6 +144,10 @@ struct ServerWindow: View {
                     .inspectorColumnWidth(min: 300, ideal: 340, max: 460)
             }
         }
+        .navigationTitle(server.profile.name)
+        .navigationSubtitle(server.profile.software.label)
+        .toolbar { ServerToolbar(model: model, server: server) }
+        .toolbarBackground(Theme.background, for: .windowToolbar)
         .sheet(isPresented: blockersShown) { BlockersSheet(model: model, server: server) }
         .sheet(isPresented: $renaming) { RenameSheet(model: model, server: server) }
     }
@@ -208,132 +208,6 @@ struct ServerWindow: View {
     }
 }
 
-// MARK: - Sidebar
-
-struct Sidebar: View {
-    @Bindable var model: AppModel
-    let server: ServerController
-    @Binding var renaming: Bool
-
-    /// Groups the owner folded away, remembered between launches.
-    @AppStorage("sidebarCollapsed") private var collapsedText = ""
-
-    var body: some View {
-        List(selection: pageBinding) {
-            if let overview = PageID(rawValue: SidebarGroups.top.key) { row(overview) }
-            ForEach(SidebarGroups.groups, id: \.id) { group in
-                let pages = group.pages.compactMap { PageID(rawValue: $0.key) }.filter { PageID.visible.contains($0) }
-                if !pages.isEmpty {
-                    Section(isExpanded: expanded(group.id)) {
-                        ForEach(pages) { row($0) }
-                    } header: {
-                        let rolled = SidebarGroups.rollUp(group, badges: badges(pages))
-                        HStack {
-                            Text(group.title)
-                            if !expanded(group.id).wrappedValue, rolled > 0 {
-                                Spacer()
-                                Text("\(rolled)").font(.caption.weight(.semibold)).foregroundStyle(Theme.ink)
-                                    .padding(.horizontal, 6).background(Theme.accentWash, in: Capsule())
-                            }
-                        }
-                        .accessibilityAddTraits(.isHeader)
-                        .accessibilityValue(expanded(group.id).wrappedValue ? "Expanded" : (rolled > 0 ? "Collapsed, \(rolled) waiting" : "Collapsed"))
-                    }
-                }
-            }
-        }
-        .listStyle(.sidebar)
-        .scrollContentBackground(.hidden)
-        .background(Theme.raised)
-        .safeAreaInset(edge: .top, spacing: 0) { switcher }
-        .toolbarBackground(Theme.raised, for: .windowToolbar)
-    }
-
-    private var pageBinding: Binding<PageID?> {
-        Binding(get: { model.visiblePage }, set: { if let p = $0 { model.page = p } })
-    }
-
-    private func row(_ page: PageID) -> some View {
-        Label(page.title, systemImage: page.icon)
-            .badge(badge(for: page))
-            .tag(page)
-    }
-
-    private func expanded(_ id: String) -> Binding<Bool> {
-        Binding(get: { !SidebarGroups.decodeCollapsed(collapsedText).contains(id) }, set: { open in
-            var set = SidebarGroups.decodeCollapsed(collapsedText)
-            if open { set.remove(id) } else { set.insert(id) }
-            collapsedText = SidebarGroups.encodeCollapsed(set)
-        })
-    }
-
-    private func badges(_ pages: [PageID]) -> [String: Int] {
-        Dictionary(uniqueKeysWithValues: pages.map { ($0.rawValue, badge(for: $0)) })
-    }
-
-    private func badge(for page: PageID) -> Int {
-        switch page {
-        case .plugins: server.plugins.filter { server.record(for: $0).available != nil }.count
-        case .software: server.softwareUpdate == nil ? 0 : 1
-        case .changes: server.pending.count
-        case .advisor: AdvisorCenter.shared.count(server)
-        default: 0
-        }
-    }
-
-    /// A state icon that keeps its colour in a menu. Menus draw plain symbols in one colour, so this one is drawn
-    /// coloured and marked as not a template.
-    static func menuIcon(_ state: ServerState) -> NSImage {
-        let config = NSImage.SymbolConfiguration(pointSize: 13, weight: .medium)
-            .applying(NSImage.SymbolConfiguration(paletteColors: [NSColor(state.tone.color)]))
-        let image = NSImage(systemSymbolName: state.icon, accessibilityDescription: state.title)?.withSymbolConfiguration(config) ?? NSImage()
-        image.isTemplate = false
-        return image
-    }
-
-    private var switcher: some View {
-        Menu {
-            // Each server with its state before choosing it (owner, 2026-11-15): the state's own icon in its colour, and
-            // its name in words, so it doesn't rest on colour alone. The current one keeps the menu's checkmark.
-            ForEach(model.listed) { other in
-                Toggle(isOn: Binding(get: { other.id == server.id }, set: { if $0 { model.selectedID = other.id } })) {
-                    Label {
-                        Text("\(other.profile.name)\(other.isLab ? " (for this run)" : "") · \(other.state.title)")
-                    } icon: {
-                        Image(nsImage: Self.menuIcon(other.state))
-                    }
-                }
-                .accessibilityLabel("\(other.profile.name)\(other.isLab ? ", the Lab's server for this run" : ""), \(other.state.title)")
-            }
-            Divider()
-            Button("Add Server…") { model.showAddServer = true }
-            if Modules.shared.isOn(.lab), model.lab.model(from: model.servers) != nil {
-                Button("Open the Lab") { model.openLabBoard() }
-            }
-            if !server.isLab { Button("Rename \(server.profile.name)…") { renaming = true } }
-        } label: {
-            HStack(spacing: 8) {
-                Image(systemName: server.state.icon).foregroundStyle(server.state.tone.color).accessibilityHidden(true)
-                VStack(alignment: .leading, spacing: 0) {
-                    Text(server.profile.name).font(.headline).foregroundStyle(Theme.ink).lineLimit(1)
-                    Text(server.state.title).font(.caption).foregroundStyle(Theme.muted)
-                }
-                Spacer(minLength: 0)
-                Image(systemName: "chevron.up.chevron.down").font(.caption).foregroundStyle(Theme.muted).accessibilityHidden(true)
-            }
-            .padding(8)
-            .background(Theme.surface.opacity(0.7), in: RoundedRectangle(cornerRadius: Theme.controlRadius))
-            .overlay { RoundedRectangle(cornerRadius: Theme.controlRadius).strokeBorder(Theme.controlBorder, lineWidth: 1) }
-        }
-        .menuStyle(.button)
-        .buttonStyle(.plain)
-        .menuIndicator(.hidden)
-        .padding(.horizontal, 10)
-        .padding(.vertical, 8)
-        .accessibilityLabel("Server: \(server.profile.name), \(server.state.title). Switch server.")
-    }
-}
-
 // MARK: - Toolbar
 
 struct ServerToolbar: ToolbarContent {
@@ -391,7 +265,7 @@ struct ActivityBar: View {
                 } else {
                     ProgressView().controlSize(.small)
                 }
-                Text(activity).font(.callout).foregroundStyle(Theme.ink)
+                Text(activity).font(.body).foregroundStyle(Theme.ink)
                 Spacer()
             }
             .padding(.horizontal, 20)
@@ -560,7 +434,7 @@ struct AddServerSheet: View {
 
             if mode == .existing, !available.isEmpty {
                 VStack(alignment: .leading, spacing: 4) {
-                    Text("In \(serversPath)").font(.callout.weight(.semibold)).foregroundStyle(Theme.ink)
+                    Text("In \(serversPath)").font(.body.weight(.semibold)).foregroundStyle(Theme.ink)
                     ForEach(available, id: \.path) { candidate in
                         Button {
                             folder = candidate

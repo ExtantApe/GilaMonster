@@ -68,7 +68,7 @@ struct PluginsPage: View {
             TableColumn("Name") { p in
                 VStack(alignment: .leading) {
                     Text(p.name).foregroundStyle(p.enabled ? Theme.ink : Theme.muted)
-                    if !p.enabled { Text("Disabled").font(.caption).foregroundStyle(Theme.muted) }
+                    if !p.enabled { Text("Disabled").font(.body).foregroundStyle(Theme.muted) }
                 }
             }
             TableColumn("Version") { p in Text(p.version).foregroundStyle(Theme.ink) }.width(min: 70, ideal: 110)

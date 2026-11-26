@@ -109,7 +109,7 @@ struct AllowlistPage: View {
             if offered.isEmpty {
                 Hint("No groups can be chosen yet. Mark some below. Without one they get what the default group gives.")
             } else {
-                Text("Groups").font(.callout.weight(.semibold)).foregroundStyle(Theme.ink)
+                Text("Groups").font(.body.weight(.semibold)).foregroundStyle(Theme.ink)
                 ForEach(offered, id: \.self) { group in
                     Toggle(group, isOn: Binding(get: { chosen.contains(group) }, set: { on in
                         if on { chosen.insert(group) } else { chosen.remove(group) }
@@ -180,7 +180,7 @@ struct AllowlistPage: View {
             }
             if cut.hidden > 0 || showAllEntries {
                 Button(showAllEntries ? "Show Fewer" : "Show All (\(matches.count))") { showAllEntries.toggle() }
-                    .buttonStyle(.disclosureLink(showAllEntries ? "chevron.up" : "chevron.down")).font(.callout)
+                    .buttonStyle(.disclosureLink(showAllEntries ? "chevron.up" : "chevron.down")).font(.body)
             }
             if server.hasSheriff, sheriffProfiles == nil { Hint("Profiles can be changed once GilaMonster can reach Sheriff.") }
             else if server.hasLuckPerms, !server.hasSheriff, !running { Hint("Groups can only be changed while the server runs.") }
@@ -201,7 +201,7 @@ struct AllowlistPage: View {
                 .toggleStyle(.checkbox)
             }
             if settings.knownGroups.count >= 2 {
-                Text("Don't combine").font(.callout.weight(.semibold)).foregroundStyle(Theme.ink)
+                Text("Don't combine").font(.body.weight(.semibold)).foregroundStyle(Theme.ink)
                 Hint("Choosing both groups in a pair warns you before saving. It doesn't stop you.")
                 ForEach(settings.conflicts, id: \.self) { pair in
                     HStack {

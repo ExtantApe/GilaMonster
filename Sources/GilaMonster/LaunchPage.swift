@@ -34,7 +34,7 @@ struct LaunchPage: View {
                     } label: {
                         VStack(alignment: .leading, spacing: 0) {
                             Text(preset.title).font(.body.weight(.medium))
-                            Text(preset.detail).font(.caption)
+                            Text(preset.detail).font(.body)
                         }
                         .padding(.vertical, 4)
                     }
@@ -132,7 +132,7 @@ struct LaunchPage: View {
             if server.profile.launch.preset == .recommended {
                 DisclosureGroup("Show the flags", isExpanded: $showFlags) {
                     Text((server.profile.software.recommendedFlags.isEmpty ? fallbackRecommendedFlags : server.profile.software.recommendedFlags).joined(separator: "\n"))
-                        .font(.system(.caption, design: .monospaced)).foregroundStyle(Theme.ink).textSelection(.enabled)
+                        .font(.system(.body, design: .monospaced)).foregroundStyle(Theme.ink).textSelection(.enabled)
                         .frame(maxWidth: .infinity, alignment: .leading).padding(.top, 4)
                 }
                 .foregroundStyle(Theme.ink)
@@ -181,7 +181,7 @@ struct LaunchPage: View {
     private var commandCard: some View {
         Card(title: "Full command", systemImage: "terminal") {
             let command = LaunchCommand.display(java: server.resolvedJava()?.path ?? "java", server.profile.launch, software: server.profile.software, javaMajor: server.resolvedJava()?.major ?? 0)
-            Text(command).font(.system(.caption, design: .monospaced)).foregroundStyle(Theme.ink).textSelection(.enabled)
+            Text(command).font(.system(.body, design: .monospaced)).foregroundStyle(Theme.ink).textSelection(.enabled)
                 .fixedSize(horizontal: false, vertical: true)
             Button("Copy") {
                 NSPasteboard.general.clearContents()

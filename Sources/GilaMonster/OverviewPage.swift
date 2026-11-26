@@ -9,72 +9,56 @@ struct OverviewPage: View {
     @State private var confirmRemove = false
     @State private var choosingIcon = false
 
+    @Environment(\.accessibilityReduceMotion) private var reduceMotion
+    /// The status glyph pulses once when the state changes, and not at all with Reduce Motion.
+    @State private var pulse = false
+
     private let columns = [GridItem(.adaptive(minimum: 250), spacing: 14, alignment: .top)]
+    private let factColumns = [GridItem(.adaptive(minimum: 220), spacing: 12, alignment: .top)]
 
     var body: some View {
-        Page(title: server.profile.name, subtitle: statusLine) {
-            HStack(spacing: 8) {
-                Badge(text: server.state.title, tone: server.state.tone, icon: server.state.icon)
-                Spacer()
-                // Start, Stop and Restart here and in the toolbar (owner, 2026-11-16: "Both").
-                if server.state.canStart {
-                    Button { Task { await server.start() } } label: { Label("Start", systemImage: "play.fill") }
-                        .buttonStyle(.themedPrimary).disabled(!server.canStartNow)
-                } else {
-                    Button { server.stop() } label: { Label("Stop", systemImage: "stop.fill") }
-                        .buttonStyle(.themed).disabled(server.state != .running && server.state != .starting)
-                    Button { server.restart() } label: { Label("Restart", systemImage: "arrow.clockwise") }
-                        .buttonStyle(.themed).disabled(server.state != .running)
+        ScrollView {
+            VStack(alignment: .leading, spacing: 14) {
+                header
+                if server.isLab { LabRunCard(model: model) }
+                UpgradeBanner(server: server)
+                if server.allowlistSurprise {
+                    Callout(tone: .info, title: "The allowlist is on", detail: "New servers on Minecraft 26 start with it on, so only players you add can join. Turn it off in Configs under Players, or add people to the allowlist there.")
                 }
-                Button("Show in Finder") { NSWorkspace.shared.open(server.paths.root) }.buttonStyle(.themed)
-                Menu {
-                    // The folder path, server icon and rename live here, out of the way (K672).
-                    Section((server.paths.root.path as NSString).abbreviatingWithTildeInPath) {
-                        Button("Copy Folder Path") {
-                            NSPasteboard.general.clearContents()
-                            NSPasteboard.general.setString(server.paths.root.path, forType: .string)
-                        }
+                if server.needsRestart {
+                    Callout(tone: .warning, title: "Restart needed", detail: pendingDetail) {
+                        Button("Review") { model.page = .changes }.buttonStyle(.themed)
                     }
-                    if !server.isLab {
-                        Button("Rename…") { renaming = true }
-                        Button("Server Icon…") { choosingIcon = true }
-                        Divider()
-                        Button("Remove from GilaMonster…") { confirmRemove = true }.disabled(server.state.isLive)
+                }
+                if let plan = server.restartPlan {
+                    Callout(tone: .info, title: planTitle(plan)) {
+                        Button("Cancel Restart") { server.cancelRestart() }.buttonStyle(.themed)
                     }
-                } label: {
-                    Label("More", systemImage: "ellipsis.circle").labelStyle(.iconOnly)
                 }
-                .menuStyle(.borderlessButton).fixedSize().accessibilityLabel("More actions").help("More actions")
-            }
 
-            if server.isLab { LabRunCard(model: model) }
-            UpgradeBanner(server: server)
-            if server.allowlistSurprise {
-                Callout(tone: .info, title: "The allowlist is on", detail: "New servers on Minecraft 26 start with it on, so only players you add can join. Turn it off in Configs under Players, or add people to the allowlist there.")
-            }
-            if server.needsRestart {
-                Callout(tone: .warning, title: "Restart needed", detail: pendingDetail) {
-                    Button("Review") { model.page = .changes }.buttonStyle(.themed)
+                // Needs you and Players online side by side, stacked when the window is narrow.
+                ViewThatFits(in: .horizontal) {
+                    HStack(alignment: .top, spacing: 12) {
+                        needsYou.frame(minWidth: 300)
+                        playersOnline.frame(minWidth: 260)
+                    }
+                    VStack(alignment: .leading, spacing: 12) {
+                        needsYou
+                        playersOnline
+                    }
                 }
-            }
-            if let plan = server.restartPlan {
-                Callout(tone: .info, title: planTitle(plan)) {
-                    Button("Cancel Restart") { server.cancelRestart() }.buttonStyle(.themed)
+
+                LazyVGrid(columns: factColumns, alignment: .leading, spacing: 12) {
+                    connectCard
+                    healthCard
+                    backupsCard
+                    softwareCard
                 }
-            }
-
-            needsYou
-
-            Text("At a glance").font(.title3.weight(.semibold)).foregroundStyle(Theme.ink).accessibilityAddTraits(.isHeader)
-            LazyVGrid(columns: columns, alignment: .leading, spacing: 14) {
-                connectCard
                 if !server.isLab { ConnectionsCard(server: server) }
-                performanceCard
-                softwareCard
-                pluginsCard
-                backupsCard
-                issuesCard
             }
+            .padding(20)
+            .frame(maxWidth: 1080, alignment: .leading)
+            .frame(maxWidth: .infinity, alignment: .leading)
         }
         .task(id: server.backups.first?.date) { await server.refreshDriveWarning() }
         .sheet(isPresented: $choosingIcon) {
@@ -91,10 +75,69 @@ struct OverviewPage: View {
         }
     }
 
-    private var statusLine: String {
-        NeedsYou.statusLine(running: server.state == .running, starting: server.state == .starting, since: server.startedAt,
-                            players: server.players.count, software: server.profile.software.label,
-                            lastBackup: server.backups.first?.date, isLab: server.isLab)
+    private var openIssueCount: Int { server.issues.filter { $0.status == .open }.count }
+
+    /// The status sentence with its glyph, the actions beside it, and the one muted fact line.
+    private var header: some View {
+        VStack(alignment: .leading, spacing: 6) {
+            HStack(alignment: .center, spacing: 10) {
+                GlyphView(glyph: server.state.glyph, size: 22)
+                    .scaleEffect(pulse ? 1.35 : 1)
+                Text(NeedsYou.sentence(name: server.profile.name, state: server.state, players: server.players.count))
+                    .font(Theme.display(28)).foregroundStyle(Theme.ink)
+                    .fixedSize(horizontal: false, vertical: true)
+                    .accessibilityAddTraits(.isHeader)
+                    .accessibilityLabel("\(NeedsYou.sentence(name: server.profile.name, state: server.state, players: server.players.count)) State: \(server.state.title).")
+                Spacer(minLength: 12)
+                actions
+            }
+            Text(NeedsYou.factLine(software: server.profile.software.label, running: server.state == .running, since: server.startedAt,
+                                   lastBackup: server.backups.first?.date, isLab: server.isLab,
+                                   needs: NeedsYou.items(needsYouFacts).count, openIssues: openIssueCount))
+                .foregroundStyle(Theme.muted).fixedSize(horizontal: false, vertical: true)
+        }
+        .onChange(of: server.state) {
+            guard !reduceMotion else { return }
+            withAnimation(.easeOut(duration: 0.18)) { pulse = true }
+            Task { @MainActor in
+                try? await Task.sleep(for: .milliseconds(200))
+                withAnimation(.easeIn(duration: 0.2)) { pulse = false }
+            }
+        }
+    }
+
+    @ViewBuilder private var actions: some View {
+        HStack(spacing: 8) {
+            // Start, Stop and Restart here and in the toolbar (owner, 2026-11-16: "Both").
+            if server.state.canStart {
+                Button { Task { await server.start() } } label: { Label("Start", systemImage: "play.fill") }
+                    .buttonStyle(.themedPrimary).disabled(!server.canStartNow)
+            } else {
+                Button { server.stop() } label: { Label("Stop", systemImage: "stop.fill") }
+                    .buttonStyle(.themed).disabled(server.state != .running && server.state != .starting)
+                Button { server.restart() } label: { Label("Restart", systemImage: "arrow.clockwise") }
+                    .buttonStyle(.themed).disabled(server.state != .running)
+            }
+            Button("Show in Finder") { NSWorkspace.shared.open(server.paths.root) }.buttonStyle(.themed)
+            Menu {
+                // The folder path, server icon and rename live here, out of the way (K672).
+                Section((server.paths.root.path as NSString).abbreviatingWithTildeInPath) {
+                    Button("Copy Folder Path") {
+                        NSPasteboard.general.clearContents()
+                        NSPasteboard.general.setString(server.paths.root.path, forType: .string)
+                    }
+                }
+                if !server.isLab {
+                    Button("Rename…") { renaming = true }
+                    Button("Server Icon…") { choosingIcon = true }
+                    Divider()
+                    Button("Remove from GilaMonster…") { confirmRemove = true }.disabled(server.state.isLive)
+                }
+            } label: {
+                Label("More", systemImage: "ellipsis.circle").labelStyle(.iconOnly)
+            }
+            .menuStyle(.borderlessButton).fixedSize().accessibilityLabel("More actions").help("More actions")
+        }
     }
 
     private var needsYouFacts: NeedsYouFacts {
@@ -110,28 +153,67 @@ struct OverviewPage: View {
         return f
     }
 
-    @ViewBuilder private var needsYou: some View {
+    /// Needs you, as one quiet card: each item with its words and its one action, or "Nothing needs you."
+    private var needsYou: some View {
         let items = NeedsYou.items(needsYouFacts)
-        if items.isEmpty {
-            Callout(tone: .good, title: "Nothing needs you.", detail: server.isLab ? nil : "Backups are on, plugins and software are up to date, and no connection problems were found.") { EmptyView() }
-        } else {
-            HStack(spacing: 6) {
-                Text("Needs you").font(.title3.weight(.semibold)).foregroundStyle(Theme.ink)
-                Text("\(items.count)").font(.title3).foregroundStyle(Theme.muted)
+        return FactCard(title: items.isEmpty ? "Nothing needs you" : "Needs you (\(items.count))") {
+            if items.isEmpty {
+                Text(server.isLab ? "All clear." : "Backups are on, plugins and software are up to date, and no connection problems were found.")
+                    .foregroundStyle(Theme.ink).fixedSize(horizontal: false, vertical: true)
             }
-            .accessibilityElement(children: .combine).accessibilityAddTraits(.isHeader)
-            LazyVGrid(columns: columns, alignment: .leading, spacing: 14) {
-                ForEach(items) { item in
-                    Callout(tone: item.tone == .warning ? .warning : .info, title: item.title, detail: item.detail) {
+            ForEach(items) { item in
+                let tone: Tone = item.tone == .warning ? .warning : .info
+                HStack(alignment: .firstTextBaseline, spacing: 8) {
+                    Image(systemName: tone.icon).foregroundStyle(tone.color).accessibilityHidden(true)
+                    VStack(alignment: .leading, spacing: 2) {
+                        Text(item.title).font(.body.weight(.semibold)).foregroundStyle(Theme.ink).fixedSize(horizontal: false, vertical: true)
+                        if !item.detail.isEmpty { Text(item.detail).foregroundStyle(Theme.muted).fixedSize(horizontal: false, vertical: true) }
                         if let action = item.action, let title = item.actionTitle {
                             Button(title) { perform(action) }
-                                .buttonStyle(item.kind == .noBackup ? .themedPrimary : .themed)
+                                .buttonStyle(item.kind == .noBackup || items.count == 1 ? .themedPrimary : .themed)
                                 .disabled(action == .backUpNow && server.isBackingUp)
+                                .padding(.top, 2)
                         }
                     }
+                    Spacer(minLength: 0)
                 }
+                .accessibilityElement(children: .contain)
+                .accessibilityLabel("\(tone.announcement.prefix): \(item.title)")
             }
         }
+    }
+
+    /// Who's on now, with their made-up faces and how long they've been on when the log says.
+    private var playersOnline: some View {
+        FactCard(title: server.state == .running ? "Players online (\(server.players.count))" : "Players online") {
+            if server.state != .running {
+                Text("The server isn't running.").foregroundStyle(Theme.muted)
+            } else if server.players.isEmpty {
+                Text("Nobody is on right now.").foregroundStyle(Theme.muted)
+            }
+            ForEach(server.state == .running ? server.players.sorted().prefix(8).map { $0 } : [], id: \.self) { name in
+                HStack(spacing: 8) {
+                    FaceView(name: name, size: 24)
+                    Text(name).foregroundStyle(Theme.ink).rowName(name)
+                    Spacer(minLength: 8)
+                    if let minutes = onFor(name) { Text(minutes).monospacedDigit().foregroundStyle(Theme.muted) }
+                }
+                .accessibilityElement(children: .combine)
+            }
+            if server.state == .running, server.players.count > 8 {
+                Text("and \(server.players.count - 8) more").foregroundStyle(Theme.muted)
+            }
+            if !server.knownPlayers.isEmpty || !server.players.isEmpty {
+                Button("Open Players") { model.page = .players }.buttonStyle(.themed).padding(.top, 2)
+            }
+        }
+    }
+
+    /// "41 min" from the open session in the server's log, if there is one.
+    private func onFor(_ name: String) -> String? {
+        guard let start = server.playerHistory.first(where: { $0.name == name && $0.end == nil })?.start else { return nil }
+        let minutes = max(1, Int(Date().timeIntervalSince(start) / 60))
+        return minutes < 60 ? "\(minutes) min" : "\(minutes / 60) h \(minutes % 60) m"
     }
 
     private func perform(_ action: NeedsYouItem.Action) {
@@ -159,7 +241,7 @@ struct OverviewPage: View {
     }
 
     private var connectCard: some View {
-        Card(title: "Connect", systemImage: "network") {
+        FactCard(title: "Connect") {
             let port = server.serverPort
             // The Lab only listens on this Mac, so a network address would just fail.
             let local = server.isLab ? nil : SystemInfo.lanAddress().map { port == 25565 ? $0 : "\($0):\(port)" }
@@ -168,7 +250,7 @@ struct OverviewPage: View {
             Fact(label: "Server message", value: server.serverMessage ?? "Not set")
             Fact(label: "Players online", value: server.state == .running ? "\(server.players.count)" : "None")
             if !server.players.isEmpty {
-                Text(server.players.sorted().joined(separator: ", ")).font(.callout).foregroundStyle(Theme.ink)
+                Text(server.players.sorted().joined(separator: ", ")).font(.body).foregroundStyle(Theme.ink)
             }
             if !server.isLab { ConnectCheckRow(server: server) }
             if let local {
@@ -181,8 +263,8 @@ struct OverviewPage: View {
         }
     }
 
-    private var performanceCard: some View {
-        Card(title: "Performance", systemImage: "speedometer") {
+    private var healthCard: some View {
+        FactCard(title: "Health") {
             if let tps = server.tps, server.state == .running {
                 HStack(alignment: .firstTextBaseline) {
                     Text("Ticks per second").foregroundStyle(Theme.muted)
@@ -210,8 +292,9 @@ struct OverviewPage: View {
         }
     }
 
+    /// The server software and its plugins in one card, since plugin updates also show under Needs you.
     private var softwareCard: some View {
-        Card(title: "Software", systemImage: "shippingbox") {
+        FactCard(title: "Software") {
             Fact(label: "Running", value: server.profile.software.label)
             if let java = server.resolvedJava() { Fact(label: "Java", value: java.major > 0 ? String(java.major) : "Custom") }
             if let update = server.softwareUpdate {
@@ -219,22 +302,19 @@ struct OverviewPage: View {
             } else if server.profile.software.supportStatus == "UNSUPPORTED" {
                 Badge(text: "This version no longer gets updates", tone: .warning)
             }
-            Button("Open Software") { model.page = .software }.buttonStyle(.themed)
-        }
-    }
-
-    private var pluginsCard: some View {
-        Card(title: "Plugins", systemImage: "puzzlepiece.extension") {
             let updates = server.plugins.filter { server.record(for: $0).available != nil }.count
-            Fact(label: "Installed", value: "\(server.plugins.filter(\.enabled).count)")
-            Fact(label: "Updates available", value: "\(updates)")
-            Fact(label: "Without a source", value: "\(server.plugins.filter { !server.record(for: $0).source.isSet }.count)")
-            Button("Open Plugins") { model.page = .plugins }.buttonStyle(.themed)
+            Fact(label: "Plugins installed", value: "\(server.plugins.filter(\.enabled).count)")
+            Fact(label: "Plugin updates", value: "\(updates)")
+            Fact(label: "Plugins without a source", value: "\(server.plugins.filter { !server.record(for: $0).source.isSet }.count)")
+            HStack {
+                Button("Open Software") { model.page = .software }.buttonStyle(.themed)
+                Button("Open Plugins") { model.page = .plugins }.buttonStyle(.themed)
+            }
         }
     }
 
     private var backupsCard: some View {
-        Card(title: "Backups", systemImage: "externaldrive") {
+        FactCard(title: "Backups") {
             if let latest = server.backups.first {
                 Fact(label: "Latest", value: latest.date.formatted(.relative(presentation: .named)))
                 Fact(label: "Size", value: Format.bytes(latest.size))
@@ -247,14 +327,6 @@ struct OverviewPage: View {
             }
             Button("Back Up Now") { server.attempt { try await server.backupNow() } }
                 .buttonStyle(.themed).disabled(server.isBackingUp)
-        }
-    }
-
-    private var issuesCard: some View {
-        Card(title: "Issues", systemImage: "exclamationmark.bubble") {
-            let open = server.issues.filter { $0.status == .open }
-            Fact(label: "Open", value: "\(open.count)")
-            Fact(label: "Needing attention", value: "\(open.filter { $0.severity >= .error }.count)")
         }
     }
 }
@@ -341,9 +413,9 @@ struct ServerIconCard: View {
                     }
                 }
                 .overlay(RoundedRectangle(cornerRadius: 4).stroke(icon.inUse ? Theme.accent : Theme.controlBorder, lineWidth: icon.inUse ? 3 : 1))
-                Text(icon.name).font(.caption).foregroundStyle(Theme.ink).lineLimit(2).multilineTextAlignment(.center).frame(width: 76)
-                if icon.inUse { Text("In use").font(.caption.weight(.semibold)).foregroundStyle(Theme.accent) }
-                else if !icon.fits { Text("\(icon.width)×\(icon.height)").font(.caption).foregroundStyle(Theme.warning) }
+                Text(icon.name).font(.body).foregroundStyle(Theme.ink).lineLimit(2).multilineTextAlignment(.center).frame(width: 76)
+                if icon.inUse { Text("In use").font(.body.weight(.semibold)).foregroundStyle(Theme.accent) }
+                else if !icon.fits { Text("\(icon.width)×\(icon.height)").font(.body).foregroundStyle(Theme.warning) }
             }
         }
         .buttonStyle(.plain)

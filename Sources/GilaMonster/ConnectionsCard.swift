@@ -88,17 +88,17 @@ struct ConnectionsCard: View {
         VStack(alignment: .leading, spacing: 4) {
             HStack(alignment: .firstTextBaseline) {
                 Text(service.name).font(.body.weight(.semibold)).foregroundStyle(Theme.ink)
-                Text(service.provider.title).font(.caption).foregroundStyle(Theme.muted)
+                Text(service.provider.title).font(.body).foregroundStyle(Theme.muted)
                 Spacer(minLength: 8)
                 Badge(text: status.health.title, tone: status.health.tone)
             }
-            Text(status.summary).font(.callout).foregroundStyle(Theme.ink).fixedSize(horizontal: false, vertical: true)
+            Text(status.summary).font(.body).foregroundStyle(Theme.ink).fixedSize(horizontal: false, vertical: true)
             if !status.details.isEmpty {
                 DisclosureGroup(isExpanded: Binding(get: { expanded.contains(service.id) }, set: { if $0 { expanded.insert(service.id) } else { expanded.remove(service.id) } })) {
                     VStack(alignment: .leading, spacing: 2) {
-                        ForEach(Array(status.details.enumerated()), id: \.offset) { Text("• \($0.element)").font(.callout).foregroundStyle(Theme.muted) }
+                        ForEach(Array(status.details.enumerated()), id: \.offset) { Text("• \($0.element)").font(.body).foregroundStyle(Theme.muted) }
                     }
-                } label: { Text("What was checked").font(.callout) }
+                } label: { Text("What was checked").font(.body) }
             }
         }
         .padding(.vertical, 4)
@@ -117,7 +117,7 @@ struct ConnectionsCard: View {
                 Text(url.isEmpty ? "Not set" : url).foregroundStyle(Theme.ink).textSelection(.enabled).lineLimit(1).truncationMode(.middle)
                 if !url.isEmpty { Badge(text: status.health.title, tone: status.health.tone) }
             }
-            if !url.isEmpty, status.health != .unknown { Text(status.summary).font(.callout).foregroundStyle(Theme.muted) }
+            if !url.isEmpty, status.health != .unknown { Text(status.summary).font(.body).foregroundStyle(Theme.muted) }
         }
         .accessibilityElement(children: .combine)
     }
@@ -214,7 +214,7 @@ struct ConnectionsEditor: View {
                 }
                 .fixedSize()
                 Spacer()
-                if let error { Text(error).foregroundStyle(Theme.danger).font(.callout) }
+                if let error { Text(error).foregroundStyle(Theme.danger).font(.body) }
                 Button("Cancel") { dismiss() }.keyboardShortcut(.cancelAction)
                 Button("Save") { save() }.keyboardShortcut(.defaultAction).buttonStyle(.themedPrimary)
             }

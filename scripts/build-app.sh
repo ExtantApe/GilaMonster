@@ -79,6 +79,10 @@ strip -x "$app/Contents/MacOS/gilamonster-session" 2>/dev/null || true
 [ -f brand/AppIcon.icns ] || swift scripts/brand-kit.swift brand/kit
 cp brand/AppIcon.icns "$app/Contents/Resources/AppIcon.icns"
 cp brand/MenuBarTemplate.png brand/MenuBarTemplate@2x.png "$app/Contents/Resources/"
+# The display face (K786): Lilita One, SIL OFL 1.1, with its licence beside it as the OFL asks.
+mkdir -p "$app/Contents/Resources/Fonts"
+cp brand/fonts/lilitaone/LilitaOne-Regular.ttf "$app/Contents/Resources/Fonts/"
+cp brand/fonts/lilitaone/OFL.txt "$app/Contents/Resources/Fonts/LilitaOne-OFL.txt"
 
 cat > "$app/Contents/Info.plist" <<PLIST
 <?xml version="1.0" encoding="UTF-8"?>
