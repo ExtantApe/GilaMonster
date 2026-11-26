@@ -1,6 +1,8 @@
 # Changelog
 
-## Unreleased
+## 0.6.1 (2026-11-26)
+
+- **Installing:** quitting GilaMonster stops every server it runs. With servers running, Quit asks first; Keep Running is the default and cancels the quit. So install at a quiet time: quit with Stop and Quit, replace GilaMonster in Applications, open it, and start your servers again.
 
 - **The Allow prompt's buttons fit their labels (K800).** Allow for Today was cut off at the right edge of its button and ran into the window edge. Deny, Allow, Allow for Today and Need More Time are now each as wide as their label and can't be squeezed. The window is 580 pt at least and grows when the buttons need more room, so larger text makes it wider. Wording, button order, Deny as the default with focus, the countdown, Need More Time, Escape and the click guard are unchanged. The fingerprint check still passes with the same value as main; before hashing it now also takes out two exact layout strings, `.fixedSize()` and `.frame(idealWidth: 262, alignment: .leading)`.
 - **The Lab's switches are drawn by GilaMonster (K801).** The check rows used the system switch, which was seen half on: a teal track with the knob in the middle. The new switch has its knob at one end or the other. During a run it keeps its end, turns gray with a dashed outline and shows a lock, and VoiceOver reads "On, locked while a run is going". A check that is waiting for an earlier one can still be switched on or off, as before.
