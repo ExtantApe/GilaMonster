@@ -112,4 +112,39 @@ public enum NeedsYou {
         }
         return parts.joined(separator: " ")
     }
+
+    /// The Overview's status sentence (K786), set large beside the state's glyph: "Riverside is up. 3 players online."
+    public static func sentence(name: String, state: ServerState, players: Int) -> String {
+        switch state {
+        case .running: return "\(name) is up. " + (players == 0 ? "Nobody is online." : players == 1 ? "1 player online." : "\(players) players online.")
+        case .starting: return "\(name) is starting."
+        case .stopping: return "\(name) is stopping."
+        case .stopped: return "\(name) is stopped."
+        case .crashed: return "\(name) is down. It stopped unexpectedly."
+        case .external: return "\(name) is running outside GilaMonster."
+        }
+    }
+
+    /// The one muted line under the sentence: "Paper 26.2 · up for 2 hours · backed up 25 minutes ago · nothing needs you".
+    public static func factLine(software: String, running: Bool, since: Date?, lastBackup: Date?, isLab: Bool,
+                                needs: Int, openIssues: Int, now: Date = Date()) -> String {
+        var parts = [software]
+        if running, let since {
+            let f = DateComponentsFormatter()
+            f.unitsStyle = .full; f.maximumUnitCount = 1; f.allowedUnits = [.day, .hour, .minute]
+            parts.append("up for \(f.string(from: max(60, now.timeIntervalSince(since))) ?? "a while")")
+        }
+        if !isLab {
+            if let lastBackup {
+                let rel = RelativeDateTimeFormatter()
+                rel.unitsStyle = .full
+                parts.append("backed up \(rel.localizedString(for: lastBackup, relativeTo: now))")
+            } else {
+                parts.append("no backup yet")
+            }
+        }
+        parts.append(needs == 0 ? "nothing needs you" : needs == 1 ? "one thing needs you" : "\(needs) things need you")
+        if openIssues > 0 { parts.append(openIssues == 1 ? "1 open issue" : "\(openIssues) open issues") }
+        return parts.joined(separator: " · ")
+    }
 }

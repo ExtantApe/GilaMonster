@@ -53,6 +53,9 @@ public struct PlayerInfo: Identifiable, Equatable, Sendable {
     public let playTicks: Int?
     public var playTime: TimeInterval? { playTicks.map { Double($0) / 20 } }
     public var title: String { name ?? uuid }
+    public init(uuid: String, name: String?, lastSeen: Date?, playTicks: Int?) {
+        self.uuid = uuid; self.name = name; self.lastSeen = lastSeen; self.playTicks = playTicks
+    }
 }
 
 public struct InventoryItem: Identifiable, Equatable, Sendable {
