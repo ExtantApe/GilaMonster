@@ -72,6 +72,9 @@ enum Theme {
         })
     }
 
+    /// A palette color by the name ControlLook gives it, so the checks and the app agree on which color a part uses.
+    static func named(_ name: String) -> Color { dynamic(Palette.named[name] ?? Palette.ink) }
+
     /// A fixed art color (the pixel lizard, the bead band, made-up faces). Decoration only, never text, and the same in
     /// every appearance, as the icon is.
     static func art(_ hex: UInt32) -> Color { Color(nsColor: nsColor(hex)) }
@@ -115,35 +118,41 @@ struct ThemeButtonStyle: ButtonStyle {
                 .frame(minWidth: 24, minHeight: Theme.controlHeight)
                 .background(fill, in: RoundedRectangle(cornerRadius: Theme.controlRadius))
                 .overlay {
-                    RoundedRectangle(cornerRadius: Theme.controlRadius).strokeBorder(borderColor, lineWidth: 1)
+                    // A disabled button has a dashed outline, so it is told apart by more than its color.
+                    RoundedRectangle(cornerRadius: Theme.controlRadius).strokeBorder(borderColor, style: StrokeStyle(lineWidth: 1, dash: enabled ? [] : [4, 3]))
                 }
                 .overlay {
                     if focused {
                         RoundedRectangle(cornerRadius: Theme.controlRadius + 2).strokeBorder(Theme.accent, lineWidth: 2).padding(-3)
                     }
                 }
-                .opacity(enabled ? (configuration.isPressed ? 0.8 : 1) : 0.5)
+                // Disabled is drawn in its own colors (K801), each held to WCAG by the palette checks. Fading the
+                // enabled button to half strength left the main button's label near 2:1.
+                .opacity(enabled && configuration.isPressed ? 0.8 : 1)
                 .contentShape(Rectangle())
                 .onHover { hovering = $0 }
                 .animation(reduceMotion ? nil : .easeOut(duration: 0.1), value: hovering)
         }
 
         private var foreground: Color {
-            switch kind {
+            guard enabled else { return Theme.named(ControlLook.disabledButton.label) }
+            return switch kind {
             case .primary: Theme.onPop
             case .secondary: Theme.ink
             case .danger: Theme.danger
             }
         }
         private var fill: Color {
-            switch kind {
+            guard enabled else { return Theme.named(ControlLook.disabledButton.fill) }
+            return switch kind {
             case .primary: Theme.pop
             case .secondary: hovering && enabled ? Theme.raised : Theme.surface
             case .danger: hovering && enabled ? Theme.dangerWash : Theme.surface
             }
         }
         private var borderColor: Color {
-            switch kind {
+            guard enabled else { return Theme.named(ControlLook.disabledButton.edge) }
+            return switch kind {
             case .primary: Theme.popText
             case .secondary: Theme.controlBorder
             case .danger: Theme.danger
@@ -485,6 +494,62 @@ extension SourceKind {
         case .web: "globe"
         }
     }
+}
+
+// MARK: - Switches
+
+/// A switch GilaMonster draws itself (K801). The system switch was seen drawn half on, a teal track with the knob in the
+/// middle, on the Lab's check rows. This one puts the knob at one end or the other, and when it's disabled it keeps
+/// its end, turns gray with a dashed outline and shows a lock. It draws no label: give it an accessibility label.
+/// VoiceOver reads it as a switch that is On or Off, with why it's locked when it is.
+struct ThemedSwitchStyle: ToggleStyle {
+    /// Said after On or Off when the switch is disabled.
+    var lockedBecause = "locked"
+
+    func makeBody(configuration: Configuration) -> some View {
+        Button { configuration.isOn.toggle() } label: { configuration.label }
+            .buttonStyle(Track(isOn: configuration.isOn, lockedBecause: lockedBecause))
+    }
+
+    private struct Track: ButtonStyle {
+        let isOn: Bool
+        let lockedBecause: String
+        func makeBody(configuration: Configuration) -> some View { Drawn(isOn: isOn, lockedBecause: lockedBecause, pressed: configuration.isPressed) }
+    }
+
+    private struct Drawn: View {
+        let isOn: Bool
+        let lockedBecause: String
+        let pressed: Bool
+        @Environment(\.isEnabled) private var enabled
+        @Environment(\.isFocused) private var focused
+        @Environment(\.accessibilityReduceMotion) private var reduceMotion
+
+        var body: some View {
+            let look = ControlLook.switchParts(on: isOn, enabled: enabled)
+            Capsule().fill(Theme.named(look.track))
+                .overlay { Capsule().strokeBorder(Theme.named(look.edge), style: StrokeStyle(lineWidth: 1, dash: enabled ? [] : [3, 2])) }
+                .overlay(alignment: look.knobTrailing ? .leading : .trailing) {
+                    if let lock = look.lock {
+                        Image(systemName: "lock.fill").resizable().scaledToFit().frame(width: 9, height: 10).foregroundStyle(Theme.named(lock)).padding(.horizontal, 6).accessibilityHidden(true)
+                    }
+                }
+                .overlay(alignment: look.knobTrailing ? .trailing : .leading) { Circle().fill(Theme.named(look.knob)).padding(3) }
+                .frame(width: 40, height: 22)
+                .overlay { if focused { Capsule().strokeBorder(Theme.accent, lineWidth: 2).padding(-3) } }
+                .opacity(pressed ? 0.8 : 1)
+                .frame(minHeight: 24)
+                .contentShape(Rectangle())
+                .animation(reduceMotion ? nil : .easeOut(duration: 0.12), value: isOn)
+                .accessibilityAddTraits(.isToggle)
+                .accessibilityValue(ControlLook.switchValue(on: isOn, enabled: enabled, lockedBecause: lockedBecause))
+        }
+    }
+}
+
+extension ToggleStyle where Self == ThemedSwitchStyle {
+    static var themedSwitch: ThemedSwitchStyle { ThemedSwitchStyle() }
+    static func themedSwitch(lockedBecause: String) -> ThemedSwitchStyle { ThemedSwitchStyle(lockedBecause: lockedBecause) }
 }
 
 /// Disables a control and says why, as a tooltip and a VoiceOver hint, so a grey button is never a mystery

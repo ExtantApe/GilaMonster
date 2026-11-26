@@ -195,11 +195,12 @@ struct LabStationRow: View {
     var body: some View {
         VStack(alignment: .leading, spacing: 6) {
             HStack(alignment: .top, spacing: 12) {
+                // GilaMonster's own switch (K801): the knob is at one end or the other, and during a run it keeps its
+                // end, turns gray and shows a lock. A check that is waiting for an earlier one can still be switched.
                 Toggle(station.title, isOn: $included)
-                    .toggleStyle(.switch).labelsHidden().disabled(lab.isBusy)
-                    // An off switch is a white knob on a pale track; the control outline gives it a 3:1 edge.
-                    .overlay { if !included { Capsule().strokeBorder(Theme.controlBorder, lineWidth: 1).allowsHitTesting(false).accessibilityHidden(true) } }
+                    .toggleStyle(.themedSwitch(lockedBecause: "locked while a run is going")).disabled(lab.isBusy)
                     .accessibilityLabel("Include \(station.title) in the next run")
+                    .help(lab.isBusy ? "A run is going now, so the checks can't be changed until it ends." : included ? "In the next run." : "Left out of the next run.")
                 VStack(alignment: .leading, spacing: 2) {
                     HStack(spacing: 8) {
                         Text(station.title).font(.body.weight(.semibold)).foregroundStyle(Theme.ink)
