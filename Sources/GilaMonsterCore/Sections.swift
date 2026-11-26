@@ -19,7 +19,7 @@ public enum Sections {
     /// The section a page belongs to.
     public static func section(of pageKey: String) -> Section? { all.first { s in s.pages.contains { $0.key == pageKey } } }
 
-    /// ⌘1 to ⌘5 pick a section, in spine order. Anything else picks nothing.
+    /// ⌥⌘1 to ⌥⌘5 pick a section, in spine order. Anything else picks nothing.
     public static func section(forDigit digit: Int) -> Section? { (1...all.count).contains(digit) ? all[digit - 1] : nil }
 
     /// What VoiceOver reads for a bead: its word, how many pages it holds, and what's waiting there.

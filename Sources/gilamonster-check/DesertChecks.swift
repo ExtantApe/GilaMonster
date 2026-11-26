@@ -22,9 +22,9 @@ import GilaMonsterCore
     equal(Sections.section(of: "players")?.id, "people", "Players is under People")
     equal(Sections.section(of: "configs")?.id, "server", "Configs is under Server")
     check(Sections.section(of: "made-up") == nil, "a page that doesn't exist has no section")
-    equal(Sections.section(forDigit: 1)?.id, "home", "⌘1 is Home")
-    equal(Sections.section(forDigit: 5)?.id, "upkeep", "⌘5 is Upkeep")
-    check(Sections.section(forDigit: 0) == nil && Sections.section(forDigit: 6) == nil, "there's no ⌘0 or ⌘6 section")
+    equal(Sections.section(forDigit: 1)?.id, "home", "the first digit is Home")
+    equal(Sections.section(forDigit: 5)?.id, "upkeep", "the fifth is Upkeep")
+    check(Sections.section(forDigit: 0) == nil && Sections.section(forDigit: 6) == nil, "there's no section 0 or 6")
     equal(Sections.spoken("People", pages: 2, waiting: 0), "People, 2 pages", "VoiceOver reads a bead's word and page count")
     equal(Sections.spoken("Home", pages: 1, waiting: 0), "Home, 1 page", "one page is singular")
     equal(Sections.spoken("Content", pages: 4, waiting: 1), "Content, 4 pages, 1 waiting", "and what's waiting there")
@@ -40,12 +40,16 @@ import GilaMonsterCore
     equal(Sections.landing(server, visible: [], last: nil), nil, "a section with nothing shown opens nothing")
     equal(Sections.badge(Sections.all[4], badges: ["changes": 2, "advisor": 1, "plugins": 5]), 3, "a bead's badge adds up its own pages only")
 
-    section("Shortcuts: sections on ⌘1 to ⌘5, nothing else lost")
+    section("Shortcuts: sections on ⌥⌘1 to ⌥⌘5, pages keep ⌘1 to ⌘9, nothing else lost")
     let model = source("AppModel.swift")
-    check(model.contains("ForEach(Array(Sections.all.enumerated()), id: \\.element.id)") && model.contains(".keyboardShortcut(KeyEquivalent(Character(String(index + 1))), modifiers: .command)"), "⌘1 to ⌘5 pick a section")
-    check(model.contains(".keyboardShortcut(KeyEquivalent(Character(String(index + 1))), modifiers: [.command, .option])"), "each page by number moved to ⌥⌘1 to ⌥⌘9")
+    func after(_ marker: String, _ length: Int = 260) -> String {
+        guard let r = model.range(of: marker) else { return "" }
+        return String(model[r.upperBound...].prefix(length))
+    }
+    check(after("ForEach(Array(Sections.all.enumerated()), id: \\.element.id)").contains(".keyboardShortcut(KeyEquivalent(Character(String(index + 1))), modifiers: [.command, .option])"), "⌥⌘1 to ⌥⌘5 pick a section")
+    check(after("ForEach(Array(PageID.visible.enumerated()), id: \\.element)", 320).contains(".keyboardShortcut(KeyEquivalent(Character(String(index + 1))), modifiers: .command)"), "⌘1 to ⌘9 still open each page by number, as before the redesign")
     check(model.contains(".keyboardShortcut(.tab, modifiers: .control)") && model.contains(".keyboardShortcut(.tab, modifiers: [.control, .shift])"), "⌃Tab and ⌃⇧Tab move along the trail")
-    check(model.components(separatedBy: "modifiers: .command)").count == 2, "only the sections use a plain ⌘ digit")
+    check(model.components(separatedBy: "String(index + 1))), modifiers: [.command, .option])").count == 2 && model.components(separatedBy: "String(index + 1))), modifiers: .command)").count == 2, "each digit set is used once")
     // The shortcuts people already had, unchanged.
     for (shortcut, words) in [(".keyboardShortcut(\"n\")", "⌘N adds a server"), (".keyboardShortcut(\"r\").disabled", "⌘R starts"),
                               (".keyboardShortcut(\".\", modifiers: [.command, .control])", "⌃⌘. stops"), (".keyboardShortcut(\"r\", modifiers: [.command, .shift])", "⇧⌘R restarts"),
@@ -122,7 +126,7 @@ import GilaMonsterCore
     let players = source("DeepViews.swift")
     check(players.contains("Theme.popText).frame(width: 4)") && players.contains("on ? Theme.raised : Color.clear"), "the selected row has an edge marker as well as its tint")
     check(players.contains("Text(\"× \\(item.count)\")"), "inventory slots show their count in text")
-    check(players.contains("Filled circle: on now. Square: away."), "the key says what each shape means")
+    check(players.contains("Filled circle: on now. Square: offline."), "the key says what each shape means")
 
     section("Allow prompt: restyled only, behavior byte for byte")
     let prompts = source("SessionPrompts.swift")

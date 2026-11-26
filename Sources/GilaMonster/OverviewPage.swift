@@ -158,7 +158,7 @@ struct OverviewPage: View {
         let items = NeedsYou.items(needsYouFacts)
         return FactCard(title: items.isEmpty ? "Nothing needs you" : "Needs you (\(items.count))") {
             if items.isEmpty {
-                Text(server.isLab ? "All clear." : "Backups are on, plugins and software are up to date, and no connection problems were found.")
+                Text(server.isLab ? "All clear." : "Backups are on and everything is up to date. No connection problems turned up.")
                     .foregroundStyle(Theme.ink).fixedSize(horizontal: false, vertical: true)
             }
             ForEach(items) { item in

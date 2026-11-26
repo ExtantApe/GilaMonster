@@ -143,7 +143,7 @@ public enum NeedsYou {
                 parts.append("no backup yet")
             }
         }
-        parts.append(needs == 0 ? "nothing needs you" : needs == 1 ? "one thing needs you" : "\(needs) things need you")
+        parts.append(needs == 0 ? "nothing needs you" : needs == 1 ? "1 thing needs you" : "\(needs) things need you")
         if openIssues > 0 { parts.append(openIssues == 1 ? "1 open issue" : "\(openIssues) open issues") }
         return parts.joined(separator: " · ")
     }

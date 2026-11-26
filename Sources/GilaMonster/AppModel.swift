@@ -650,22 +650,22 @@ struct ServerCommands: Commands {
             Button(model.showIssues ? "Hide Issues" : "Show Issues") { model.showIssues.toggle(); model.issuesOpenedByHand = model.showIssues }
                 .keyboardShortcut("i", modifiers: [.command, .option])
             Divider()
-            // The five sections on ⌘1 to ⌘5, in spine order (K786).
+            // The five sections on ⌥⌘1 to ⌥⌘5, in spine order (K786). Pages keep ⌘1 to ⌘9, as before.
             ForEach(Array(Sections.all.enumerated()), id: \.element.id) { index, section in
                 Button(section.title) { model.choose(section) }
-                    .keyboardShortcut(KeyEquivalent(Character(String(index + 1))), modifiers: .command)
+                    .keyboardShortcut(KeyEquivalent(Character(String(index + 1))), modifiers: [.command, .option])
                     .disabled(model.pages(in: section).isEmpty)
             }
             Button("Next Page") { model.stepTrail(by: 1) }
                 .keyboardShortcut(.tab, modifiers: .control)
             Button("Previous Page") { model.stepTrail(by: -1) }
                 .keyboardShortcut(.tab, modifiers: [.control, .shift])
-            // Each page by number, as ⌘1 to ⌘9 did before the sections took ⌘1 to ⌘5 (K786): now ⌥⌘1 to ⌥⌘9.
+            // Each page by number on ⌘1 to ⌘9, unchanged from before the redesign (owner: shortcuts that exist today stay).
             Menu("Go to Page") {
                 ForEach(Array(PageID.visible.enumerated()), id: \.element) { index, page in
                     if index < 9 {
                         Button(page.title) { model.page = page }
-                            .keyboardShortcut(KeyEquivalent(Character(String(index + 1))), modifiers: [.command, .option])
+                            .keyboardShortcut(KeyEquivalent(Character(String(index + 1))), modifiers: .command)
                     } else {
                         Button(page.title) { model.page = page }
                     }

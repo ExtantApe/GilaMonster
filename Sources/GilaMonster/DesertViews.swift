@@ -145,7 +145,7 @@ struct BeadBandView: View {
 // MARK: - Spine
 
 /// The basalt spine down the window's left edge: the lizard, the server switcher and one bead per section.
-/// The beads are a tab list named Sections: ↑↓ move between them, Return or Space picks one, and ⌘1 to ⌘5 pick one
+/// The beads are a tab list named Sections: ↑↓ move between them, Return or Space picks one, and ⌥⌘1 to ⌥⌘5 pick one
 /// from anywhere.
 struct Spine: View {
     @Bindable var model: AppModel
@@ -210,7 +210,7 @@ struct Spine: View {
         .accessibilityLabel(Sections.spoken(section.title, pages: pages, waiting: waiting))
         .accessibilityAddTraits(on ? [.isButton, .isSelected] : .isButton)
         .accessibilityAction { model.choose(section) }
-        .help("\(section.title) (⌘\((Sections.all.firstIndex(of: section) ?? 0) + 1))")
+        .help("\(section.title) (⌥⌘\((Sections.all.firstIndex(of: section) ?? 0) + 1))")
     }
 
     private func move(from section: Sections.Section, by offset: Int) {
@@ -276,7 +276,7 @@ struct ServerSwitcher: View {
                         .padding(2).background(Theme.surface, in: RoundedRectangle(cornerRadius: 3))
                         .offset(x: 5, y: 5)
                 }
-                Text("\(server.profile.name) ▾").font(.body).foregroundStyle(Theme.spineMuted).lineLimit(1).truncationMode(.middle).frame(maxWidth: 70)
+                Text("\(server.profile.name) ▾").accessibilityHidden(true).font(.body).foregroundStyle(Theme.spineMuted).lineLimit(1).truncationMode(.middle).frame(maxWidth: 70)
             }
             .frame(width: 70)
             .contentShape(Rectangle())
@@ -321,6 +321,9 @@ struct Trail: View {
         .accessibilityElement(children: .contain)
         .accessibilityLabel("\(section.title) pages")
         .accessibilityAddTraits(.isTabBar)
+        // A section change swaps the tabs, so a tab that had focus would vanish and take focus with it. Keep focus on
+        // the trail, on the new section's chosen page (accessibility review, K786).
+        .onChange(of: section.id) { if focused != nil { DispatchQueue.main.async { focused = model.visiblePage } } }
     }
 
     private func tab(_ page: PageID) -> some View {

@@ -256,7 +256,7 @@ struct PlayersPage: View {
                 Rectangle().fill(Theme.border).frame(height: 1).padding(.vertical, 6).accessibilityHidden(true)
                 rosterHeading("Seen before (\(split.seenBefore.count))")
                 ForEach(split.seenBefore) { row($0, online: false) }
-                Text("Filled circle: on now. Square: away.").foregroundStyle(Theme.muted).padding(.horizontal, 8).padding(.top, 8)
+                Text("Filled circle: on now. Square: offline.").foregroundStyle(Theme.muted).padding(.horizontal, 8).padding(.top, 8)
             }
             .padding(12)
         }
@@ -287,7 +287,7 @@ struct PlayersPage: View {
             Text(player.title).foregroundStyle(Theme.ink).rowName(player.title)
             Spacer(minLength: 4)
             GlyphView(glyph: glyph, size: 12)
-            Text(online ? "On now" : "Away").foregroundStyle(Theme.muted).fixedSize()
+            Text(online ? "On now" : "Offline").foregroundStyle(Theme.muted).fixedSize()
         }
         .padding(.vertical, 4).padding(.leading, 10).padding(.trailing, 8)
         .background(on ? Theme.raised : Color.clear, in: RoundedRectangle(cornerRadius: 8))
@@ -297,7 +297,7 @@ struct PlayersPage: View {
         .contentShape(Rectangle())
         .onTapGesture { selected = player; rosterFocused = true }
         .accessibilityElement(children: .ignore)
-        .accessibilityLabel("\(player.title), \(online ? "on now" : "away")")
+        .accessibilityLabel("\(player.title), \(online ? "on now" : "offline")")
         .accessibilityAddTraits(on ? [.isButton, .isSelected] : .isButton)
         .accessibilityAction { selected = player }
     }
@@ -399,7 +399,7 @@ struct PlayerDetail: View {
                     Text(player.title).font(Theme.display(26)).foregroundStyle(Theme.ink).rowName(player.title).accessibilityAddTraits(.isHeader)
                     HStack(spacing: 5) {
                         GlyphView(glyph: online ? .up : .stopped, size: 12)
-                        Text(online ? "On now" : "Away").font(.body.weight(.semibold)).foregroundStyle(Theme.ink)
+                        Text(online ? "On now" : "Offline").font(.body.weight(.semibold)).foregroundStyle(Theme.ink)
                     }
                     .accessibilityElement(children: .combine)
                     Text(subtitle).foregroundStyle(Theme.muted).lineLimit(1).truncationMode(.middle).help(subtitle).textSelection(.enabled)
