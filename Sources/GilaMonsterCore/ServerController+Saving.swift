@@ -51,10 +51,9 @@ extension ServerController {
     func cloneForBackup(scope: BackupScope) async -> URL? {
         let items = Backups.items(paths.root, scope: scope)
         guard !items.isEmpty else { return nil }
-        let folder = paths.root.deletingLastPathComponent()
-            .appendingPathComponent(AppPaths.ownFolderName, isDirectory: true)
-            .appendingPathComponent("backup-clones", isDirectory: true)
-            .appendingPathComponent("\(paths.root.lastPathComponent)-\(UUID().uuidString.prefix(8))", isDirectory: true)
+        // The place and the name are BackupClones', so the launch sweep (K799) knows a clone left behind when it sees one.
+        let folder = BackupClones.folder(besideServer: paths.root)
+            .appendingPathComponent(BackupClones.newName(forServer: paths.root), isDirectory: true)
         do { try FileOps.ensureDir(folder) } catch { return nil }
         for item in items {
             let source = paths.root.appendingPathComponent(item)
@@ -71,7 +70,7 @@ extension ServerController {
 
     /// Removes a clone folder this controller made, and nothing else: only a path inside backup-clones.
     static func removeClone(_ folder: URL) {
-        guard folder.deletingLastPathComponent().lastPathComponent == "backup-clones" else { return }
+        guard folder.deletingLastPathComponent().lastPathComponent == BackupClones.folderName else { return }
         try? FileManager.default.removeItem(at: folder)
     }
 }

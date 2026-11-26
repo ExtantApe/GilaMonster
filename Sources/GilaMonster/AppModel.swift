@@ -144,6 +144,13 @@ final class AppModel {
     /// own and the process runs in the server's folder, so stopping them with a SIGTERM (which saves) is safe.
     var leftOver: [ServerController] { servers.filter { if case .external = $0.state { true } else { false } } }
 
+    static let cloneLog = Logger(subsystem: Bundle.main.bundleIdentifier ?? "GilaMonster", category: "backup-clones")
+    /// True when another GilaMonster with this bundle identifier is running. It may be part-way through a backup.
+    static var anotherCopyIsRunning: Bool {
+        guard let id = Bundle.main.bundleIdentifier else { return false }
+        return NSRunningApplication.runningApplications(withBundleIdentifier: id).contains { $0.processIdentifier != ProcessInfo.processInfo.processIdentifier }
+    }
+
     init() {
         let paths: [String] = JSONStore.load(AppPaths.registry, defaults: [])
         var opened = paths.compactMap { ServerController.open(root: URL(fileURLWithPath: $0, isDirectory: true)) }
@@ -165,6 +172,13 @@ final class AppModel {
             }
             // A server can be running when the app opens, and its players still need the pack's address to answer.
             servers.forEach { $0.startPackHostIfWanted() }
+        }
+        // Backup clones left by a backup that was cut short (K799): removed now, before any backup can start. Skipped
+        // in a snapshot, and when a backup or another copy of GilaMonster is running, since the clone could be theirs.
+        if ProcessInfo.processInfo.environment["GILAMONSTER_SNAPSHOT"] == nil {
+            for swept in BackupClones.sweep(besideServers: servers.map(\.paths.root), serversFolder: AppPaths.servers, backupRunning: Backups.writing || Self.anotherCopyIsRunning) {
+                if let line = swept.result.line(swept.folder) { Self.cloneLog.notice("\(line, privacy: .public)") }
+            }
         }
         servers.forEach(Alerts.connect)
         // Session access: off until the owner turns it on in Settings, and never in a snapshot or the Advisor trial.
