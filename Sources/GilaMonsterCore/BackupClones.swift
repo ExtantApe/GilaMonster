@@ -10,6 +10,8 @@ import Foundation
 /// - only folders named the way GilaMonster names them, a name, a hyphen and 8 hex digits;
 /// - only real folders, directly inside a real `backup-clones` folder. A link is never followed and never removed,
 ///   and removing a clone removes any link inside it as a link, leaving what it points at alone;
+/// - only folders with GilaMonster's mark beside them (`<name>.gilamonster-clone`, written when the clone is made, from
+///   0.6.1). A folder without one, such as a clone left by an older version, is left for the owner to decide on (K527);
 /// - nothing else in that folder is touched.
 public enum BackupClones {
     public static let folderName = "backup-clones"
@@ -29,9 +31,27 @@ public enum BackupClones {
         return tail.count == 8 && tail.allSatisfy { $0.isASCII && $0.isHexDigit }
     }
 
+    /// The mark's file name for a clone folder: a plain file beside it, so it never ends up in the backup archive.
+    public static func markURL(_ clone: URL) -> URL {
+        clone.deletingLastPathComponent().appendingPathComponent(clone.lastPathComponent + ".gilamonster-clone")
+    }
+
+    /// Writes the mark for a clone GilaMonster has just made. False when it can't be written.
+    public static func mark(_ clone: URL) -> Bool {
+        FileManager.default.createFile(atPath: markURL(clone).path, contents: Data("Made by GilaMonster for one backup. Removed with the clone.\n".utf8))
+    }
+
+    /// Removes a clone's mark, only if it's a plain file.
+    public static func unmark(_ clone: URL) {
+        let m = markURL(clone)
+        if kind(m) == S_IFREG { try? FileManager.default.removeItem(at: m) }
+    }
+
     public struct Sweep: Equatable, Sendable {
         /// Names of the clone folders that were removed.
         public var removed: [String] = []
+        /// Names that look like clones but carry no mark, so they were left alone (made before 0.6.1, or not ours).
+        public var unmarked: [String] = []
         /// Names that looked like clones and couldn't be removed.
         public var failed: [String] = []
         /// Why nothing was looked at, when that's so.
@@ -48,7 +68,7 @@ public enum BackupClones {
     }
 
     /// What kind of thing is at a path, without following a link.
-    private static func kind(_ url: URL) -> mode_t? {
+    static func kind(_ url: URL) -> mode_t? {
         var info = stat()
         return lstat(url.path, &info) == 0 ? info.st_mode & S_IFMT : nil
     }
@@ -68,8 +88,11 @@ public enum BackupClones {
             let item = folder.appendingPathComponent(name, isDirectory: true)
             // A real folder only. A link with a clone's name isn't one of ours, and is left as it is.
             guard kind(item) == S_IFDIR else { continue }
+            // Only a clone GilaMonster marked as its own when it made it. Older clones have no mark and stay.
+            guard kind(markURL(item)) == S_IFREG else { out.unmarked.append(name); continue }
             do {
                 try FileManager.default.removeItem(at: item)
+                unmark(item)
                 out.removed.append(name)
             } catch { out.failed.append(name) }
         }

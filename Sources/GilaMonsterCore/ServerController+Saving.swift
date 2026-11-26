@@ -55,6 +55,8 @@ extension ServerController {
         let folder = BackupClones.folder(besideServer: paths.root)
             .appendingPathComponent(BackupClones.newName(forServer: paths.root), isDirectory: true)
         do { try FileOps.ensureDir(folder) } catch { return nil }
+        // The mark beside it is what lets the launch sweep remove it if this backup is cut short. Without it, no clone.
+        guard BackupClones.mark(folder) else { Self.removeClone(folder); return nil }
         for item in items {
             let source = paths.root.appendingPathComponent(item)
             // -c only: a clone or nothing. No -L, so a linked world isn't followed onto another drive.
@@ -72,5 +74,6 @@ extension ServerController {
     static func removeClone(_ folder: URL) {
         guard folder.deletingLastPathComponent().lastPathComponent == BackupClones.folderName else { return }
         try? FileManager.default.removeItem(at: folder)
+        BackupClones.unmark(folder)
     }
 }

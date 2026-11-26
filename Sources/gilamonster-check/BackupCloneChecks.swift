@@ -21,16 +21,22 @@ import Foundation
     try! FileOps.ensureDir(clones)
     try! FileOps.ensureDir(outside)
     write("a world that must survive", outside.appendingPathComponent("level.dat"))
-    func make(_ name: String) -> URL {
+    func make(_ name: String, marked: Bool = true) -> URL {
         let url = clones.appendingPathComponent(name, isDirectory: true)
         try! FileOps.ensureDir(url.appendingPathComponent("world/region"))
         write("made up", url.appendingPathComponent("world/region/r.0.0.mca"))
+        if marked, BackupClones.isCloneName(name) { check(BackupClones.mark(url), "a clone's mark is written") }
         return url
     }
     let leftover = make("made-up-server-1A2B3C4D")
     try! fm.createSymbolicLink(at: leftover.appendingPathComponent("world_nether"), withDestinationURL: outside)
     _ = make("made-up-other-0a1b2c3d")
     let plain = make("keep-me")
+    // Made before 0.6.1, or by something else: a clone's name and no mark. The owner decides on these (K527).
+    let older = make("made-up-older-ABCDEF12", marked: false)
+    // A mark that is a link doesn't count.
+    let fakeMarked = make("made-up-faked-0F0F0F0F", marked: false)
+    try! fm.createSymbolicLink(at: BackupClones.markURL(fakeMarked), withDestinationURL: outside.appendingPathComponent("level.dat"))
     let short = make("made-up-server-1A2B3C")
     write("a note", clones.appendingPathComponent("notes.txt"))
     write("a file with a clone's name", clones.appendingPathComponent("made-up-file-1A2B3C4D"))
@@ -49,7 +55,10 @@ import Foundation
     let done = BackupClones.sweep(clones, backupRunning: false)
     equal(done.removed, ["made-up-other-0a1b2c3d", "made-up-server-1A2B3C4D"], "the two leftover clones are removed")
     check(done.failed.isEmpty && done.skipped == nil, "with nothing failed")
-    equal(names(), ["keep-me", "made-up-file-1A2B3C4D", "made-up-linked-1A2B3C4D", "made-up-server-1A2B3C", "notes.txt"], "everything else is still there")
+    equal(names(), ["keep-me", "made-up-faked-0F0F0F0F", "made-up-faked-0F0F0F0F.gilamonster-clone", "made-up-file-1A2B3C4D", "made-up-linked-1A2B3C4D", "made-up-older-ABCDEF12", "made-up-server-1A2B3C", "notes.txt"], "everything else is still there, and the removed clones' marks went with them")
+    equal(done.unmarked, ["made-up-faked-0F0F0F0F", "made-up-older-ABCDEF12"], "clones without a real mark are left alone and named")
+    check(fm.fileExists(atPath: older.appendingPathComponent("world/region/r.0.0.mca").path), "an unmarked clone keeps its files")
+    check(fm.fileExists(atPath: outside.appendingPathComponent("level.dat").path) && (try? fm.destinationOfSymbolicLink(atPath: BackupClones.markURL(fakeMarked).path)) != nil, "a linked mark is left as it is, and what it points at too")
     check(fm.fileExists(atPath: plain.appendingPathComponent("world/region/r.0.0.mca").path) && fm.fileExists(atPath: short.appendingPathComponent("world/region/r.0.0.mca").path), "other folders keep their files")
     check(fm.fileExists(atPath: outside.appendingPathComponent("level.dat").path), "a link inside a clone wasn't followed: what it pointed at is untouched")
     check((try? fm.destinationOfSymbolicLink(atPath: link.path)) != nil, "a link with a clone's name is left as a link")
@@ -79,7 +88,9 @@ import Foundation
     section("Backup clones: every server's folder, once")
     let s1 = base.appendingPathComponent("servers/made-up-server"), s2 = base.appendingPathComponent("servers/made-up-other"), s3 = base.appendingPathComponent("more/made-up-third")
     _ = make("made-up-server-9F8E7D6C")
-    try! FileOps.ensureDir(BackupClones.folder(besideServer: s3).appendingPathComponent("made-up-third-00000000"))
+    let third = BackupClones.folder(besideServer: s3).appendingPathComponent("made-up-third-00000000")
+    try! FileOps.ensureDir(third)
+    check(BackupClones.mark(third), "the third server's clone is marked")
     let both = BackupClones.sweep(besideServers: [s1, s2, s3], backupRunning: false)
     equal(both.count, 2, "two servers in one folder share a clones folder, swept once")
     equal(both.flatMap(\.result.removed).sorted(), ["made-up-server-9F8E7D6C", "made-up-third-00000000"], "and a server kept elsewhere has its own swept too")
@@ -92,6 +103,7 @@ import Foundation
     let core = URL(fileURLWithPath: #filePath).deletingLastPathComponent().deletingLastPathComponent().appendingPathComponent("GilaMonsterCore")
     let saving = (try? String(contentsOf: core.appendingPathComponent("ServerController+Saving.swift"), encoding: .utf8)) ?? ""
     check(saving.contains("BackupClones.folder(besideServer: paths.root)") && saving.contains("BackupClones.newName(forServer: paths.root)"), "a backup's clone is made where the sweep looks, with the name it knows")
+    check(saving.contains("guard BackupClones.mark(folder) else { Self.removeClone(folder); return nil }") && saving.contains("BackupClones.unmark(folder)"), "each new clone is marked before anything is copied, and the mark goes with it")
     let model = (try? String(contentsOf: core.deletingLastPathComponent().appendingPathComponent("GilaMonster/AppModel.swift"), encoding: .utf8)) ?? ""
     check(model.contains("BackupClones.sweep(besideServers: servers.map(\\.paths.root), serversFolder: AppPaths.servers, backupRunning: Backups.writing || Self.anotherCopyIsRunning)"), "the app sweeps at launch, and not while a backup or another copy of the app runs")
     check(model.contains("Self.cloneLog.notice"), "and logs what it removed")

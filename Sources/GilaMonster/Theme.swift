@@ -534,7 +534,10 @@ struct ThemedSwitchStyle: ToggleStyle {
                         Image(systemName: "lock.fill").resizable().scaledToFit().frame(width: 9, height: 10).foregroundStyle(Theme.named(lock)).padding(.horizontal, 6).accessibilityHidden(true)
                     }
                 }
-                .overlay(alignment: look.knobTrailing ? .trailing : .leading) { Circle().fill(Theme.named(look.knob)).padding(3) }
+                // Locked on has a filled gray track, so its dashes go inside, in the knob's color, which the checks hold on it.
+                .overlay { if !enabled && isOn { Capsule().strokeBorder(Theme.named(look.knob), style: StrokeStyle(lineWidth: 1, dash: [3, 2])).padding(2) } }
+                // A fixed size, so the alignment can move it: a bare Circle fills the track and sits in the middle.
+                .overlay(alignment: look.knobTrailing ? .trailing : .leading) { Circle().fill(Theme.named(look.knob)).frame(width: 16, height: 16).padding(3) }
                 .frame(width: 40, height: 22)
                 .overlay { if focused { Capsule().strokeBorder(Theme.accent, lineWidth: 2).padding(-3) } }
                 .opacity(pressed ? 0.8 : 1)

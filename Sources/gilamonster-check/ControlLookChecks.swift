@@ -43,6 +43,8 @@ import GilaMonsterCore
     check(theme.contains("ControlLook.switchParts(on: isOn, enabled: enabled)") && theme.contains(".accessibilityAddTraits(.isToggle)")
           && theme.contains(".accessibilityValue(ControlLook.switchValue(on: isOn, enabled: enabled, lockedBecause: lockedBecause))"), "the switch is drawn from those parts and read as a switch with its value")
     check(theme.contains("Button { configuration.isOn.toggle() } label: { configuration.label }"), "it is a button underneath, so Space and a click both flip it")
+    check(theme.contains("Circle().fill(Theme.named(look.knob)).frame(width: 16, height: 16).padding(3)"), "the knob has its own size, so it sits at its end and not in the middle")
+    check(theme.contains("if !enabled && isOn { Capsule().strokeBorder(Theme.named(look.knob), style: StrokeStyle(lineWidth: 1, dash: [3, 2])).padding(2) }"), "locked on shows dashes inside its gray track, in the knob's color")
     check(theme.contains("if focused { Capsule().strokeBorder(Theme.accent, lineWidth: 2).padding(-3) }"), "with a focus ring")
     check(lab.contains("Button(\"Run Checks\") { runChecks() }\n                            .buttonStyle(.themedPrimary)\n                            .disabled(lab.isBusy || included.isEmpty)"), "Run Checks is the themed main button, disabled during a run or with nothing ticked")
 
