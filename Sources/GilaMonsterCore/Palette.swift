@@ -33,7 +33,11 @@ public enum Palette {
     }
 
     /// The four appearances macOS can ask for: light, dark, and each with Increase Contrast on.
-    public enum Mode: String, CaseIterable, Sendable { case light, dark, contrastLight = "light, increased contrast", contrastDark = "dark, increased contrast" }
+    public enum Mode: String, CaseIterable, Sendable {
+        case light, dark, contrastLight = "light, increased contrast", contrastDark = "dark, increased contrast"
+        /// Increase Contrast is on.
+        public var isContrast: Bool { self == .contrastLight || self == .contrastDark }
+    }
 
     // The colors themselves are in PaletteTokens.swift, written from Brand's JSON by scripts/palette-tokens.py.
 
@@ -55,7 +59,13 @@ public enum Palette {
         case text = "text"
         /// WCAG 1.4.11: icons, outlines and focus rings a person needs to see need 3:1.
         case ui = "control or icon"
+        /// The plain appearances' minimum.
         public var minimum: Double { self == .text ? 4.5 : 3 }
+        /// With Increase Contrast on, text is held to 7:1 (WCAG 1.4.6) and controls and icons to 4.5:1 (K786).
+        public func minimum(_ mode: Mode) -> Double {
+            guard mode.isContrast else { return minimum }
+            return self == .text ? 7 : 4.5
+        }
     }
 
     public struct Pair: Sendable {
@@ -98,10 +108,17 @@ public enum Palette {
         add("onSel", onSel, "sel", sel, .text)
         add("selMark", selMark, "side", side, .ui)
         add("bandInk", bandInk, "band", band, .text)
+        // The spine (K786): words on basalt, the bead outlines and the selected bead, and the badge pill's number.
+        add("beadEdge", beadEdge, "side", side, .ui)
+        add("beadOn", beadOn, "side", side, .ui)
+        add("pill", pill, "side", side, .ui)
+        add("sideFocus", sideFocus, "side", side, .ui)
+        add("onPill", onPill, "pill", pill, .text)
         for (s, bg) in surfaces {
             add("up", up, s, bg, .ui)
             add("starting", starting, s, bg, .ui)
             add("meter", meter, s, bg, .ui)
+            add("stopped", stopped, s, bg, .ui)
         }
         return list
     }()
@@ -166,7 +183,7 @@ public enum Palette {
     public struct Finding: Sendable {
         public let pair: Pair, mode: Mode, vision: Vision, ratio: Double, flavor: Flavor
         public var line: String {
-            "\(pair.foreground) on \(pair.background) (\(pair.use.rawValue)), \(flavor.rawValue) \(mode.rawValue)\(vision == .typical ? "" : ", \(vision.rawValue)"): \(String(format: "%.2f", ratio)):1, needs \(pair.use.minimum):1"
+            "\(pair.foreground) on \(pair.background) (\(pair.use.rawValue)), \(flavor.rawValue) \(mode.rawValue)\(vision == .typical ? "" : ", \(vision.rawValue)"): \(String(format: "%.2f", ratio)):1, needs \(pair.use.minimum(mode)):1"
         }
     }
 
@@ -178,7 +195,7 @@ public enum Palette {
             for mode in Mode.allCases {
                 for vision in Vision.allCases {
                     let r = contrast(simulate(pair.fg.hex(mode, flavor), vision), simulate(pair.bg.hex(mode, flavor), vision))
-                    if r < pair.use.minimum { out.append(Finding(pair: pair, mode: mode, vision: vision, ratio: r, flavor: flavor)) }
+                    if r < pair.use.minimum(mode) { out.append(Finding(pair: pair, mode: mode, vision: vision, ratio: r, flavor: flavor)) }
                 }
                 }
             }

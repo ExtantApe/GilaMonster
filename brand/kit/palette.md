@@ -1,5 +1,11 @@
 # GilaMonster palette tokens
 
+**Since K786 (2026-11-25), the app uses the desert base, calmed down** (owner's pick: "B: desert base, calmed down"):
+page `#F6EFE3`, cards `#FDFAF4`, raised `#EFE6D6` in light; page `#1E1C20`, cards `#262428`, raised `#302D33` in dark;
+and a basalt spine (`#2A282C` light, `#151417` dark) in both. The hues below are unchanged; the full set, with the
+Increase Contrast values held to 7:1 for text and 4.5:1 for controls, is `themes-tokens.json`, and `gilamonster-check`
+holds every pair. The table below is the round that set the hues.
+
 The main palette, chosen by the owner on 2026-11-23 (D272), with the icon (D276). These are the text and graphic
 tokens behind `Sources/GilaMonsterCore/Palette.swift`. Every value is held to 4.5:1 against both
 of its backgrounds (cream `#F5EBDD` and white in light; basalt `#2A282C` and deep `#1E1C20` in dark), in typical color

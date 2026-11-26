@@ -34,9 +34,17 @@ ROLES = [
     ("starting", "starting", "A server starting or stopping."),
     ("meter", "meter", "Progress fill."),
     ("bar", "bar", "Window bar (not drawn yet)."), ("barInk", "barInk", "Text on the bar."),
-    ("side", "side", "Sidebar (not drawn yet)."), ("sideInk", "sideInk", "Sidebar text."), ("sideMuted", "sideMuted", "Sidebar secondary text."),
-    ("sel", "sel", "Selected sidebar row."), ("onSel", "onSel", "Text on the selected row."), ("selMark", "selMark", "The mark on the selected row's leading edge."),
+    ("side", "side", "The basalt spine, in both appearances."), ("sideInk", "sideInk", "The selected section's word on the spine."), ("sideMuted", "sideMuted", "The other sections' words on the spine."),
+    ("sel", "sel", "Cream tile behind the pixel lizard on the spine."), ("onSel", "onSel", "Basalt on the cream tile."), ("selMark", "selMark", "The selected bead's cream outline."),
     ("band", "band", "Page header strip (not drawn yet)."), ("bandInk", "bandInk", "Text on the header strip."),
+    ("raised", "raised", "Selected rows, inventory slots and other raised spots on a page."),
+    ("stopped", "stopped", "A server that's stopped, and players who are away."),
+    ("beadIdle", "beadIdle", "An unselected section bead's fill on the spine. Decoration: its outline carries it."),
+    ("beadEdge", "beadEdge", "An unselected section bead's outline on the spine."),
+    ("beadOn", "beadOn", "The selected section bead's fill on the spine."),
+    ("pill", "pill", "A badge count's pill on the spine."),
+    ("onPill", "onPill", "The number in a badge pill."),
+    ("sideFocus", "sideFocus", "The keyboard focus ring on the spine, where the page's own focus color would be too dark."),
 ]
 
 def hexval(s): return int(s.lstrip("#"), 16)
@@ -64,12 +72,8 @@ def main():
         lines.append(f"    public static let {role} = Swatch(bold: ({', '.join(map(h, b))}), quiet: ({', '.join(map(h, q))}))")
     for role, key, doc in ROLES:
         emit(role, four("bold", key), four("quiet", key), doc)
-    def raised(flavor):
-        # Raised rows sit between the page and a card, so any text that passes on both passes on them. Brand's own
-        # `raised` was darker than the page in light, which dropped link and status text under 4.5:1 there.
-        l, d = themes[f"{flavor}-light"], themes[f"{flavor}-dark"]
-        return [mix(hexval(s["bg"]), hexval(s["surface"]), 0.5) for s in (l["standard"], d["standard"], l["increaseContrast"], d["increaseContrast"])]
-    emit("raised", raised("bold"), raised("quiet"), "Hover and raised rows: halfway between the page and a card.")
+    # Raised comes straight from Brand's set since K786 (2026-11-25): the paler sand leaves room for every text color
+    # on it, and gilamonster-check holds each pair there like the rest.
     emit("dangerWash", danger_wash("bold"), danger_wash("quiet"), "Behind an error. Derived from down and the page, since Brand's set has none.")
     lines.append("}")
     OUT.write_text("\n".join(lines) + "\n")
