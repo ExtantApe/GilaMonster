@@ -1,6 +1,6 @@
 # Changelog
 
-## Unreleased
+## 0.6.0 (2026-11-26)
 
 - **A new look: the desert base, calmed down (K786).** The owner's pick, 2026-11-25: "B: desert base, calmed down". The 17-row sidebar is now a basalt **spine** with the lizard, the server switcher and five section beads (Home, Server, Content, People, Upkeep), each with its word and a badge for what's waiting there. The chosen section's pages run across the top as a **trail** of tabs. Every page is still there, at most two clicks away. **⌥⌘1 to ⌥⌘5** pick a section and **⌃Tab** and **⌃⇧Tab** move along the trail. Every shortcut from before still works, including **⌘1 to ⌘9** for each page by number, now listed under View, Go to Page with every page. ↑↓ move between beads, ←→ along the trail, and Return or Space picks; VoiceOver reads the spine as a tab list named Sections, and each bead as "People, 2 pages".
 - **Colors.** Paler sand in light, basalt in dark, and a basalt spine in both, from `brand/kit/themes-tokens.json`. With **Increase Contrast** on, text is now held to 7:1 and controls and icons to 4.5:1 (it was 4.5:1 and 3:1), in typical vision and with each color-vision simulation. Bold's main action is red-orange, as in the approved mockup (it was amber); Quiet keeps its own red-orange.
