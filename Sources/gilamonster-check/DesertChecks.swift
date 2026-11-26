@@ -135,10 +135,27 @@ import GilaMonsterCore
     if let start = prompts.range(of: "/// Each waiting ask with Deny and Allow.") {
         let list = String(prompts[start.lowerBound...])
         let fonts = try! NSRegularExpression(pattern: #"\.font\([^()]*(?:\([^()]*\)[^()]*)*\)"#)
-        let bare = fonts.stringByReplacingMatches(in: list, range: NSRange(list.startIndex..., in: list), withTemplate: "")
+        // K800 added layout only, and each piece is taken out by its exact text before hashing: `.fixedSize()` on the
+        // four buttons, and the width the words' column asks for.
+        let layout = [".fixedSize()", ".frame(idealWidth: 262, alignment: .leading)"]
+        let bare = layout.reduce(fonts.stringByReplacingMatches(in: list, range: NSRange(list.startIndex..., in: list), withTemplate: "")) { $0.replacingOccurrences(of: $1, with: "") }
         var h: UInt64 = 0xcbf29ce484222325
         for b in bare.utf8 { h ^= UInt64(b); h = h &* 0x100000001b3 }
-        equal(String(h, radix: 16), "e23c502b945538b5", "SessionAskList is unchanged apart from its fonts")
+        equal(String(h, radix: 16), "e23c502b945538b5", "SessionAskList is unchanged apart from its fonts and the K800 layout modifiers")
+        equal(list.components(separatedBy: ".fixedSize()").count - 1, 4, "Deny, Allow, Allow for Today and Need More Time are each as wide as their label")
+        for label in ["Button(\"Deny\")", "Button(\"Allow\")", "Button(\"Allow for Today\")", "Button(\"Need More Time (\\(left) left)\")"] {
+            // From the button to the end of its style line. Need More Time's style comes after its action, just
+            // before .disabled.
+            let stop = label.contains("Need") ? ".disabled(left <= 0)" : "\n"
+            var tail = ""
+            if let from = list.range(of: label) {
+                let rest: Substring = list[from.lowerBound...]
+                if let end = rest.range(of: stop) { tail = String(rest[..<end.lowerBound]) }
+            }
+            check(tail.contains(".fixedSize()"), "\(label) never shrinks below its label")
+        }
+        check(!list.contains("truncationMode") && !list.contains("lineLimit"), "no label in the list is cut short")
+        check(list.contains("}.frame(idealWidth: 262, alignment: .leading)\n                    Spacer(minLength: 12)"), "the words keep a 262 pt column beside the buttons")
     } else { check(false, "SessionAskList is in SessionPrompts.swift") }
     func at(_ s: String) -> Int { prompts.range(of: s).map { prompts.distance(from: prompts.startIndex, to: $0.lowerBound) } ?? -1 }
     let deny = at("Button(\"Deny\") { if settled() { service.resolve(ask.id, allow: false) } }")
@@ -155,6 +172,10 @@ import GilaMonsterCore
     check(prompts.contains("SessionAskPlacement.accepts(pointer: pointer, sinceChange: Date().timeIntervalSince(changed))"), "the click guard is still there")
     check(prompts.contains("override func cancelOperation(_ sender: Any?) {\n            if let first = SessionAccessService.shared.waiting.first { SessionAccessService.shared.resolve(first.id, allow: false) }"), "Escape still denies")
     check(prompts.contains("AskPanelLook { SessionAskList(service: .shared, focusFirst: true) }") && prompts.contains("BeadBandView(height: 6)"), "the ask window wears the bead band and sand surface")
+    check(prompts.contains(".frame(minWidth: AskPanelLook.minWidth)") && prompts.contains("static var minWidth: CGFloat { 580 }") && !prompts.contains(".frame(width: 580)"), "the ask window is 580 pt at least and grows when the buttons need more")
+    check(prompts.contains("panel.contentView?.fittingSize"), "and it is sized from what its content asks for, every time it opens")
+    let style = source("Theme.swift")
+    check(style.contains("configuration.label\n                .lineLimit(1)\n                .fixedSize(horizontal: true, vertical: false)"), "a themed button's label is one line at its full width")
     // Fails closed: the fingerprint catches a one-word change.
     var tampered: UInt64 = 0xcbf29ce484222325
     for b in "Button(\"Allow\")".utf8 { tampered ^= UInt64(b); tampered = tampered &* 0x100000001b3 }

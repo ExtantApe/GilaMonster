@@ -224,14 +224,17 @@ final class SessionPrompts: NSObject, UNUserNotificationCenterDelegate, @uncheck
 /// How the ask window looks (K786): a thin bead band across the top and the sand surface below it. Looks only: the list
 /// inside, its wording, buttons, focus and guard are SessionAskList's, unchanged.
 struct AskPanelLook<Content: View>: View {
+    static var minWidth: CGFloat { 580 }
     @ViewBuilder var content: Content
     var body: some View {
         VStack(spacing: 0) {
             BeadBandView(height: 6)
             content.padding(.horizontal, 18).padding(.top, 14).padding(.bottom, 18)
         }
-        // Wider than the old 520 pt, so Allow for Today fits beside Deny and Allow at the 13 pt text size.
-        .frame(width: 580)
+        // 580 pt at the 13 pt text size. In SessionAskList every button is `.fixedSize()`, so it is as wide as its
+        // label and never clips it (K800), and the words on the left ask for a 262 pt column, which is what they had
+        // at 580 pt. The window is sized from those, so larger text makes it wider instead of squeezing a button.
+        .frame(minWidth: AskPanelLook.minWidth)
         .background(Theme.surface)
     }
 }
@@ -293,19 +296,19 @@ struct SessionAskList: View {
                                 // A second-by-second label would make VoiceOver chatter, so it says the minutes.
                                 .accessibilityLabel("The name is the session's own. No answer in about \(max(1, (left + 30) / 60)) minutes means no.")
                         }
-                    }
+                    }.frame(idealWidth: 262, alignment: .leading)
                     Spacer(minLength: 12)
                     VStack(alignment: .trailing, spacing: 6) {
                         HStack {
-                            Button("Deny") { if settled() { service.resolve(ask.id, allow: false) } }.buttonStyle(.themed)
+                            Button("Deny") { if settled() { service.resolve(ask.id, allow: false) } }.buttonStyle(.themed).fixedSize()
                                 .keyboardShortcut(index == 0 && focusFirst ? .defaultAction : nil)
                                 .focused($focused, equals: ask.id)
                                 .accessibilityLabel("Deny: \(ask.sentence)").opacity(dropped ? 0.4 : 1)
-                            Button("Allow") { if settled() { service.resolve(ask.id, allow: true) } }.buttonStyle(.themedPrimary)
+                            Button("Allow") { if settled() { service.resolve(ask.id, allow: true) } }.buttonStyle(.themedPrimary).fixedSize()
                                 .accessibilityLabel("Allow: \(ask.sentence)").opacity(dropped ? 0.4 : 1)
                             if let family = ask.action.todayFamily {
                                 Divider().frame(height: 18).padding(.horizontal, 6)
-                                Button("Allow for Today") { if settled() { service.resolveForToday(ask.id) } }.buttonStyle(.themed)
+                                Button("Allow for Today") { if settled() { service.resolveForToday(ask.id) } }.buttonStyle(.themed).fixedSize()
                                     .helped("Allows \(family.words) on every server without asking again until midnight. Each one still checks nobody is online.")
                                     .accessibilityLabel("Allow for today: \(ask.sentence). Covers \(family.words) on every server until midnight.")
                             }
@@ -317,7 +320,7 @@ struct SessionAskList: View {
                                 Announcer.say("One minute added, \(left - 1) left", force: true)
                             }
                         }
-                        .buttonStyle(.disclosureLink("plus")).font(.body)
+                        .buttonStyle(.disclosureLink("plus")).font(.body).fixedSize()
                         .disabled(left <= 0)
                         .help("Waits another minute before the answer becomes no. Nothing is allowed by this.")
                         .accessibilityLabel("Need more time for: \(ask.sentence). Adds a minute, \(left) left. Nothing is allowed.")
