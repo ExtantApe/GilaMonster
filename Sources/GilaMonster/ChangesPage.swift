@@ -69,7 +69,7 @@ struct ChangesPage: View {
                 }
             } else {
                 FlowRow(spacing: 8) {
-                    Button("Restart Now") { server.restart() }.buttonStyle(.themedPrimary)
+                    Button("Restart Now") { server.restart(by: .button("Changes")) }.buttonStyle(.themedPrimary)
                     Button("In 5 Minutes, with Warnings") {
                         server.scheduleRestart(RestartPlan(at: Date().addingTimeInterval(300), reason: "Scheduled restart"))
                     }

@@ -115,7 +115,7 @@ import GilaMonsterCore
     check(!NeedsYou.factLine(software: "Paper", running: false, since: nil, lastBackup: nil, isLab: true, needs: 1, openIssues: 0, now: now).contains("backup"), "the Lab has no backup words")
     let overview = source("OverviewPage.swift")
     check(overview.contains("Theme.display(28)") && overview.contains("GlyphView(glyph: server.state.glyph, size: 22)"), "the sentence is in the display face beside the glyph")
-    check(overview.contains("server.start()") && overview.contains("server.stop()") && overview.contains("server.restart()"), "Start, Stop and Restart are still on Overview")
+    check(overview.contains("server.start()") && overview.contains("server.stop(by: .button(\"Overview\"))") && overview.contains("server.restart(by: .button(\"Overview\"))"), "Start, Stop and Restart are still on Overview")
     check(overview.contains("ConnectCheckRow") && overview.contains("Copy Network Address") && overview.contains("Back Up Now") && overview.contains("ConnectionsCard"), "every action the old cards had is still there")
 
     section("Players: the roster")

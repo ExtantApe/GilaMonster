@@ -162,7 +162,7 @@ import Security
         let root = folder("real-session")
         write("server-port=25596\nserver-ip=127.0.0.1\nonline-mode=false\nwhite-list=false\nnetwork-compression-threshold=-1\nview-distance=4\nsimulation-distance=4\nmotd=made up\nlevel-type=minecraft\\:flat\n", root.appendingPathComponent("server.properties"))
         let c = try await ServerController.adopt(root: root, name: "Real session test")
-        defer { c.forceStop(); c.stopTicker() }
+        defer { c.forceStop(by: .app("for a check")); c.stopTicker() }
         try EULA.accept(c.paths)
         try await c.installSoftware(try await SoftwareCatalog.latestBuild(.paper, mc: realMC)!)
         c.profile.lastPluginCheck = Date(); c.profile.software.lastCheck = Date()
@@ -214,7 +214,7 @@ import Security
         let calls = SessionAccess.recentLog(20, from: service.logFile!)
         check(calls.count == 5 && calls.filter { !$0.allowed }.count == 1, "all five calls recorded, one refused")
         bot.leave()
-        c.stop()
+        c.stop(by: .app("for a check"))
         await checkUntil(90, "stopped: \(c.state)") { c.state == .stopped }
     } catch { failures.append("real session access: \(error)") }
 }

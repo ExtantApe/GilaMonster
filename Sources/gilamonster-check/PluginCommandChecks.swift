@@ -377,7 +377,7 @@ private let head = "[12:00:00 INFO]: "
         let typed = c.console.count
         if case .refused = await c.commands.run("fakeplug", ["ping"]).outcome { equal(c.console.count, typed, "switched off: nothing typed into a running server") } else { check(false, "switched off refuses") }
 
-        c.stop()
+        c.stop(by: .app("for a check"))
         await checkUntil(20, "the fake server stops") { c.state == .stopped }
     } catch { failures.append("fake format 1 server: \(error)") }
 }
@@ -573,7 +573,7 @@ extension Result {
         c.profile.lastPluginCheck = Date(); c.profile.software.lastCheck = Date()
         c.profile.backup.enabled = false
         c.profile.launch.restartOnCrash = false
-        defer { c.forceStop(); c.stopTicker() }
+        defer { c.forceStop(by: .app("for a check")); c.stopTicker() }
         Modules.shared.set(.pluginCommands, on: true)
         defer { Modules.shared.set(.pluginCommands, on: false) }
 
@@ -605,7 +605,7 @@ extension Result {
 
         if withLuckPerms {
             await realSheriffApproval(c, root: root)
-            c.stop()
+            c.stop(by: .app("for a check"))
             await checkUntil(90, "stops") { c.state == .stopped }
             return
         }
@@ -618,7 +618,7 @@ extension Result {
         let unknown = await c.commands.run("sheriff", ["nosuchthing"])
         if case .failed(let e) = unknown.outcome { equal(e.code, "unknown-command", "an unknown subcommand gets the base code") } else { check(false, "unknown subcommand: \(unknown.outcome)") }
 
-        c.stop()
+        c.stop(by: .app("for a check"))
         await checkUntil(90, "stops") { c.state == .stopped }
     } catch { failures.append("real sheriff: \(error)") }
 }
@@ -960,7 +960,7 @@ private final class PageClient {
         let port = 25593, web = 25694
         let root = folder("real-invites")
         let c = try await buildInvitesServer(root: root, port: port, web: web, sheriff: sheriff, welcomewagon: welcomewagon)
-        defer { c.forceStop(); c.stopTicker() }
+        defer { c.forceStop(by: .app("for a check")); c.stopTicker() }
         Modules.shared.set(.pluginCommands, on: true)
         defer { Modules.shared.set(.pluginCommands, on: false) }
         let runtimes = await JavaManager.discover()
@@ -1056,7 +1056,7 @@ private final class PageClient {
         check(!page().contains("Signed in as"), "and GilaMonster's page with it")
         bot.leave()
 
-        c.stop()
+        c.stop(by: .app("for a check"))
         await checkUntil(90, "stops") { c.state == .stopped }
     } catch { failures.append("real invites: \(error)") }
 }
@@ -1115,7 +1115,7 @@ private final class PageClient {
     _ = await c.commands.run("sheriff", ["reload"])
     _ = await c.sheriffApply(uuid: PlayerFiles.offlineUUID(name: "MadeUpBuilder"), name: "MadeUpBuilder", add: ["builders"], remove: [])
     _ = await c.createInvite(name: "MadeUpExplorer", profiles: ["young"], days: 14)
-    c.stop()
+    c.stop(by: .app("for a check"))
     _ = await until(90, { c.state == .stopped })
     c.stopTicker()
     // Warnings from the first start, before the groups existed, would only confuse the hand check.

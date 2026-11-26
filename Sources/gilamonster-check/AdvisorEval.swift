@@ -53,10 +53,10 @@ private func evalShell(_ line: String) async throws { _ = try await Tool.run("/b
     let endState = "\(c.state)"
     connected.forEach { $0.leave() }
     if c.state == .running || c.state == .starting {
-        c.stop()
+        c.stop(by: .app("for a check"))
         for _ in 0..<240 where c.state != .stopped { try? await Task.sleep(for: .milliseconds(500)) }
     }
-    if c.state != .stopped, !c.state.canStart { c.forceStop() }
+    if c.state != .stopped, !c.state.canStart { c.forceStop(by: .app("for a check")) }
     try? await Task.sleep(for: .seconds(2))
     c.scanLatestLog()
     c.stopTicker()

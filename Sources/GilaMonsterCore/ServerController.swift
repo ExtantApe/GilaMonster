@@ -140,6 +140,12 @@ public final class ServerController: Identifiable {
     private var sawShutdown = false
     private var sawCrash = false
     private var restartAfterStop = false
+    /// The stop that's under way, as it was written to the stop file (K798). Nil when GilaMonster hasn't asked.
+    private var stopAsk: StopRecord?
+    /// What the stop needed beyond asking, for the exit's line: Java asked to shut down, or the process killed.
+    private var stopNote: String?
+    /// The newest line of this server's stop file: what last stopped it, and how it exited.
+    public internal(set) var lastStop: StopRecord?
     private var crashTimes: [Date] = []
     private var stopDeadline: Task<Void, Never>?
     private var waiters: [(needles: [String], resume: (String?) -> Void)] = []
@@ -481,6 +487,8 @@ public final class ServerController: Identifiable {
         players = []
         connected = []
         expectingStop = false
+        stopAsk = nil
+        stopNote = nil
         sawShutdown = false
         sawCrash = false
         state = .starting
@@ -492,8 +500,18 @@ public final class ServerController: Identifiable {
         }
     }
 
-    public func stop() {
+    /// Writes that a stop was asked for, and by what, to the server's stop file before anything is sent (K798).
+    private func noteStopAsked(_ source: StopSource, note: String? = nil) {
+        let record = StopRecord.asked(source, restart: restartAfterStop, note: note)
+        stopAsk = record
+        lastStop = record
+        StopLog.append(record, to: StopLog.file(paths))
+    }
+
+    /// Stops the server with a save. `source` is who or what asked, and goes in the server's stop file.
+    public func stop(by source: StopSource) {
         guard state == .running || state == .starting, let process else { return }
+        noteStopAsked(source)
         expectingStop = true
         startedStopWhileStarting = state == .starting
         state = .stopping
@@ -506,25 +524,29 @@ public final class ServerController: Identifiable {
             try? await Task.sleep(for: .seconds(120))
             guard !Task.isCancelled, let self else { return }
             self.appendWrapper("The server hasn't stopped after 2 minutes. Asking Java to shut down.", level: .warn)
+            self.stopNote = "Java was asked to shut down after 2 minutes"
             self.process?.terminate()
             try? await Task.sleep(for: .seconds(45))
             guard !Task.isCancelled else { return }
             self.appendWrapper("Still running. Forcing it to stop; unsaved data may be lost.", level: .error)
+            self.stopNote = "GilaMonster forced it to stop after it didn't shut down"
             self.process?.kill()
         }
     }
 
     /// Stops the server immediately, without waiting for a clean save.
-    public func forceStop() {
+    public func forceStop(by source: StopSource) {
+        guard process != nil else { return }
+        noteStopAsked(source, note: "Forced, without waiting for a save")
         expectingStop = true
         process?.kill()
     }
 
-    public func restart(reason: String = "Restart") {
+    public func restart(reason: String = "Restart", by source: StopSource) {
         guard state == .running || state == .starting else { return }
         appendWrapper("\(reason): restarting.", level: .info)
         restartAfterStop = true
-        stop()
+        stop(by: source)
     }
 
     private func handleExit(_ code: Int32) {
@@ -551,9 +573,18 @@ public final class ServerController: Identifiable {
         // after a stop or SIGTERM from outside (code 143), with no crash in its log (K692): restarting it would undo
         // a stop someone meant, and leave a server GilaMonster later orphans.
         let stoppedElsewhere = !expectingStop && code != 0 && ShutdownSignals.stoppedItself(sawShutdown: sawShutdown, sawCrash: sawCrash)
-        if !failedToStart, expectingStop || code == 0 || stoppedElsewhere {
+        let cleanStop = !failedToStart && (expectingStop || code == 0 || stoppedElsewhere)
+        // The exit goes in the stop file with what asked for it, or as the server's own doing when nothing here did (K798).
+        let exit = StopRecord.exited(code: code, outcome: cleanStop ? .stopped : failedToStart ? .gaveUp : .crashed, ask: stopAsk,
+                                     ownShutdown: sawShutdown, crashInLog: sawCrash, note: stopNote)
+        StopLog.append(exit, to: StopLog.file(paths))
+        lastStop = exit
+        stopAsk = nil
+        stopNote = nil
+        if cleanStop {
             appendWrapper(stoppedElsewhere ? "The server was stopped from outside GilaMonster and saved its worlds. It wasn't restarted." : "Server stopped.", level: .info)
-            recordEvent(.stop, stoppedElsewhere ? "Stopped outside GilaMonster" : "Stopped")
+            appendWrapper("What stopped it: \(exit.by). Exit code \(code).", level: .info)
+            recordEvent(.stop, stoppedElsewhere ? "Stopped outside GilaMonster" : "Stopped", detail: "From \(exit.by). Exit code \(code).")
             state = .stopped
             if restartAfterStop {
                 restartAfterStop = false
@@ -618,20 +649,27 @@ public final class ServerController: Identifiable {
     }
 
     /// Asks a server we no longer own to shut down cleanly.
-    public func stopExternalServer() async {
+    public func stopExternalServer(by source: StopSource) async {
         guard case let .external(pid) = state else { return }
         guard SystemInfo.workingDirectory(pid: pid)?.standardizedFileURL.resolvingSymlinksInPath().path == paths.root.standardizedFileURL.resolvingSymlinksInPath().path else {
             await detectExternalServer()
             return
         }
+        // GilaMonster didn't start this one, so there's no exit code to read: the file says it was asked, then gone.
+        let ask = StopRecord.asked(source, restart: false, note: "A server GilaMonster hadn't started")
+        StopLog.append(ask, to: StopLog.file(paths))
         kill(pid, SIGTERM)
         for _ in 0..<60 where SystemInfo.isAlive(pid: pid) { try? await Task.sleep(for: .seconds(1)) }
+        let gone = StopRecord.exited(code: nil, outcome: SystemInfo.isAlive(pid: pid) ? .stillRunning : .gone, ask: ask)
+        StopLog.append(gone, to: StopLog.file(paths))
+        lastStop = gone
         await detectExternalServer()
     }
 
     // MARK: Console
 
-    public func send(_ command: String) {
+    /// `source` matters only when the command is `stop`: it's who typed it, for the stop file.
+    public func send(_ command: String, by source: StopSource = .console) {
         // The console is line-based: a line break would make the rest a second command (K158 audit).
         guard !command.contains(where: \.isNewline) else {
             appendWrapper("Not sent: a console command can't contain a line break.", level: .warn)
@@ -642,6 +680,7 @@ public final class ServerController: Identifiable {
         append(">\u{00A0}\(text)", level: .info, origin: .command)
         let bare = text.hasPrefix("/") ? String(text.dropFirst()) : text
         if bare == "stop" {
+            noteStopAsked(source)
             expectingStop = true
             state = .stopping
         }
@@ -1152,7 +1191,7 @@ public final class ServerController: Identifiable {
         if plan.whenEmpty {
             if players.isEmpty {
                 restartPlan = nil
-                restart(reason: plan.reason)
+                restart(reason: plan.reason, by: .app("for a planned restart once nobody was online (\(plan.reason))"))
             }
             return
         }
@@ -1160,7 +1199,7 @@ public final class ServerController: Identifiable {
         let left = Int(at.timeIntervalSince(now).rounded())
         if left <= 0 {
             restartPlan = nil
-            restart(reason: plan.reason)
+            restart(reason: plan.reason, by: .app("for a planned restart (\(plan.reason))"))
             return
         }
         // Announce the warning we've just entered.
@@ -2023,8 +2062,8 @@ public final class ServerController: Identifiable {
     private func saveShelved() { try? JSONStore.save(shelved, to: paths.shelved) }
 
     /// Stops the server if it's running, for actions that need it down.
-    func stopAndWait() async throws {
-        if state == .running || state == .starting { stop() }
+    func stopAndWait(_ what: String) async throws {
+        if state == .running || state == .starting { stop(by: .app(what)) }
         for _ in 0..<(180 * 4) where state.isLive { try? await Task.sleep(for: .milliseconds(250)) }
         guard state.canStart else { throw AppError("The server didn't stop, so nothing was changed.") }
     }
@@ -2049,7 +2088,7 @@ public final class ServerController: Identifiable {
             throw AppError("The restore point \(upgrade.backupFile) wasn't found in \(folder.path). If it's on an external drive, check it's connected. Nothing was changed.")
         }
         try await Backups.verify(record, in: folder, expectingWorlds: upgrade.worlds)
-        try await stopAndWait()
+        try await stopAndWait("to roll back an upgrade")
         setActivity("Moving the upgraded server to the Shelf…")
         defer { setActivity(nil) }
         let shelfFolder = Backups.shelf(profile)
@@ -2085,7 +2124,7 @@ public final class ServerController: Identifiable {
             throw AppError("That shelved upgrade's file is missing from \(folder.path).")
         }
         try await Backups.verify(record, in: folder, expectingWorlds: [])
-        try await stopAndWait()
+        try await stopAndWait("to bring back a shelved upgrade")
         let before = profile.software
         let worlds = Backups.worldFolders(paths.root)
         let point = try await makeRestorePoint()

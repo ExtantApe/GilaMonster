@@ -165,6 +165,7 @@ if CommandLine.arguments.contains("--connections") {
     sidebarChecks()
     desertChecks()
     controlLookChecks()
+    stopLogChecks()
     quitReasonChecks()
     await sessionAccessChecks()
     commandPatternChecks()
@@ -2731,7 +2732,7 @@ if CommandLine.arguments.contains("--real-paper") {
         try await c.installSoftware(try await SoftwareCatalog.latestBuild(.paper, mc: realMC)!)
         for source in [PluginSource.modrinth(project: "luckperms", allowBeta: false), Multiverse.source, .modrinth(project: "bluemap", allowBeta: false)] { try await c.addPlugin(source: source) }
         c.profile.lastPluginCheck = Date(); c.profile.software.lastCheck = Date()
-        defer { c.stopLinksPage(); c.forceStop(); c.stopTicker() }
+        defer { c.stopLinksPage(); c.forceStop(by: .app("for a check")); c.stopTicker() }
         await c.start()
         await checkUntil(240, "up: \(c.state)") { c.state == .running }
         await c.refreshPlugins()
@@ -2849,7 +2850,7 @@ if CommandLine.arguments.contains("--real-paper") {
         check(c.mapAccessNote?.contains("enforce-access") == true, "and the app says why: \(c.mapAccessNote ?? "")")
         viewerBot.leave(); otherBot.leave()
         c.stopLinksPage()
-        c.stop()
+        c.stop(by: .app("for a check"))
         await checkUntil(90, "stopped") { !c.state.isLive }
     } catch { failures.append("real map threw: \(error)") }
 }
@@ -2884,7 +2885,7 @@ if CommandLine.arguments.contains("--real-paper") {
         let missing = await AccountLookup.lookUp("ZzqQmadeUpNoSu9")
         equal(missing, .noAccount, "a made-up name has no account")
         let c = try await server("prejoin-online", port: 25590, online: true)
-        defer { c.forceStop(); c.stopTicker() }
+        defer { c.forceStop(by: .app("for a check")); c.stopTicker() }
         equal(c.playerAccessSettings.knownGroups, ["default", "madeup-one", "madeup-staff", "madeup-two"], "groups read from the server")
         var settings = c.playerAccessSettings
         settings.grantable = ["madeup-one", "madeup-two", "no-such-group"]
@@ -2922,7 +2923,7 @@ if CommandLine.arguments.contains("--real-paper") {
         _ = await c.requestAccess(AccessChange(uuid: first.uuid, name: first.name, addGroups: ["madeup-one"], addToAllowlist: false))
 
         // Stopped: everything waits, and happens once it's back.
-        await c.stop()
+        await c.stop(by: .app("for a check"))
         await checkUntil(60, "stopped") { !c.state.isLive }
         let held = await c.requestAccess(AccessChange(uuid: second.uuid, name: second.name, addGroups: ["madeup-one"]))
         equal(held, nil, "stopped, it's accepted"); equal(c.waitingAccess.count, 1, "and waits")
@@ -2940,7 +2941,7 @@ if CommandLine.arguments.contains("--real-paper") {
         equal(running, nil, "running, removing works"); check(!c.allowlist.contains { $0.uuid == second.uuid }, "and the list agrees")
         let stay = await c.currentGroups(uuid: second.uuid)
         equal(stay, ["default", "madeup-one"], "their groups stay")
-        await c.stop()
+        await c.stop(by: .app("for a check"))
         await checkUntil(60, "stopped") { !c.state.isLive }
     } catch { failures.append("real pre-join online: \(error)") }
     do {
@@ -2951,7 +2952,7 @@ if CommandLine.arguments.contains("--real-paper") {
         bytes[8] = (bytes[8] & 0x3F) | 0x80
         let uuid = UUID(uuid: (bytes[0], bytes[1], bytes[2], bytes[3], bytes[4], bytes[5], bytes[6], bytes[7], bytes[8], bytes[9], bytes[10], bytes[11], bytes[12], bytes[13], bytes[14], bytes[15])).uuidString.lowercased()
         let c = try await server("prejoin-offline", port: 25589, online: false)
-        defer { c.forceStop(); c.stopTicker() }
+        defer { c.forceStop(by: .app("for a check")); c.stopTicker() }
         check(c.playerAccessBlocked != nil, "offline mode is refused for real use")
         c.accessAllowsOffline = true
         var settings = c.playerAccessSettings
@@ -2971,7 +2972,7 @@ if CommandLine.arguments.contains("--real-paper") {
         let groups = await c.currentGroups(uuid: uuid)
         equal(groups, ["default", "madeup-one"], "their groups are there on first join")
         bot.leave()
-        await c.stop()
+        await c.stop(by: .app("for a check"))
         await checkUntil(60, "stopped") { !c.state.isLive }
     } catch { failures.append("real pre-join offline: \(error)") }
 }
@@ -3410,7 +3411,7 @@ func localAddresses() -> [String] {
         let root = folder("real-upgrade-plugins")
         write("server-port=25594\nonline-mode=false\nwhite-list=false\nview-distance=3\nsimulation-distance=3\nlevel-type=minecraft\\:flat\n", root.appendingPathComponent("server.properties"))
         let c = try await ServerController.adopt(root: root, name: "Real upgrade test")
-        defer { c.forceStop(); c.stopTicker() }
+        defer { c.forceStop(by: .app("for a check")); c.stopTicker() }
         try EULA.accept(c.paths)
         c.profile.lastPluginCheck = Date(); c.profile.software.lastCheck = Date()
         c.runtimes = await JavaManager.discover()
@@ -3462,7 +3463,7 @@ func localAddresses() -> [String] {
         let root = folder("real-management")
         write("server-port=25597\nserver-ip=127.0.0.1\nonline-mode=false\nwhite-list=false\nenforce-whitelist=false\nnetwork-compression-threshold=-1\nview-distance=4\nsimulation-distance=4\nmotd=made up message\nlevel-type=minecraft\\:flat\n", root.appendingPathComponent("server.properties"))
         let c = try await ServerController.adopt(root: root, name: "Real management test")
-        defer { c.forceStop(); c.stopTicker() }
+        defer { c.forceStop(by: .app("for a check")); c.stopTicker() }
         try EULA.accept(c.paths)
         try await c.installSoftware(try await SoftwareCatalog.latestBuild(.paper, mc: realMC)!)
         c.profile.lastPluginCheck = Date(); c.profile.software.lastCheck = Date()
@@ -3486,7 +3487,7 @@ func localAddresses() -> [String] {
         bot.leave()
         await checkUntil(10, "and so does the leave") { !c.players.contains("MadeUpBot") }
         check(c.console.contains { $0.text.contains("Players are read from the management server") }, "the console says where players come from")
-        c.stop()
+        c.stop(by: .app("for a check"))
         await checkUntil(90, "stopped: \(c.state)") { c.state == .stopped }
         check(c.management == nil, "the link closes with the server")
     } catch { failures.append("real management: \(error)") }
@@ -3498,7 +3499,7 @@ func localAddresses() -> [String] {
         let root = folder("real-signin")
         write("server-port=25593\nonline-mode=false\nwhite-list=true\nenforce-whitelist=false\nnetwork-compression-threshold=-1\nview-distance=4\nsimulation-distance=4\nmotd=made up message\nlevel-type=minecraft\\:flat\n", root.appendingPathComponent("server.properties"))
         let c = try await ServerController.adopt(root: root, name: "Real sign-in test")
-        defer { c.forceStop(); c.stopTicker(); c.stopLinksPage() }
+        defer { c.forceStop(by: .app("for a check")); c.stopTicker(); c.stopLinksPage() }
         try EULA.accept(c.paths)
         let build = try await SoftwareCatalog.latestBuild(.paper, mc: realMC)!
         try await c.installSoftware(build)
@@ -3614,7 +3615,7 @@ func localAddresses() -> [String] {
         check(!afterRemoval.contains("Signed in as"), "taking them off the allowlist ends it at once")
         check(c.signInLog.contains { $0.kind == .removed && $0.name == "MadeUpBot" }, "and that's in the log")
         bot.leave()
-        await c.stop()
+        await c.stop(by: .app("for a check"))
         await checkUntil(60, "real server stopped: \(c.state)") { !c.state.isLive }
         check(FileOps.children(pending).isEmpty, "no links left waiting after a stop")
     } catch { failures.append("real sign-in: \(error)") }
@@ -3742,7 +3743,7 @@ func localAddresses() -> [String] {
         try EULA.accept(c.paths)
         try await c.installSoftware(try await SoftwareCatalog.latestBuild(.paper, mc: realMC)!)
         c.profile.lastPluginCheck = Date(); c.profile.software.lastCheck = Date()
-        defer { c.stopPackHost(); c.forceStop(); c.stopTicker() }
+        defer { c.stopPackHost(); c.forceStop(by: .app("for a check")); c.stopTicker() }
         let runtimes = await JavaManager.discover()
         guard let java = JavaManager.best(for: 25, in: runtimes) else { failures.append("no Java 25"); return }
         let table = try await ProtocolTable.load(mc: realMC, cache: folder("real-pack-protocol"), java: java.path)
@@ -3800,7 +3801,7 @@ func localAddresses() -> [String] {
         try await offered("PackBotTwo", expect: oldBuild.sha1, "before the restart")
 
         // Across the restart they switch together.
-        c.stop()
+        c.stop(by: .app("for a check"))
         await checkUntil(90, "stopped: \(c.state)") { !c.state.isLive }
         await c.start()
         await checkUntil(240, "back up: \(c.state)") { c.state == .running }
@@ -3813,7 +3814,7 @@ func localAddresses() -> [String] {
         let exactURL = c.packBuildAddress(recipe: "real-export", sha1: exact.sha1)!
         equal(exact.sha1, Hashing.sha1(try Data(contentsOf: exportZip)), "the exact pack keeps the export's own SHA-1")
         equal(try await c.usePack(url: exactURL, sha1: exact.sha1, required: true, recipe: "real-export"), .staged, "set on the running server")
-        c.stop()
+        c.stop(by: .app("for a check"))
         await checkUntil(90, "stopped for the exact pack: \(c.state)") { !c.state.isLive }
         await c.start()
         await checkUntil(240, "up with the exact pack: \(c.state)") { c.state == .running }
@@ -3829,7 +3830,7 @@ func localAddresses() -> [String] {
         let decliner = try Bot(name: "PackBotFour", port: port, table: table, packAnswer: 1)
         await checkUntil(30, "a required pack declined disconnects") { decliner.packOffer != nil && !c.players.contains("PackBotFour") }
         decliner.leave()
-        c.stop()
+        c.stop(by: .app("for a check"))
         await checkUntil(90, "stopped at the end: \(c.state)") { !c.state.isLive }
     } catch { failures.append("real pack serving threw: \(error)") }
 }
@@ -3840,7 +3841,7 @@ func localAddresses() -> [String] {
         let root = folder("real-server")
         write("server-port=25599\nonline-mode=false\nview-distance=4\nsimulation-distance=4\nmotd=before\nlevel-type=minecraft\\:flat\n", root.appendingPathComponent("server.properties"))
         let c = try await ServerController.adopt(root: root, name: "Real test")
-        defer { c.forceStop(); c.stopTicker() }
+        defer { c.forceStop(by: .app("for a check")); c.stopTicker() }
         try EULA.accept(c.paths)
         let build = try await SoftwareCatalog.latestBuild(.paper, mc: "1.21.11")!
         try await c.installSoftware(build)
@@ -3881,7 +3882,7 @@ func localAddresses() -> [String] {
             try await c.deleteWorld(made)
             equal(c.worldOperation?.succeeded, true, "real delete confirmed: \(c.console.suffix(5).map(\.text))")
         }
-        c.stop()
+        c.stop(by: .app("for a check"))
         await checkUntil(90, "stopped after Multiverse") { c.state == .stopped }
 
         // Real config files, as real Paper wrote them: forms must read them and not damage them.
@@ -3923,7 +3924,7 @@ func localAddresses() -> [String] {
         c.send("whitelist add GilaMonsterTest")
         try? await Task.sleep(for: .seconds(3))
         print("    allowlist: \(c.console.suffix(2).map(\.text)) entries=\(PlayerList.entries(c.liveConfigText(ConfigFile(path: "whitelist.json", title: "", summary: "", group: "", format: .json, policy: .stagedWhileRunning))))")
-        c.stop()
+        c.stop(by: .app("for a check"))
         await checkUntil(90, "stopped after form edits") { c.state == .stopped }
         let monstersAfter = ConfigForm.fields(c.liveConfigText(bukkit), format: .yaml).first { $0.path == ["spawn-limits", "monsters"] }
         equal(monstersAfter?.value, "42", "Paper kept the form's edit")
@@ -3988,7 +3989,7 @@ func localAddresses() -> [String] {
         let before = try await c.backupNow(trigger: "manual")
         c.send("save-all flush")
         try? await Task.sleep(for: .seconds(3))
-        c.stop()
+        c.stop(by: .app("for a check"))
         await checkUntil(90, "stopped for compare") { c.state == .stopped }
         var props = PropertiesDocument(c.liveConfigText(c.configs.first { $0.path == "server.properties" }!)); props.set("max-players", "33")
         try FileOps.writeAtomic(props.text, to: c.paths.properties)
@@ -4040,7 +4041,7 @@ func localAddresses() -> [String] {
         await c.start()
         await checkUntil(240, "the old world opens again on 1.21.11 (last: \(c.console.suffix(3).map(\.text)))") { c.state == .running }
         check(!c.console.dropFirst(max(0, marker)).contains { $0.text.lowercased().contains("newer version") }, "no newer-world complaints")
-        c.stop()
+        c.stop(by: .app("for a check"))
         await checkUntil(90, "stopped after rollback") { c.state == .stopped }
         check(c.issues.contains { $0.ruleID == "offline-mode" }, "rule fires on real output: \(c.issues.map(\.title).prefix(6))")
     } catch { failures.append("real paper: \(error)") }
@@ -4072,6 +4073,19 @@ func localAddresses() -> [String] {
         c.profile.software.lastCheck = Date()
         c.profile.backup.scope = .standard
         await scenario(c, startupTimeout: 30, port: 25597)
+        // The stop file (K798), on a second stand-in of its own, once the first is down and its port is free.
+        if c.state.isLive { c.stop(by: .app("for a check")); _ = await until(60) { !c.state.isLive } }
+        let stops = folder("standin-stops")
+        try FileManager.default.copyItem(at: root.appendingPathComponent("standin.jar"), to: stops.appendingPathComponent("standin.jar"))
+        write("server-port=25597\nserver-ip=127.0.0.1\nmotd=made up\nlevel-name=world\n", stops.appendingPathComponent("server.properties"))
+        makeJarInPlugins(stops, "Foo")
+        let s = try await ServerController.adopt(root: stops, name: "Stand-in Stops")
+        s.requiresEULA = false
+        s.profile.software = c.profile.software
+        s.profile.launch.javaPath = jdk.path
+        s.profile.launch.preset = .none
+        s.profile.lastPluginCheck = Date()
+        await stopLogLifecycle(s, startupTimeout: 30)
     } catch { failures.append("lifecycle: \(error)") }
 }
 
@@ -4423,13 +4437,13 @@ func buildStandIn(jdk: JavaRuntime, into jar: URL) async throws {
 
         // Stopping while it's still starting mustn't hang.
         if c.profile.software.jarName == "standin.jar" {
-            c.stop()
+            c.stop(by: .app("for a check"))
             await checkUntil(30, "stopped first") { c.state == .stopped }
             write("x", c.paths.root.appendingPathComponent("slow-boot"))
             await c.start()
             try? await Task.sleep(for: .seconds(1))
             let stopAt = Date()
-            c.stop()
+            c.stop(by: .app("for a check"))
             await checkUntil(12, "stops promptly while starting: \(c.state)") { c.state == .stopped }
             check(Date().timeIntervalSince(stopAt) < 12, "well under the two minute wait")
             try? FileManager.default.removeItem(at: c.paths.root.appendingPathComponent("slow-boot"))
@@ -4445,7 +4459,7 @@ func buildStandIn(jdk: JavaRuntime, into jar: URL) async throws {
         }
 
         // Stop cleanly.
-        c.stop()
+        c.stop(by: .app("for a check"))
         check(c.state == .stopping, "stopping")
         await checkUntil(60, "stopped: \(c.state)") { c.state == .stopped }
         check(!SystemInfo.isPortBusy(port), "port released")
@@ -4542,7 +4556,7 @@ func buildStandIn(jdk: JavaRuntime, into jar: URL) async throws {
         try? FileManager.default.removeItem(at: ServerPaths(root: run).meta)
         try? FileManager.default.removeItem(at: run.appendingPathComponent("seeded"))
         let c = try await ServerController.adopt(root: run, name: "Sandbox run")
-        defer { c.forceStop(); c.stopTicker() }
+        defer { c.forceStop(by: .app("for a check")); c.stopTicker() }
         c.profile.backup.enabled = false
         c.profile.lastPluginCheck = Date(); c.profile.software.lastCheck = Date()
         c.profile.launch.restartOnCrash = false
@@ -4560,7 +4574,7 @@ func buildStandIn(jdk: JavaRuntime, into jar: URL) async throws {
 }
 
 @MainActor func shutOK(_ c: ServerController) async {
-    c.stop()
+    c.stop(by: .app("for a check"))
     await checkUntil(90, "stops: \(c.state)") { c.state == .stopped }
 }
 
@@ -4879,6 +4893,7 @@ func makePack(_ name: String, _ files: [String: String], inside: String? = nil) 
     sidebarChecks()
     desertChecks()
     controlLookChecks()
+    stopLogChecks()
     quitReasonChecks()
     await sessionAccessChecks()
     commandPatternChecks()
@@ -5881,7 +5896,7 @@ func residentBytes() -> UInt64 {
     try FileOps.ensureDir(root)
     write("server-port=25580\nonline-mode=false\nview-distance=4\nsimulation-distance=4\nmotd=GilaMonster sandbox\nlevel-type=minecraft\\:flat\nnetwork-compression-threshold=-1\nspawn-protection=0\nmax-tick-time=-1\n", root.appendingPathComponent("server.properties"))
     let c = try await ServerController.adopt(root: root, name: "Sandbox seed")
-    defer { c.forceStop(); c.stopTicker() }
+    defer { c.forceStop(by: .app("for a check")); c.stopTicker() }
     c.profile.backup.enabled = false
     c.profile.backup.destination = root.appendingPathComponent(".gilamonster/backups").path
     c.profile.lastPluginCheck = Date(); c.profile.software.lastCheck = Date()
@@ -5981,7 +5996,7 @@ func residentBytes() -> UInt64 {
     print("    snapshot holds: \(snapshot.containers)")
     let outcome = try c.restorePlayer(snapshot, inventoryOnly: true, containers: snapshot.containers)
     equal(outcome, .staged, "restore waits for the restart with per-world data")
-    c.restart(reason: "Test")
+    c.restart(reason: "Test", by: .app("for a check"))
     await checkUntil(240, "restart applies it: \(c.pending.map { $0.conflict ?? $0.summary })") { c.state == .running && c.pending.isEmpty }
     aliceBot = try await join("Alice", c, table, port: port)
     try? await Task.sleep(for: .seconds(1))
@@ -6005,7 +6020,7 @@ func residentBytes() -> UInt64 {
     try? await Task.sleep(for: .seconds(1))
     print("    Carol's snapshot holds: \(carolSnap.containers)")
     equal(try c.restorePlayer(carolSnap, inventoryOnly: true, containers: carolSnap.containers), .staged, "with the plugin installed, a restore always waits for the restart")
-    c.restart(reason: "Test")
+    c.restart(reason: "Test", by: .app("for a check"))
     await checkUntil(240, "restart applies Carol's restore") { c.state == .running && c.pending.isEmpty }
     carolBot = try await join("Carol", c, table, port: port)
     try? await Task.sleep(for: .seconds(1))

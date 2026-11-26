@@ -431,12 +431,12 @@ extension SessionAccessService {
             case .stop:
                 let server = server!
                 server.appendWrapper("A session (\(caller)) stopped the server.", level: .info)
-                server.stop()
+                server.stop(by: .session(caller: caller))
                 return done(["state": server.state.title])
 
             case .restart:
                 let server = server!
-                server.restart(reason: "Restart asked for by a session (\(caller))")
+                server.restart(reason: "Restart asked for by a session (\(caller))", by: .session(caller: caller))
                 return done(["state": server.state.title])
 
             case .publish:

@@ -167,7 +167,7 @@ struct ServerWindow: View {
             }
             if case let .external(pid) = server.state {
                 Callout(tone: .warning, title: "This server is already running outside GilaMonster", detail: "Process \(pid) is using this folder. Its console isn't available here. Stop it here to take over.") {
-                    Button("Stop It") { Task { await server.stopExternalServer() } }.buttonStyle(.themed)
+                    Button("Stop It") { Task { await server.stopExternalServer(by: .button("Stop It, for a server left running")) } }.buttonStyle(.themed)
                 }
             }
             if let update = model.appUpdate {
@@ -221,15 +221,15 @@ struct ServerToolbar: ToolbarContent {
                     .disabled(!server.canStartNow)
                     .helped(server.busyWith.map { "Wait: \($0)…" } ?? "Start the server (⌘R)")
             } else {
-                Button { server.stop() } label: { Label("Stop", systemImage: "stop.fill") }
+                Button { server.stop(by: .button("toolbar")) } label: { Label("Stop", systemImage: "stop.fill") }
                     .disabled(server.state != .running && server.state != .starting)
                     .helped("Stop the server (⌃⌘.)")
             }
-            Button { server.restart() } label: { Label("Restart", systemImage: "arrow.clockwise") }
+            Button { server.restart(by: .button("toolbar")) } label: { Label("Restart", systemImage: "arrow.clockwise") }
                 .disabled(server.state != .running)
                 .helped("Restart the server (⇧⌘R)")
             if server.state == .stopping {
-                Button(role: .destructive) { server.forceStop() } label: { Label("Force Stop", systemImage: "bolt.slash.fill") }
+                Button(role: .destructive) { server.forceStop(by: .forceStop) } label: { Label("Force Stop", systemImage: "bolt.slash.fill") }
                     .helped("Stop immediately without waiting for a clean save")
             }
             Button {

@@ -423,14 +423,14 @@ public final class LabController {
     }
 
     private func shutDown(_ c: ServerController) async {
-        if c.state == .running || c.state == .starting { c.stop() }
+        if c.state == .running || c.state == .starting { c.stop(by: .lab) }
         for _ in 0..<(120 * 4) where c.state.isLive { try? await Task.sleep(for: .milliseconds(250)) }
-        if c.state.isLive { c.forceStop(); try? await Task.sleep(for: .seconds(1)) }
+        if c.state.isLive { c.forceStop(by: .lab); try? await Task.sleep(for: .seconds(1)) }
     }
 
     private func ask(_ c: ServerController, _ command: String, expecting needle: String, seconds: Int = 10) async -> String? {
         let start = c.console.last?.id ?? -1
-        c.send(command)
+        c.send(command, by: .lab)
         for _ in 0..<(seconds * 4) {
             try? await Task.sleep(for: .milliseconds(250))
             if let line = c.console.first(where: { $0.id > start && $0.origin == .server && $0.text.contains(needle) }) { return line.text }

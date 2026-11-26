@@ -140,7 +140,7 @@ import Foundation
         let root = folder("real-packmule")
         write("server-port=25591\nserver-ip=127.0.0.1\nonline-mode=false\nview-distance=4\nsimulation-distance=4\nmotd=made up\nlevel-type=minecraft\\:flat\n", root.appendingPathComponent("server.properties"))
         let c = try await ServerController.adopt(root: root, name: "Real Packmule test")
-        defer { c.forceStop(); c.stopTicker() }
+        defer { c.forceStop(by: .app("for a check")); c.stopTicker() }
         try EULA.accept(c.paths)
         try await c.installSoftware(try await SoftwareCatalog.latestBuild(.paper, mc: realMC)!)
         c.profile.lastPluginCheck = Date(); c.profile.software.lastCheck = Date()
@@ -166,7 +166,7 @@ import Foundation
         let config = (try? String(contentsOf: c.paths.plugins.appendingPathComponent("Packmule/config.yml"), encoding: .utf8)) ?? ""
         check(config.contains(oldURL), "Packmule kept the old link in its config")
         check(c.console.contains { $0.text.contains("packmule pack set main https://127.0.0.1:9/new/") }, "the command reached the real server's console")
-        c.stop()
+        c.stop(by: .app("for a check"))
         await checkUntil(90, "stopped: \(c.state)") { c.state == .stopped }
     } catch { failures.append("real packmule: \(error)") }
 }

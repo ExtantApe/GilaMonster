@@ -238,7 +238,7 @@ private func socketConnect(port: Int) throws -> Int32 {
     c.profile.lastPluginCheck = Date(); c.profile.software.lastCheck = Date()
     await c.start()
     guard await until(240, { c.state == .running }) else { throw AppError("The demo server didn't start: \(c.console.suffix(3).map(\.text))") }
-    c.stop()
+    c.stop(by: .app("for a check"))
     _ = await until(90, { c.state == .stopped })
     let made = await makePack("GilaMonster Test Pack", ["pack.mcmeta": #"{"pack":{"pack_format":75,"description":"GilaMonster test pack (made up)"}}"#, "assets/madeup/x.json": "{}"])
     let build = try await ResourcePacks.addExact(made, name: "demo-pack")

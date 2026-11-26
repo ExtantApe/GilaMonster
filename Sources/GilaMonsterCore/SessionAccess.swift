@@ -503,7 +503,7 @@ public final class SessionAccessService {
             }
             let before = server.console.last?.id ?? -1
             server.appendWrapper("A session (\(request?.caller ?? "?")) ran: \(command)", level: LogLevel.info)
-            server.send(command)
+            server.send(command, by: .session(caller: request?.caller ?? "?"))
             SessionAccess.record(request, outcome: decision, server: server.profile.name, to: log)
             try? await Task.sleep(nanoseconds: UInt64(commandWait * 1_000_000_000))
             let after = server.console.filter { $0.id > before && $0.origin == .server }

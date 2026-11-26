@@ -19,7 +19,7 @@ extension ServerController {
         let wasRunning = state == .running
         try beginBusy("Renaming")
         defer { endBusy() }
-        try await stopAndWait()
+        try await stopAndWait("to rename a player or world")
         var plan = rebuild?() ?? previewed
         let unchosen = Set(previewed.items.filter { !$0.selected }.map(\.location))
         for i in plan.items.indices where unchosen.contains(plan.items[i].location) { plan.items[i].selected = false }
@@ -273,9 +273,9 @@ extension ServerController {
             let seconds = Int(Date().timeIntervalSince(started))
             let worlds = Backups.worldFolders(folder).count
             detail = passed ? "Started in \(seconds) seconds, with \(worlds) world folder\(worlds == 1 ? "" : "s")." : "It didn't finish starting. \(child.console.filter { $0.level >= .warn }.suffix(2).map(\.text).joined(separator: " "))"
-            if child.state.isLive { child.stop() }
+            if child.state.isLive { child.stop(by: .app("to end a restore drill")) }
             for _ in 0..<(150 * 4) where child.state.isLive { try? await Task.sleep(for: .milliseconds(250)) }
-            if child.state.isLive { child.forceStop() }
+            if child.state.isLive { child.forceStop(by: .app("to end a restore drill")) }
         } catch {
             detail = error.localizedDescription
         }
@@ -328,9 +328,9 @@ extension ServerController {
     }
 
     private func stopChild(_ child: ServerController) async {
-        if child.state == .running || child.state == .starting { child.stop() }
+        if child.state == .running || child.state == .starting { child.stop(by: .app("to end a trial copy")) }
         for _ in 0..<(150 * 4) where child.state.isLive { try? await Task.sleep(for: .milliseconds(250)) }
-        if child.state.isLive { child.forceStop() }
+        if child.state.isLive { child.forceStop(by: .app("to end a trial copy")) }
     }
 
     private func finishTrial(_ report: TrialReport) {
@@ -450,7 +450,7 @@ extension ServerController {
     }
 
     /// For quitting: a copy can't outlive the app.
-    public func stopTrialCopy() { trialController?.stop() }
+    public func stopTrialCopy() { trialController?.stop(by: .app("to end a trial copy")) }
     public var trialIsLive: Bool { trialController?.state.isLive ?? false }
 
     // MARK: Players
@@ -529,7 +529,7 @@ extension ServerController {
         let wasRunning = state == .running
         try beginBusy("Merging players")
         defer { endBusy() }
-        try await stopAndWait()
+        try await stopAndWait("to merge two players")
         let point: BackupRecord? = hasWorld ? try await makeRestorePoint() : nil
         setActivity("Merging \(plan.from.title) into \(plan.to.title)…")
         defer { setActivity(nil) }
@@ -620,9 +620,11 @@ extension ServerController {
 
     public func refreshHistory() async {
         let p = paths
-        let (events, samples, days) = await Task.detached(priority: .utility) {
-            (History.read(ServerEvent.self, from: History.events(p)), History.read(MetricSample.self, from: History.samples(p)), History.read(DailySizes.self, from: History.days(p)))
+        let (events, samples, days, stops) = await Task.detached(priority: .utility) {
+            (History.read(ServerEvent.self, from: History.events(p)), History.read(MetricSample.self, from: History.samples(p)), History.read(DailySizes.self, from: History.days(p)),
+             StopLog.read(StopLog.file(p)))
         }.value
+        if let last = StopLog.last(stops) { lastStop = last }
         timeline = Array(events.reversed())
         metricHistory = samples
         sizeHistory = days

@@ -95,6 +95,10 @@ struct OverviewPage: View {
                                    lastBackup: server.backups.first?.date, isLab: server.isLab,
                                    needs: NeedsYou.items(needsYouFacts).count, openIssues: openIssueCount))
                 .foregroundStyle(Theme.muted).fixedSize(horizontal: false, vertical: true)
+            // What last stopped it, from the server's stop file (K798), while it's down.
+            if !server.state.isLive, let stop = server.lastStop {
+                Text(StopLog.sentence(stop)).foregroundStyle(Theme.muted).fixedSize(horizontal: false, vertical: true).textSelection(.enabled)
+            }
         }
         .onChange(of: server.state) {
             guard !reduceMotion else { return }
@@ -113,9 +117,9 @@ struct OverviewPage: View {
                 Button { Task { await server.start() } } label: { Label("Start", systemImage: "play.fill") }
                     .buttonStyle(.themedPrimary).disabled(!server.canStartNow)
             } else {
-                Button { server.stop() } label: { Label("Stop", systemImage: "stop.fill") }
+                Button { server.stop(by: .button("Overview")) } label: { Label("Stop", systemImage: "stop.fill") }
                     .buttonStyle(.themed).disabled(server.state != .running && server.state != .starting)
-                Button { server.restart() } label: { Label("Restart", systemImage: "arrow.clockwise") }
+                Button { server.restart(by: .button("Overview")) } label: { Label("Restart", systemImage: "arrow.clockwise") }
                     .buttonStyle(.themed).disabled(server.state != .running)
             }
             Button("Show in Finder") { NSWorkspace.shared.open(server.paths.root) }.buttonStyle(.themed)

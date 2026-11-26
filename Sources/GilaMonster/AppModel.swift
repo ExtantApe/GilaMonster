@@ -227,15 +227,16 @@ final class AppModel {
 
     func pathsChanged() { saveRegistry() }
 
-    func stopAll() async {
+    /// `source` is why everything is stopping (a quit, the Mac shutting down, a signal), for each server's stop file.
+    func stopAll(by source: StopSource) async {
         for server in servers {
             server.stopTrialCopy()
-            if server.isLab, lab.isBusy { server.forceStop() }
-            if server.state.isLive { server.stop() }
+            if server.isLab, lab.isBusy { server.forceStop(by: source) }
+            if server.state.isLive { server.stop(by: source) }
         }
         // Left-over servers stop alongside, each asked to save and shut down (K692).
         await withTaskGroup(of: Void.self) { group in
-            for server in leftOver { group.addTask { await server.stopExternalServer() } }
+            for server in leftOver { group.addTask { await server.stopExternalServer(by: source) } }
         }
         for _ in 0..<(180 * 4) where anyLive { try? await Task.sleep(for: .milliseconds(250)) }
     }
@@ -479,7 +480,7 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
         let held = NSAppleEventManager.shared().suspendCurrentAppleEvent()
         Backups.cancelInFlight()
         Task { @MainActor in
-            await model.stopAll()
+            await model.stopAll(by: .mac(reason))
             if let held { NSAppleEventManager.shared().resume(withSuspensionID: held) }
             NSApp.terminate(nil)
             try? await Task.sleep(for: .seconds(2))
@@ -500,7 +501,7 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
         }
         Backups.cancelInFlight()
         Task { @MainActor in
-            await model.stopAll()
+            await model.stopAll(by: .signal(name))
             exit(0)
         }
     }
@@ -510,11 +511,12 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
     func applicationShouldTerminate(_ sender: NSApplication) -> NSApplication.TerminateReply {
         // A backup is running: ask first, with its progress (D215). Wait and Cancel both mean "quit", servers included.
         if Backups.writing, !Self.quitApproved {
-            QuitDuringBackup.ask(Self.quitReason()) { choice in
+            let asked = Self.quitReason()
+            QuitDuringBackup.ask(asked) { choice in
                 guard choice != .keepUsing else { sender.reply(toApplicationShouldTerminate: false); return }
                 Self.quitApproved = true
                 Task { @MainActor in
-                    if let model = Self.model, model.anyLive { await model.stopAll() }
+                    if let model = Self.model, model.anyLive { await model.stopAll(by: asked.unattended ? .mac(asked) : .quit) }
                     sender.reply(toApplicationShouldTerminate: true)
                 }
             }
@@ -536,7 +538,7 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
             }
             Backups.cancelInFlight()
             Task { @MainActor in
-                await model.stopAll()
+                await model.stopAll(by: .mac(reason))
                 sender.reply(toApplicationShouldTerminate: true)
             }
             return .terminateLater
@@ -562,7 +564,7 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
         guard alert.runModal() == .alertSecondButtonReturn else { return .terminateCancel }
         Backups.cancelInFlight()
         Task { @MainActor in
-            await model.stopAll()
+            await model.stopAll(by: .quit)
             sender.reply(toApplicationShouldTerminate: true)
         }
         return .terminateLater
@@ -632,9 +634,9 @@ struct ServerCommands: Commands {
         CommandMenu("Server") {
             Button("Start") { if let s = model.selected { Task { await s.start() } } }
                 .keyboardShortcut("r").disabled(model.selected?.canStartNow != true)
-            Button("Stop") { model.selected?.stop() }
+            Button("Stop") { model.selected?.stop(by: .menu(keyPress: NSApp.currentEvent?.type == .keyDown)) }
                 .keyboardShortcut(".", modifiers: [.command, .control]).disabled(model.selected?.state != .running && model.selected?.state != .starting)
-            Button("Restart") { model.selected?.restart() }
+            Button("Restart") { model.selected?.restart(by: .menu(keyPress: NSApp.currentEvent?.type == .keyDown)) }
                 .keyboardShortcut("r", modifiers: [.command, .shift]).disabled(model.selected?.state != .running)
             Divider()
             Button("Back Up Now") {
@@ -743,7 +745,7 @@ struct StatusMenu: View {
             if server.state.canStart {
                 Button("Start \(server.profile.name)") { Task { await server.start() } }.disabled(!server.canStartNow)
             } else if server.state == .running {
-                Button("Stop \(server.profile.name)") { server.stop() }
+                Button("Stop \(server.profile.name)") { server.stop(by: .menuBar) }
             }
             Divider()
         }

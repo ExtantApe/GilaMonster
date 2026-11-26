@@ -77,7 +77,7 @@ import Foundation
     }
 
     func discard(_ c: ServerController) {
-        c.forceStop()
+        c.forceStop(by: .app("for a check"))
         c.stopTicker()
         try? FileManager.default.removeItem(at: c.paths.root)
     }
@@ -95,9 +95,9 @@ import Foundation
     }
 
     func down(_ c: ServerController) async {
-        if c.state == .running || c.state == .starting { c.stop() }
+        if c.state == .running || c.state == .starting { c.stop(by: .app("for a check")) }
         for _ in 0..<(120 * 4) where c.state.isLive { try? await Task.sleep(for: .milliseconds(250)) }
-        if c.state.isLive { c.forceStop(); try? await Task.sleep(for: .seconds(2)) }
+        if c.state.isLive { c.forceStop(by: .app("for a check")); try? await Task.sleep(for: .seconds(2)) }
     }
 
     /// Runs a command and returns the lines it produced.
@@ -318,7 +318,7 @@ import Foundation
         defer { lab.discard(c) }
         await c.start()
         try? await Task.sleep(for: .seconds(1))
-        c.stop()
+        c.stop(by: .app("for a check"))
         for _ in 0..<(120 * 4) where c.state.isLive { try? await Task.sleep(for: .milliseconds(250)) }
         lab.saw("Ended as \(c.state). Log tail: \(c.console.suffix(2).map { String($0.text.prefix(120)) })")
     }

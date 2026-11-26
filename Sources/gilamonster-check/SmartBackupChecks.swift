@@ -190,7 +190,7 @@ import Foundation
         let root = folder("backup-trial")
         write("server-port=25595\nserver-ip=127.0.0.1\nonline-mode=false\nview-distance=6\nsimulation-distance=4\nmotd=made up\nspawn-protection=0\n", root.appendingPathComponent("server.properties"))
         let c = try await ServerController.adopt(root: root, name: "Backup trial")
-        defer { c.forceStop(); c.stopTicker() }
+        defer { c.forceStop(by: .app("for a check")); c.stopTicker() }
         try EULA.accept(c.paths)
         try await c.installSoftware(try await SoftwareCatalog.latestBuild(.paper, mc: realMC)!)
         c.profile.lastPluginCheck = Date(); c.profile.software.lastCheck = Date()
@@ -205,7 +205,7 @@ import Foundation
         for (x, z) in [(0, 0), (256, 0), (0, 256), (256, 256), (-256, 0), (0, -256)] { await generate(x, z) }
         c.send("save-all flush")
         try? await Task.sleep(for: .seconds(8))
-        c.stop()
+        c.stop(by: .app("for a check"))
         await checkUntil(90, "stopped: \(c.state)") { c.state == .stopped }
 
         let worldSize = FileOps.directorySize(root.appendingPathComponent("world"))
@@ -244,7 +244,7 @@ import Foundation
         try? await Task.sleep(for: .seconds(60))
         c.send("save-all flush")
         try? await Task.sleep(for: .seconds(8))
-        c.stop()
+        c.stop(by: .app("for a check"))
         await checkUntil(90, "stopped again: \(c.state)") { c.state == .stopped }
         let started = Date()
         let second = try await Tool.run("/usr/bin/rsync", ["-a", "--link-dest=\(snap1.path)", root.appendingPathComponent("world").path + "/", snap2.path + "/"])
