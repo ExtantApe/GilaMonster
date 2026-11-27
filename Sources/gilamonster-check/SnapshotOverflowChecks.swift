@@ -25,6 +25,7 @@ import Foundation
             let read = Overflow.readReport(text)
             check(read.expected > 0 && read.pages == read.expected, "heavy \(theme) \(look): every page was drawn (\(read.pages) of \(read.expected))")
             check(read.overflowing.isEmpty, "heavy \(theme) \(look): no page is wider than the window. \(read.overflowing.joined(separator: "; "))")
+            dialogChecks("heavy \(theme) \(look)", out.appendingPathComponent("heavy/\(theme)-\(look)/dialog-report.txt"))
         }
     }
 
@@ -35,12 +36,35 @@ import Foundation
         let larger = out.appendingPathComponent("body-\(body)")
         try? FileManager.default.removeItem(at: larger.appendingPathComponent("heavy/bold-light/overflow-report.txt"))
         let status = runScript(script, [larger.path, "heavy"], root: root,
-                               environment: ["THEMES": "bold", "LOOKS": "light", "GILAMONSTER_SNAPSHOT_PIXEL": "on", "GILAMONSTER_SNAPSHOT_BODY": body, "GILAMONSTER_SNAPSHOT_DIALOGS_ONLY": ""].filter { !$0.value.isEmpty })
+                               environment: ["THEMES": "bold", "LOOKS": "light", "GILAMONSTER_SNAPSHOT_PIXEL": "on", "GILAMONSTER_SNAPSHOT_BODY": body])
         equal(status, 0, "\(label): the snapshot script finished")
         let read = Overflow.readReport((try? String(contentsOf: larger.appendingPathComponent("heavy/bold-light/overflow-report.txt"), encoding: .utf8)) ?? "")
         check(read.expected > 0 && read.pages == read.expected, "\(label): every page was drawn (\(read.pages) of \(read.expected))")
         check(read.overflowing.isEmpty, "\(label): no page is wider than the window. \(read.overflowing.joined(separator: "; "))")
+        dialogChecks(label, larger.appendingPathComponent("heavy/bold-light/dialog-report.txt"))
     }
+
+    // Dialogs (K820 review): each sheet and the Allow window is drawn and its left and right edges are read for content
+    // running off the side. Bold Text is the case that cut the Allow prompt's player name, so it is run too.
+    section("Snapshot: no dialog is clipped, with Bold Text and the largest text")
+    for (body, bold, label) in [("23", "", "22 pt labels"), ("13", "1", "Bold Text")] {
+        let dir = out.appendingPathComponent("dialogs-\(body)-\(bold.isEmpty ? "plain" : "bold")")
+        try? FileManager.default.removeItem(at: dir.appendingPathComponent("normal/bold-dark/dialog-report.txt"))
+        var env = ["THEMES": "bold", "LOOKS": "dark", "PAGES": "overview", "GILAMONSTER_SNAPSHOT_BODY": body]
+        if !bold.isEmpty { env["GILAMONSTER_SNAPSHOT_BOLD"] = bold }
+        equal(runScript(script, [dir.path, "normal"], root: root, environment: env), 0, "\(label): the dialog run finished")
+        dialogChecks(label, dir.appendingPathComponent("normal/bold-dark/dialog-report.txt"))
+    }
+
+    // The measure has to be able to say no here too: with every sheet drawn narrower than it asks, each must be CLIPPED.
+    section("Snapshot: a deliberately clipped dialog is caught")
+    let clipOut = folder("snapshot-clipped")
+    equal(runScript(script, [clipOut.path, "normal"], root: root, environment: ["THEMES": "bold", "LOOKS": "light", "PAGES": "overview", "GILAMONSTER_SNAPSHOT_FORCE_NARROW": "1"]), 0, "the clipped run finished")
+    let clipped = Overflow.readDialogReport((try? String(contentsOf: clipOut.appendingPathComponent("normal/bold-light/dialog-report.txt"), encoding: .utf8)) ?? "")
+    check(clipped.expected > 0 && clipped.checked == clipped.expected, "the clipped run checked every dialog (\(clipped.checked) of \(clipped.expected))")
+    check(clipped.clipped.count >= clipped.expected - 2, "and caught the clipping (\(clipped.clipped.count) of \(clipped.expected) reported)")
+    check(Overflow.readDialogReport("").expected == 0 && Overflow.readDialogReport("").checked == 0, "a missing report counts as not having run")
+    check(!Overflow.edgeHasContent([(255, 255, 255), (255, 255, 255)]) && Overflow.edgeHasContent([(255, 255, 255), (30, 30, 30)]), "an edge is clipped only where a pixel differs from its neighbours")
 
     // The measure has to be able to say no: with every page made too wide on purpose, each must be reported.
     section("Snapshot: a deliberately too-wide page is caught")
@@ -51,6 +75,13 @@ import Foundation
     let wide = Overflow.readReport((try? String(contentsOf: wideOut.appendingPathComponent("normal/bold-light/overflow-report.txt"), encoding: .utf8)) ?? "")
     check(wide.expected > 0 && wide.pages == wide.expected, "the too-wide run drew every page")
     equal(wide.overflowing.count, wide.expected, "and every page was reported as too wide")
+}
+
+/// Every dialog was checked, none is clipped, and a report that isn't there fails.
+@MainActor private func dialogChecks(_ label: String, _ report: URL) {
+    let read = Overflow.readDialogReport((try? String(contentsOf: report, encoding: .utf8)) ?? "")
+    check(read.expected > 0 && read.checked == read.expected, "\(label): every dialog was checked (\(read.checked) of \(read.expected))")
+    check(read.clipped.isEmpty, "\(label): no dialog is clipped. \(read.clipped.joined(separator: "; "))")
 }
 
 @MainActor private func runScript(_ script: URL, _ arguments: [String], root: URL, environment: [String: String]) -> Int32 {

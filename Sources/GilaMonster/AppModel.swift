@@ -372,6 +372,23 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
         return rep
     }
 
+    /// Which side edges of a sheet's picture have content on them, below its top band (the Allow window's bead band
+    /// runs edge to edge). The rule is `Overflow.edgeHasContent`.
+    @MainActor private static func edgesWithContent(_ rep: NSBitmapImageRep) -> [String] {
+        let top = Int(12 * snapshotScale)
+        guard rep.pixelsHigh > top + 4, rep.pixelsWide > 4 else { return [] }
+        func column(_ x: Int) -> [(r: Int, g: Int, b: Int)] {
+            (top..<rep.pixelsHigh).compactMap { y in
+                guard let c = rep.colorAt(x: x, y: y)?.usingColorSpace(.deviceRGB) else { return nil }
+                return (Int(c.redComponent * 255), Int(c.greenComponent * 255), Int(c.blueComponent * 255))
+            }
+        }
+        var sides: [String] = []
+        if Overflow.edgeHasContent(column(0)) || Overflow.edgeHasContent(column(1)) { sides.append("left") }
+        if Overflow.edgeHasContent(column(rep.pixelsWide - 1)) || Overflow.edgeHasContent(column(rep.pixelsWide - 2)) { sides.append("right") }
+        return sides
+    }
+
     /// Debug builds only: draws every page of every listed server to images, off screen, then quits.
     /// `GILAMONSTER_SNAPSHOT=<folder>`, for checking screens nobody has clicked yet. Starts nothing.
     @MainActor private func snapshotIfAsked() {
@@ -465,12 +482,15 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
             ]
             // The Allow prompt, from a separate made-up service: the shared one is never touched (K786).
             let askPreview = SessionAccessService.preview(caller: "helper", action: .stop, server: "Made-up Server", wait: 107)
-            quitDialogs.append(("allow-prompt", AnyView(AskPanelLook { SessionAskList(service: askPreview, focusFirst: true) })))
-            // Long server names (K820): one that gets a line to itself, and one wider than the widest window.
+            // Drawn as on a 1280 pt wide screen, the widest the window may then be.
+            quitDialogs.append(("allow-prompt", AnyView(AskPanelLook(widest: 1280) { SessionAskList(service: askPreview, focusFirst: true) })))
+            // Long server names (K820): the name is always whole, on lines of its own, wrapped at its spaces.
             let longName = SessionAccessService.preview(caller: "helper", action: .stop, server: "Made-up Survival World - Season Two Creative", wait: 107)
-            quitDialogs.append(("allow-prompt-long-name", AnyView(AskPanelLook { SessionAskList(service: longName, focusFirst: true) })))
-            let longestName = SessionAccessService.preview(caller: "helper", action: .stop, server: "A Made-up Server With A Name Long Enough To Need Truncating Even In The Widest Window It Can Have", wait: 107)
-            quitDialogs.append(("allow-prompt-longest-name", AnyView(AskPanelLook { SessionAskList(service: longestName, focusFirst: true) })))
+            quitDialogs.append(("allow-prompt-long-name", AnyView(AskPanelLook(widest: 1280) { SessionAskList(service: longName, focusFirst: true) })))
+            let longestName = SessionAccessService.preview(caller: "helper", action: .stop, server: "A Made-up Server With A Name Long Enough To Need Several Lines Even In The Widest Window It Can Have", wait: 107)
+            quitDialogs.append(("allow-prompt-longest-name", AnyView(AskPanelLook(widest: 1280) { SessionAskList(service: longestName, focusFirst: true) })))
+            // On a small screen the buttons go under the words, and Deny and Allow stay fully in view.
+            quitDialogs.append(("allow-prompt-narrow-screen", AnyView(AskPanelLook(widest: 440) { SessionAskList(service: longName, focusFirst: true) })))
             var serverDialogs: [(String, AnyView)] = []
             if let server = model.servers.first(where: { !$0.isLab }) {
                 let build = PackVersion(file: "new.zip", version: "2.0", sha1: "abc", added: Date(), size: 1000, format: 75, description: "", fileCount: 3, imageCount: 1)
@@ -495,11 +515,19 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
                     ("welcome", AnyView(WelcomeView(model: model).frame(width: 1000, height: 700))),
                 ]
             }
-            for (name, view) in quitDialogs + serverDialogs {
+            // The dialog report (K820 review): a sheet has padding all round, so its picture's left and right edges are
+            // one flat color unless something has run off the side. Read by gilamonster-check --snapshot. Sheets that
+            // can't be judged that way are named with the reason.
+            let notJudged = ["settings": "a system form that scrolls, with its scroller at the edge", "welcome": "a whole window, drawn to its edges"]
+            // GILAMONSTER_SNAPSHOT_FORCE_NARROW=1 draws every sheet in 60% of the width it asks for, to prove the report catches it.
+            let narrow = environment["GILAMONSTER_SNAPSHOT_FORCE_NARROW"] != nil
+            var dialogLines: [String] = [], dialogsChecked = 0
+            let dialogs = quitDialogs + serverDialogs
+            for (name, view) in dialogs {
                     let host = NSHostingView(rootView: view.typeRoot().environment(\.legibilityWeight, boldText ? .bold : .regular).tint(Theme.accent).background(Theme.background))
                     look(host)
                     let size = host.fittingSize
-                    host.frame = NSRect(origin: .zero, size: NSSize(width: max(size.width, 320), height: max(min(size.height, 1100), 200)))
+                    host.frame = NSRect(origin: .zero, size: NSSize(width: max(size.width, 320) * (narrow ? 0.6 : 1), height: max(min(size.height, 1100), 200)))
                     let window = NSWindow(contentRect: NSRect(x: -6000, y: -6000, width: host.frame.width, height: host.frame.height), styleMask: [.borderless], backing: .buffered, defer: false)
                     window.isReleasedWhenClosed = false
                     window.contentView = host
@@ -508,10 +536,19 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
                     if let rep = Self.snapshotRep(host) {
                         host.cacheDisplay(in: host.bounds, to: rep)
                         try? rep.representation(using: .png, properties: [:])?.write(to: URL(fileURLWithPath: folder).appendingPathComponent("dialog-\(name).png"))
+                        if let why = notJudged[name] {
+                            dialogLines.append("SKIPPED \(name): \(why)")
+                        } else {
+                            dialogsChecked += 1
+                            let sides = Self.edgesWithContent(rep)
+                            if !sides.isEmpty { dialogLines.append("CLIPPED \(name): content reaches the \(sides.joined(separator: " and ")) edge of the sheet") }
+                        }
                     }
                     window.orderOut(nil)
                     windows.append(window)
             }
+            let dialogReport = (["checked \(dialogsChecked) of \(dialogs.count - dialogs.filter { notJudged[$0.0] != nil }.count) dialogs"] + dialogLines).joined(separator: "\n") + "\n"
+            try? dialogReport.write(to: URL(fileURLWithPath: folder).appendingPathComponent("dialog-report.txt"), atomically: true, encoding: .utf8)
             exit(0)
         }
     }

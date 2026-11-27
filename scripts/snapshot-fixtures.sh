@@ -129,7 +129,7 @@ swift build --scratch-path "$scratch" --product gilamonster-check >/dev/null
 for theme in ${THEMES:-bold quiet}; do
     for look in ${LOOKS:-light dark}; do
         dir="$out/$kind/$theme-$look"; mkdir -p "$dir"
-        rm -f "$dir/overflow-report.txt"   # a run that draws nothing must not pass on an old report
+        rm -f "$dir/overflow-report.txt" "$dir/dialog-report.txt"   # a run that draws nothing must not pass on an old report
         var=GILAMONSTER_SNAPSHOT_LIGHT; [[ $look == dark ]] && var=GILAMONSTER_SNAPSHOT_DARK
         [[ "$kind" == heavy ]] && height=2800 || height=1000   # tall enough that Show More and group headings are in the picture
         env GILAMONSTER_SNAPSHOT_HEIGHT=$height GILAMONSTER_HOME="$home" GILAMONSTER_SERVERS="$servers" GILAMONSTER_SNAPSHOT="$dir" GILAMONSTER_SNAPSHOT_FIRST=1 \
