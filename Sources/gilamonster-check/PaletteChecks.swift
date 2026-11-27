@@ -51,6 +51,15 @@ import GilaMonsterCore
     let failing = Palette.failures()
     for f in failing { check(false, f.line) }
     check(failing.isEmpty, "no pair falls under WCAG AA anywhere (\(Palette.pairs.count) pairs × \(Palette.Mode.allCases.count) appearances × \(Palette.Vision.allCases.count) kinds of color vision)")
+    // Buttons in a callout sit on its wash (K809): each outline and the focus ring is a listed pair there.
+    for wash in ["accentWash", "warningWash", "dangerWash", "infoWash"] {
+        for outline in ["controlBorder", "popText", "accent"] {
+            check(Palette.pairs.contains { $0.foreground == outline && $0.background == wash && $0.use == .ui }, "\(outline) on \(wash) is held to the control minimum")
+        }
+    }
+    let dismissOutline = Palette.contrast(Palette.controlBorder.hex(.contrastLight, .bold), Palette.dangerWash.hex(.contrastLight, .bold))
+    check(dismissOutline >= 4.5, "the plain button's outline on the danger wash with Increase Contrast, light: \(String(format: "%.2f", dismissOutline)):1")
+    check(Palette.contrast(Palette.controlBorder.hex(.contrastLight, .bold), 0xE9D8D0) < 4.5, "the wash it replaced was under 4.5:1, which is why it's a shade lighter")
     // Fails closed: a made-up palette with a weak pair is caught.
     check(Palette.contrast(0xCDD5B6, 0xFFFEF8) < 3, "the old card border would fail as a control outline, which is why controls have their own")
 }

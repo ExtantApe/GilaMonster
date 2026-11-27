@@ -186,10 +186,12 @@ final class AppModel {
         SessionPrompts.shared.install()
         // A Keychain call that waits on the owner says so (K809): spoken, and as one Mac notification.
         KeychainWait.shared.onShown = { purposes in
-            Announcer.say("\(Tone.warning.announcement.prefix): \(KeychainWait.title)", urgent: true, force: true)
+            Announcer.say("\(Tone.warning.announcement.prefix): \(KeychainWait.spokenWait)", urgent: true, always: true)
             Alerts.keychainWait(purposes)
         }
         KeychainWait.shared.onCleared = { Alerts.keychainWaitEnded() }
+        // How it ended is said too, every time: a second no in a row is still news.
+        KeychainWait.shared.onOutcome = { outcome in Announcer.say(KeychainWait.spoken(outcome), urgent: outcome != .allowed, always: true) }
         if ProcessInfo.processInfo.environment["GILAMONSTER_SNAPSHOT"] == nil, !AdvisorTrial.isOn {
             // After the window is up, so a Keychain prompt can't hold up the launch.
             Task { await SessionAccessService.shared.apply(SessionAccess.loadSettings()) }
@@ -367,6 +369,14 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
         if let name = ProcessInfo.processInfo.environment["GILAMONSTER_SNAPSHOT_THEME"], let flavor = Palette.Flavor(rawValue: name) { Theme.flavor = flavor }
         NSApp.setActivationPolicy(.accessory)
         NSApp.windows.forEach { $0.close() }
+        // GILAMONSTER_SNAPSHOT_KEYCHAIN=wait|denied draws every page with a made-up Keychain banner on top (K809).
+        switch ProcessInfo.processInfo.environment["GILAMONSTER_SNAPSHOT_KEYCHAIN"] {
+        case "wait": KeychainWait.shared.preview(waiting: [.sessionToken, .advisorKey])
+        case "denied": KeychainWait.shared.preview(denied: [.sessionToken])
+        default: break
+        }
+        // GILAMONSTER_SNAPSHOT_PAGES=overview,console draws only those pages, for a quick look at one thing.
+        let onlyPages = ProcessInfo.processInfo.environment["GILAMONSTER_SNAPSHOT_PAGES"].map { Set($0.split(separator: ",").map(String.init)) }
         Task { @MainActor in
             model.showFolderSetup = false
             try? FileOps.ensureDir(URL(fileURLWithPath: folder))
@@ -381,14 +391,15 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
             for server in drawn where ProcessInfo.processInfo.environment["GILAMONSTER_SNAPSHOT_DIALOGS_ONLY"] == nil {
                 // Players is drawn a second time with a made-up player picked, when the fixture has one (K786).
                 let shots: [(page: PageID, pick: String?)] = PageID.allCases.map { ($0, nil) } + [(.players, "MadeUpKid")]
-                for (page, pick) in shots {
+                for (page, pick) in shots where onlyPages?.contains(page.rawValue) != false {
                     PlayersPage.snapshotPick = pick
                     if pick != nil, !server.knownPlayers.contains(where: { $0.title == pick }) { continue }
                     model.selectedID = server.id
                     model.page = page
                     // GILAMONSTER_SNAPSHOT_FORCE_WIDE=1 makes every page too wide on purpose, to prove the report catches it.
                     let wide = ProcessInfo.processInfo.environment["GILAMONSTER_SNAPSHOT_FORCE_WIDE"] != nil
-                    let host = NSHostingView(rootView: AnyView(RootView(model: model).tint(Theme.accent).frame(minWidth: wide ? 1700 : 0)))
+                    // The real window's minimum size (see the WindowGroup below), so the picture is laid out as the app is.
+                    let host = NSHostingView(rootView: AnyView(RootView(model: model).tint(Theme.accent).frame(minWidth: wide ? 1700 : 1120, minHeight: 640)))
                     if ProcessInfo.processInfo.environment["GILAMONSTER_SNAPSHOT_LIGHT"] != nil { host.appearance = NSAppearance(named: .aqua) }
                     if ProcessInfo.processInfo.environment["GILAMONSTER_SNAPSHOT_DARK"] != nil { host.appearance = NSAppearance(named: .darkAqua) }
                     let window = NSWindow(contentRect: NSRect(x: -6000, y: -6000, width: 1280, height: ProcessInfo.processInfo.environment["GILAMONSTER_SNAPSHOT_HEIGHT"].flatMap(Double.init).map { CGFloat($0) } ?? 1000), styleMask: [.borderless], backing: .buffered, defer: false)

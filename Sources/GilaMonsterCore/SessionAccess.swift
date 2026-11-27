@@ -467,16 +467,21 @@ public final class SessionAccessService {
         switch read {
         case let .token(token) where !token.isEmpty:
             cachedToken = token
-            keychainWait.setDenied(.sessionToken, false)
             // Turned off and on again during the wait: follow the switch as it is now.
-            if wanted { _ = listen() } else { stop() }
+            if wanted {
+                keychainWait.report(listen() ? .allowed : .failed)
+            } else {
+                stop()
+                keychainWait.setDenied(.sessionToken, false)
+            }
         case .denied:
             stop()
-            keychainWait.setDenied(.sessionToken, wanted)
             error = "macOS didn't let GilaMonster read its session token, so sessions can't connect. Turn this off and on to try again."
+            if wanted { keychainWait.report(.denied) }
         default:
             stop()
             error = "GilaMonster couldn't read its session token from the Keychain, so sessions can't connect. Turn this off and on to try again."
+            if wanted { keychainWait.report(.failed) }
         }
     }
 

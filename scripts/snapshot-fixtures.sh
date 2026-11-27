@@ -3,6 +3,8 @@
 #   scripts/snapshot-fixtures.sh OUT normal   one server with a few plugins, worlds and allowlist entries
 #   scripts/snapshot-fixtures.sh OUT heavy    eight servers with long names; the first has 60 plugins, 30 worlds,
 #                                             80 allowlist entries and long errors in its log
+#   KEYCHAIN=wait|denied  puts a made-up Keychain banner on top of every page (K809): waiting for the owner, or after a no.
+#   PAGES=overview,console  draws only those pages. SCRATCH=<folder>  builds there instead of .build.
 # Everything is made-up and lives under a temp folder that's removed at the end, pass or fail (D226). Nothing
 # starts: the snapshot only draws. Pictures land in OUT/<fixture>/<theme>-<light|dark>/.
 set -euo pipefail
@@ -89,7 +91,9 @@ else
 fi
 { echo "["; for ((i = 0; i < ${#list[@]}; i++)); do printf '  "%s"' "${list[$i]}"; (( i < ${#list[@]} - 1 )) && echo "," || echo; done; echo "]"; } > "$home/servers.json"
 
-swift build --product GilaMonster >/dev/null
+scratch="${SCRATCH:-.build}"
+case "${KEYCHAIN:-}" in ""|wait|denied) ;; *) echo "KEYCHAIN is wait or denied" >&2; exit 2;; esac
+swift build --scratch-path "$scratch" --product GilaMonster >/dev/null
 for theme in ${THEMES:-bold quiet}; do
     for look in ${LOOKS:-light dark}; do
         dir="$out/$kind/$theme-$look"; mkdir -p "$dir"
@@ -97,7 +101,8 @@ for theme in ${THEMES:-bold quiet}; do
         var=GILAMONSTER_SNAPSHOT_LIGHT; [[ $look == dark ]] && var=GILAMONSTER_SNAPSHOT_DARK
         [[ "$kind" == heavy ]] && height=2800 || height=1000   # tall enough that Show More and group headings are in the picture
         env GILAMONSTER_SNAPSHOT_HEIGHT=$height GILAMONSTER_HOME="$home" GILAMONSTER_SERVERS="$servers" GILAMONSTER_SNAPSHOT="$dir" GILAMONSTER_SNAPSHOT_FIRST=1 \
-            GILAMONSTER_SNAPSHOT_THEME=$theme "$var=1" perl -e 'alarm 900; exec @ARGV' .build/debug/GilaMonster >/dev/null 2>&1 || true
+            GILAMONSTER_SNAPSHOT_THEME=$theme GILAMONSTER_SNAPSHOT_KEYCHAIN="${KEYCHAIN:-}" ${PAGES:+GILAMONSTER_SNAPSHOT_PAGES="$PAGES"} "$var=1" \
+            perl -e 'alarm 900; exec @ARGV' "$scratch/debug/GilaMonster" >/dev/null 2>&1 || true
         echo "$kind $theme-$look: $(ls "$dir" | wc -l | tr -d ' ') pictures"
     done
 done

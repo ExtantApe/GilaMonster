@@ -77,5 +77,5 @@ extension Palette {
     /// The keyboard focus ring on the spine, where the page's own focus color would be too dark.
     public static let sideFocus = Swatch(bold: (0x34B4BB, 0x34B4BB, 0x62D3D9, 0x62D3D9), quiet: (0x34B4BB, 0x34B4BB, 0x62D3D9, 0x62D3D9))
     /// Behind an error. Derived from down and the page, since Brand's set has none.
-    public static let dangerWash = Swatch(bold: (0xF2E4DB, 0x392A2F, 0xE9D8D0, 0x3E3338), quiet: (0xF2E4DB, 0x392A2F, 0xE9D8D0, 0x3E3338))
+    public static let dangerWash = Swatch(bold: (0xF2E4DB, 0x392A2F, 0xEBDBD2, 0x3E3338), quiet: (0xF2E4DB, 0x392A2F, 0xEBDBD2, 0x3E3338))
 }

@@ -126,28 +126,50 @@ struct WelcomeView: View {
 struct KeychainBanner: View {
     private let wait = KeychainWait.shared
     private let sessions = SessionAccessService.shared
+    private enum Stop { case retry, dismiss }
+    @FocusState private var focus: Stop?
 
-    @MainActor static var isShown: Bool { KeychainWait.shared.isWaiting || !KeychainWait.shared.denied.isEmpty }
+    @MainActor static var isShown: Bool { !KeychainWait.shared.banners.isEmpty }
 
+    // Nothing here moves or blinks, so there's nothing for Reduce Motion to turn off. The model does the announcing
+    // (AppModel), so each callout stays quiet and nothing is said twice.
     var body: some View {
         VStack(spacing: 8) {
-            if wait.isWaiting {
-                // Nothing here moves or blinks, so there's nothing for Reduce Motion to turn off. A stop for the Tab
-                // key, so it can be reached and read without a pointer.
-                Callout(tone: .warning, title: KeychainWait.title, detail: KeychainWait.detail(wait.waitingOn))
-                    .focusable()
-                    .accessibilityHint("Answer the macOS password window to carry on")
+            if let purposes = waitingPurposes {
+                // Read as one element: there's nothing in it to press, so it's no stop for the Tab key.
+                Callout(tone: .warning, title: KeychainWait.title, detail: KeychainWait.detail(purposes), announces: false, spokenAsOne: true, inBannerRow: true)
             }
-            if wait.denied.contains(.sessionToken), !wait.isPending(.sessionToken) {
-                Callout(tone: .danger, title: KeychainWait.deniedTitle, detail: KeychainWait.deniedDetail(.sessionToken)) {
+            if let retrying {
+                // One callout through a retry, so the buttons and the focus on them stay where they are.
+                Callout(tone: retrying ? .warning : .danger, title: retrying ? KeychainWait.retryTitle : KeychainWait.deniedTitle,
+                        detail: retrying ? KeychainWait.retryDetail : KeychainWait.deniedDetail(.sessionToken), announces: false, inBannerRow: true) {
                     VStack(alignment: .trailing, spacing: 6) {
-                        Button("Try Again") { Task { await sessions.apply(SessionAccess.loadSettings()) } }.buttonStyle(.themedPrimary)
-                            .accessibilityHint("macOS asks for Keychain access once more")
-                        Button("Dismiss") { wait.setDenied(.sessionToken, false) }.buttonStyle(.themed)
+                        Button(retrying ? KeychainWait.retryButtonWaiting : KeychainWait.retryButton) {
+                            // The button is about to go gray, which would drop the focus: it moves to Dismiss first.
+                            if focus == .retry { focus = .dismiss }
+                            Announcer.say(KeychainWait.spokenRetry, urgent: true, always: true)
+                            Task { await sessions.apply(SessionAccess.loadSettings()) }
+                        }
+                        .buttonStyle(.themedPrimary).disabled(retrying).focused($focus, equals: .retry)
+                        .accessibilityHint("macOS asks for Keychain access once more")
+                        Button("Dismiss") { wait.setDenied(.sessionToken, false) }.buttonStyle(.themed).focused($focus, equals: .dismiss)
+                            .accessibilityLabel("Dismiss the Keychain message")
                     }
                 }
             }
         }
+    }
+
+    /// What the waiting banner names, or nil when it isn't shown.
+    private var waitingPurposes: [KeychainWait.Purpose]? {
+        for case let .waiting(purposes) in wait.banners { return purposes }
+        return nil
+    }
+
+    /// Whether the denied banner is mid-retry, or nil when it isn't shown.
+    private var retrying: Bool? {
+        for case let .denied(retrying) in wait.banners { return retrying }
+        return nil
     }
 }
 

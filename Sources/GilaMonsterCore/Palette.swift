@@ -101,6 +101,13 @@ public enum Palette {
             add("danger", danger, s, bg, .ui)                  // the danger button's outline
             add("accent", accent, s, bg, .ui)                      // focus rings, toggles, icons
         }
+        // Buttons inside a callout sit on its wash (K809): the plain button's outline, the main button's outline,
+        // and the focus ring.
+        for (w, wash) in [("accentWash", accentWash), ("warningWash", warningWash), ("dangerWash", dangerWash), ("infoWash", infoWash)] {
+            add("controlBorder", controlBorder, w, wash, .ui)
+            add("popText", popText, w, wash, .ui)
+            if w != "accentWash" { add("accent", accent, w, wash, .ui) }
+        }
         // The window chrome Brand's themes define, ready for when the app draws it.
         add("barInk", barInk, "bar", bar, .text)
         add("sideInk", sideInk, "side", side, .text)

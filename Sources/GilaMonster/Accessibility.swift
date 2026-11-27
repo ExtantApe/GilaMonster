@@ -13,12 +13,13 @@ import SwiftUI
 
     static func pageChanged() { quietUntil = Date().addingTimeInterval(Overflow.quietAfterPageChange) }
 
-    /// `force` skips the quiet moment, for things the owner just did or that need saying now.
-    static func say(_ text: String, urgent: Bool = false, force: Bool = false) {
+    /// `force` skips the quiet moment, for things the owner just did or that need saying now. `always` also says it
+    /// when the same words were said a moment ago: an outcome, such as a second no in a row, is news each time.
+    static func say(_ text: String, urgent: Bool = false, force: Bool = false, always: Bool = false) {
         let now = Date()
-        if !force, now < quietUntil { return }
+        if !force, !always, now < quietUntil { return }
         recent = recent.filter { now.timeIntervalSince($0.value) < 5 }
-        guard recent[text] == nil, !text.isEmpty else { return }
+        guard always || recent[text] == nil, !text.isEmpty else { return }
         recent[text] = now
         let priority: NSAccessibilityPriorityLevel = urgent ? .high : .medium
         NSAccessibility.post(element: NSApp as Any, notification: .announcementRequested,

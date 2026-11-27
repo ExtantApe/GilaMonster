@@ -63,7 +63,7 @@ def main():
         # Brand's set has no wash for errors: a tint of `down` over the page, held to WCAG by the checks like the rest.
         l, d = themes[f"{flavor}-light"], themes[f"{flavor}-dark"]
         return [mix(hexval(l["standard"]["bg"]), hexval(l["standard"]["down"]), 0.05), mix(hexval(d["standard"]["bg"]), hexval(d["standard"]["down"]), 0.12),
-                mix(hexval(l["increaseContrast"]["bg"]), hexval(l["increaseContrast"]["down"]), 0.10), mix(hexval(d["increaseContrast"]["bg"]), hexval(d["increaseContrast"]["down"]), 0.14)]
+                mix(hexval(l["increaseContrast"]["bg"]), hexval(l["increaseContrast"]["down"]), 0.09), mix(hexval(d["increaseContrast"]["bg"]), hexval(d["increaseContrast"]["down"]), 0.14)]
     h = lambda v: "0x%06X" % v
     lines = ["// Written by scripts/palette-tokens.py from brand/kit/themes-tokens.json. Don't edit by hand: change the JSON",
              "// and run the script, then gilamonster-check.", "", "extension Palette {"]

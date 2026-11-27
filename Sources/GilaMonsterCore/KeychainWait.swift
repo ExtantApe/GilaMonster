@@ -28,6 +28,29 @@ public final class KeychainWait {
     /// Set by the app: called once when the banner turns on, and once when it turns off.
     @ObservationIgnored public var onShown: (@MainActor ([Purpose]) -> Void)?
     @ObservationIgnored public var onCleared: (@MainActor () -> Void)?
+    /// Set by the app: how a wait the owner was shown ended, for saying it aloud.
+    @ObservationIgnored public var onOutcome: (@MainActor (Outcome) -> Void)?
+    /// Purposes whose wait reached the banner and hasn't had its ending reported yet.
+    @ObservationIgnored private var shownFor: Set<Purpose> = []
+
+    /// How session access's read of its token ended.
+    public enum Outcome: Sendable, Equatable { case allowed, denied, failed }
+
+    /// What the banner row shows. One denied banner stays in place through a retry, so its buttons and the keyboard
+    /// focus on them don't vanish the moment Try Keychain Again is pressed.
+    public enum Banner: Equatable, Sendable {
+        case waiting([Purpose])
+        case denied(retrying: Bool)
+    }
+    public var banners: [Banner] {
+        var out: [Banner] = []
+        let refused = denied.contains(.sessionToken)
+        let retrying = refused && isPending(.sessionToken)
+        let waiting = refused ? waitingOn.filter { $0 != .sessionToken } : waitingOn
+        if !waiting.isEmpty { out.append(.waiting(waiting)) }
+        if refused { out.append(.denied(retrying: retrying)) }
+        return out
+    }
 
     public init() {}
 
@@ -54,6 +77,9 @@ public final class KeychainWait {
         guard pending[id] != nil else { return }
         let wasWaiting = isWaiting
         overdue.insert(id)
+        if let purpose = pending[id] { shownFor.insert(purpose) }
+        // A retry after a no keeps its own banner, which the button press already announced.
+        if !wasWaiting, !banners.contains(where: { if case .waiting = $0 { true } else { false } }) { return }
         if !wasWaiting { onShown?(waitingOn) }
     }
 
@@ -69,6 +95,24 @@ public final class KeychainWait {
     public func setDenied(_ purpose: Purpose, _ refused: Bool) {
         if refused { denied.insert(purpose) } else { denied.remove(purpose) }
     }
+
+    /// Records how session access's read ended, and tells the app when there's something to say. A no or a failure is
+    /// always said. A yes is said only when the owner was shown a wait or had been refused before: an ordinary
+    /// launch, where the token comes back at once, stays quiet.
+    public func report(_ outcome: Outcome) {
+        let noticed = shownFor.remove(.sessionToken) != nil || denied.contains(.sessionToken)
+        setDenied(.sessionToken, outcome == .denied)
+        if outcome != .allowed || noticed { onOutcome?(outcome) }
+    }
+
+    #if DEBUG
+    /// Debug snapshots only: a wait or a no that nothing is behind, so the banners can be drawn. No timer runs and
+    /// the app is told nothing, so no notification is posted.
+    public func preview(waiting: [Purpose] = [], denied refused: Set<Purpose> = []) {
+        for purpose in waiting { let id = UUID(); pending[id] = purpose; overdue.insert(id) }
+        denied = refused
+    }
+    #endif
 
     /// Runs one Keychain call on a background thread of its own and waits for it without holding the main thread.
     /// The call may sit on a macOS password window for as long as the owner takes.
@@ -88,10 +132,30 @@ public final class KeychainWait {
     // MARK: Words
 
     public static let title = "GilaMonster is waiting for you to allow Keychain access"
+    public static let whereToLook = "Look for a macOS password window. It may be behind other windows."
+
+    /// What VoiceOver says when the banner appears: what's happening, then where to look.
+    public static let spokenWait = "\(title). \(whereToLook)"
+
+    /// The denied banner while Try Keychain Again is waiting for an answer.
+    public static let retryTitle = "Asking macOS for Keychain access again"
+    public static let retryDetail = "\(whereToLook) Session access stays off until you answer."
+    public static let spokenRetry = "\(retryTitle). \(whereToLook)"
+    public static let retryButton = "Try Keychain Again"
+    public static let retryButtonWaiting = "Waiting for macOS…"
+
+    /// What VoiceOver says when the wait ends.
+    public static func spoken(_ outcome: Outcome) -> String {
+        switch outcome {
+        case .allowed: "Keychain access allowed. Session access is on."
+        case .denied: "Keychain access wasn't allowed. Session access is off."
+        case .failed: "GilaMonster couldn't read the Keychain. Session access is off."
+        }
+    }
 
     /// The banner's second line: where to look, then what waits.
     public static func detail(_ purposes: [Purpose]) -> String {
-        var parts = ["Look for a macOS password window. It may be behind other windows."]
+        var parts = [whereToLook]
         let session = purposes.contains(.sessionToken), advisor = purposes.contains(.advisorKey)
         if session && advisor { parts.append("Session access and the Advisor's key wait until you answer.") }
         else if advisor { parts.append("The Advisor's key waits until you answer.") }

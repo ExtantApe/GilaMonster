@@ -77,8 +77,72 @@ final class BlockingKeychain: @unchecked Sendable {
     await pause(0.5)
     check(!wait.isWaiting && shown.count == 1, "a call that finished in time leaves nothing behind when its timer fires")
 
+    equal(wait.banners, [], "with nothing waiting and nothing refused, there's no banner")
+
+    section("Keychain wait: how it ended is said, and a retry keeps its banner")
+    let told = KeychainWait()
+    told.threshold = 0.3
+    var outcomes: [KeychainWait.Outcome] = []
+    var toldShown = 0
+    told.onOutcome = { outcomes.append($0) }
+    told.onShown = { _ in toldShown += 1 }
+    _ = await told.run(.sessionToken) { 1 }
+    told.report(.allowed)
+    equal(outcomes, [], "an ordinary launch, where the token comes straight back, says nothing")
+    var held = BlockingKeychain()
+    var holding = Task { await told.run(.sessionToken) { [held] in held.read(create: true) } }
+    await checkUntil(5, "a wait the owner is shown") { told.banners == [.waiting([.sessionToken])] }
+    held.release(.token("made-up"))
+    _ = await holding.value
+    told.report(.allowed)
+    equal(outcomes, [.allowed], "allowed after a wait that was shown: said")
+    told.report(.allowed)
+    equal(outcomes, [.allowed], "and only once")
+    told.report(.denied)
+    told.report(.denied)
+    equal(outcomes, [.allowed, .denied, .denied], "a no is said every time, a second one in a row too")
+    equal(told.banners, [.denied(retrying: false)], "after a no: the denied banner, with its button ready")
+    toldShown = 0
+    held = BlockingKeychain()
+    holding = Task { await told.run(.sessionToken) { [held] in held.read(create: true) } }
+    await checkUntil(5, "the retry starts") { held.callCount == 1 }
+    equal(told.banners, [.denied(retrying: true)], "during a retry the same banner stays, as waiting, so its buttons and the focus don't vanish")
+    await pause(0.6)
+    equal(told.banners, [.denied(retrying: true)], "and past the threshold there's still one banner, not a second one beside it")
+    equal(toldShown, 0, "with no second spoken line or notification for the retry the owner just pressed")
+    let other = BlockingKeychain()
+    let otherHolding = Task { await told.run(.advisorKey) { other.read(create: false) } }
+    await checkUntil(5, "another wait during a retry gets its own banner") { told.banners == [.waiting([.advisorKey]), .denied(retrying: true)] }
+    other.release(.missing)
+    _ = await otherHolding.value
+    held.release(.token("made-up"))
+    _ = await holding.value
+    told.report(.allowed)
+    check(outcomes.last == .allowed && outcomes.count == 4 && told.banners.isEmpty, "allowed on the retry: said, and the banner goes")
+    told.report(.failed)
+    check(outcomes.last == .failed && told.banners.isEmpty, "a failed read is said too, and isn't shown as a no")
+    equal(KeychainWait.spoken(.allowed), "Keychain access allowed. Session access is on.", "the words for allowed")
+    equal(KeychainWait.spoken(.denied), "Keychain access wasn't allowed. Session access is off.", "for a no")
+    equal(KeychainWait.spoken(.failed), "GilaMonster couldn't read the Keychain. Session access is off.", "and for a failure")
+    equal(KeychainWait.spokenWait, "GilaMonster is waiting for you to allow Keychain access. Look for a macOS password window. It may be behind other windows.", "the spoken line for a wait says where to look")
+    check(KeychainWait.spokenRetry.hasSuffix(KeychainWait.whereToLook) && KeychainWait.retryDetail.hasPrefix(KeychainWait.whereToLook), "and so do the retry's line and banner")
+    equal(KeychainWait.retryButton, "Try Keychain Again", "the retry button says what it retries")
+    #if DEBUG
+    let drawn = KeychainWait()
+    var drawnTold = 0
+    drawn.onShown = { _ in drawnTold += 1 }
+    drawn.preview(waiting: [.sessionToken, .advisorKey])
+    equal(drawn.banners, [.waiting([.sessionToken, .advisorKey])], "the snapshot's made-up wait shows the waiting banner")
+    let refusedDrawn = KeychainWait()
+    refusedDrawn.preview(denied: [.sessionToken])
+    equal(refusedDrawn.banners, [.denied(retrying: false)], "and its made-up no shows the denied one")
+    await pause(0.1)
+    equal(drawnTold, 0, "neither tells the app, so no notification is posted for a picture")
+    #endif
+
     section("Keychain wait: the words")
-    let words = [KeychainWait.title, KeychainWait.deniedTitle] + KeychainWait.Purpose.allCases.map(KeychainWait.deniedDetail)
+    let words = [KeychainWait.title, KeychainWait.deniedTitle, KeychainWait.spokenWait, KeychainWait.retryTitle, KeychainWait.retryDetail, KeychainWait.spokenRetry, KeychainWait.retryButton]
+        + [.allowed, .denied, .failed].map(KeychainWait.spoken) + KeychainWait.Purpose.allCases.map(KeychainWait.deniedDetail)
         + [[.sessionToken], [.advisorKey], [.sessionToken, .advisorKey]].map(KeychainWait.detail)
         + [SessionAccess.Refusal.keychainWait.message]
     check(words.allSatisfy { !$0.contains("\u{2014}") && !$0.contains("\u{2013}") && !$0.isEmpty }, "plain sentences, no dashes")
@@ -126,10 +190,12 @@ final class BlockingKeychain: @unchecked Sendable {
     defer { try? FileManager.default.removeItem(atPath: socketPath) }
     let token = "made-up-token-fedcba9876543210"
 
+    var spoken: [KeychainWait.Outcome] = []
     func service(_ keychain: BlockingKeychain, log name: String) -> SessionAccessService {
         let s = SessionAccessService()
         s.keychainWait = KeychainWait()
         s.keychainWait.threshold = 0.3
+        s.keychainWait.onOutcome = { said in spoken.append(said) }
         s.tokenReader = { keychain.read(create: $0) }
         s.logFile = folder(name).appendingPathComponent("calls.jsonl")
         s.servers = { [server] }
@@ -202,6 +268,7 @@ final class BlockingKeychain: @unchecked Sendable {
     await applying.value
     check(!s.keychainWait.isWaiting && !s.waitingForKeychain, "allowed: the banner goes")
     check(s.isListening && s.cachedToken == token && s.error == nil && s.keychainWait.denied.isEmpty, "and session access is listening with the token")
+    equal(spoken, [.allowed], "and that's said, once")
     r = await send(status(token))
     check(r["ok"] as? Bool == true && (r["servers"] as? [[String: Any]])?.first?["name"] as? String == "Made-up Waiting", "the right token now answers")
     equal(said(await send(status("any-other-token"))), SessionAccess.Refusal.badToken.message, "and a wrong one is refused as wrong")
@@ -219,6 +286,7 @@ final class BlockingKeychain: @unchecked Sendable {
     await applying.value
     check(!s.keychainWait.isWaiting, "denied: the waiting banner goes")
     check(s.keychainWait.denied == [.sessionToken], "and the denied message takes its place")
+    equal(spoken, [.allowed, .denied], "the no is said")
     check(!s.isListening && !FileManager.default.fileExists(atPath: socketPath) && s.cachedToken == nil, "nothing listens and there's no token: a no is never worked around")
     check(s.error?.contains("didn't let GilaMonster read its session token") == true, "Settings says so too: \(s.error ?? "nothing")")
     r = await send(status(token))
@@ -230,6 +298,7 @@ final class BlockingKeychain: @unchecked Sendable {
     keychain.release(.token(token))
     await applying.value
     check(s.isListening && s.keychainWait.denied.isEmpty && s.error == nil, "allowed this time: listening, and the denied message is gone")
+    equal(spoken, [.allowed, .denied, .allowed], "and the yes is said, though this read came back fast")
     await s.apply(SessionAccessSettings())
 
     // A read that fails some other way closes the socket too.
@@ -240,6 +309,7 @@ final class BlockingKeychain: @unchecked Sendable {
     keychain.release(.failed(errSecIO))
     await applying.value
     check(!s.isListening && s.cachedToken == nil && s.error?.contains("couldn't read its session token") == true && s.keychainWait.denied.isEmpty, "a failed read: nothing listens, and it isn't called a no")
+    equal(spoken.last, .failed, "it's said as a failure")
     keychain.release(.token(""))
     await s.apply(on, path: socketPath)
     check(!s.isListening && s.cachedToken == nil, "an empty token is no token: nothing listens")
@@ -254,6 +324,7 @@ final class BlockingKeychain: @unchecked Sendable {
     keychain.release(.token(token))
     await applying.value
     check(!s.isListening && !FileManager.default.fileExists(atPath: socketPath), "and stays off when the answer comes")
+    check(spoken.last != .allowed, "with nothing said about session access being on")
 
     // Turned off and on again during the wait.
     keychain = BlockingKeychain()
@@ -274,13 +345,27 @@ final class BlockingKeychain: @unchecked Sendable {
     let app = URL(fileURLWithPath: #filePath).deletingLastPathComponent().deletingLastPathComponent().appendingPathComponent("GilaMonster")
     func source(_ name: String) -> String { (try? String(contentsOf: app.appendingPathComponent(name), encoding: .utf8)) ?? "" }
     let rootView = source("RootView.swift"), appModel = source("AppModel.swift"), advisor = source("AdvisorPage.swift")
+    let theme = source("Theme.swift")
     check(rootView.contains("VStack(spacing: 8) {\n            KeychainBanner()\n"), "the banner is the first row of every server window's banners")
     check(rootView.contains(".safeAreaInset(edge: .top, spacing: 0) { KeychainBanner()"), "and on the welcome screen, where there's no banner row")
-    check(rootView.contains("Callout(tone: .warning, title: KeychainWait.title, detail: KeychainWait.detail(wait.waitingOn))\n                    .focusable()"), "it's the app's own callout (ink on the warning wash, held to 4.5:1 by the color checks), and a Tab stop")
-    check(rootView.contains("Callout(tone: .danger, title: KeychainWait.deniedTitle, detail: KeychainWait.deniedDetail(.sessionToken))") && rootView.contains("Button(\"Try Again\")") && rootView.contains("Button(\"Dismiss\") { wait.setDenied(.sessionToken, false) }"), "a no shows what won't work, with Try Again and Dismiss")
     let banner = rootView.components(separatedBy: "struct KeychainBanner").dropFirst().first?.components(separatedBy: "// MARK: - Main window").first ?? ""
-    check(!banner.isEmpty && !banner.contains("animation") && !banner.contains("transition") && !banner.contains("ProgressView"), "nothing in it moves, so Reduce Motion has nothing to turn off")
-    check(appModel.contains("Announcer.say(\"\\(Tone.warning.announcement.prefix): \\(KeychainWait.title)\", urgent: true, force: true)"), "VoiceOver is told when it appears, even in the quiet moment after launch")
+    check(banner.contains("Callout(tone: .warning, title: KeychainWait.title, detail: KeychainWait.detail(purposes), announces: false, spokenAsOne: true, inBannerRow: true)"), "it's the app's own callout (ink on the warning wash, held to 4.5:1 by the color checks), read by VoiceOver as one element")
+    check(!banner.isEmpty && !banner.contains(".focusable()"), "with no Tab stop on words that can't be pressed")
+    check(banner.contains("title: retrying ? KeychainWait.retryTitle : KeychainWait.deniedTitle") && banner.contains("Button(retrying ? KeychainWait.retryButtonWaiting : KeychainWait.retryButton)") && banner.contains("Button(\"Dismiss\") { wait.setDenied(.sessionToken, false) }"), "a no shows what won't work, with Try Keychain Again and Dismiss, in one callout that stays through a retry")
+    check(!banner.contains("\"Try Again\""), "no button is called just Try Again")
+    check(banner.components(separatedBy: "inBannerRow: true").count == 3 && theme.contains(".fixedSize(horizontal: false, vertical: !inBannerRow)"), "both banners lay their detail out as the banner row needs, so the page below isn't pushed out of view")
+    check(appModel.contains(".frame(minWidth: wide ? 1700 : 1120, minHeight: 640)"), "the snapshot draws pages at the real window's minimum size")
+    check(banner.contains("if focus == .retry { focus = .dismiss }") && banner.contains(".disabled(retrying).focused($focus, equals: .retry)") && banner.contains(".focused($focus, equals: .dismiss)"), "when the retry button goes gray, the keyboard focus moves to Dismiss first")
+    check(banner.contains("Announcer.say(KeychainWait.spokenRetry, urgent: true, always: true)"), "pressing it says that macOS is being asked, and where to look")
+    check(!banner.contains("animation") && !banner.contains("transition") && !banner.contains("ProgressView"), "nothing in it moves, so Reduce Motion has nothing to turn off")
+    check(appModel.contains("Announcer.say(\"\\(Tone.warning.announcement.prefix): \\(KeychainWait.spokenWait)\", urgent: true, always: true)"), "VoiceOver is told when it appears, with where to look, even in the quiet moment after launch")
+    check(appModel.contains("KeychainWait.shared.onOutcome = { outcome in Announcer.say(KeychainWait.spoken(outcome), urgent: outcome != .allowed, always: true) }"), "and told how it ended")
+    let announcer = source("Accessibility.swift")
+    check(announcer.contains("if !force, !always, now < quietUntil { return }") && announcer.contains("guard always || recent[text] == nil, !text.isEmpty else { return }"), "an outcome is said even when the same words were said seconds ago")
+    check(theme.contains("guard announces else { return }") && theme.contains(".accessibilityElement(children: spokenAsOne && !long ? .ignore : .contain)"), "the callout can leave the announcing to its owner, and be read as one element when it has nothing to press")
+    check(appModel.contains("case \"wait\": KeychainWait.shared.preview(waiting: [.sessionToken, .advisorKey])") && appModel.contains("case \"denied\": KeychainWait.shared.preview(denied: [.sessionToken])"), "the snapshot can draw a made-up wait and a made-up no")
+    let fixtures = (try? String(contentsOf: app.deletingLastPathComponent().deletingLastPathComponent().appendingPathComponent("scripts/snapshot-fixtures.sh"), encoding: .utf8)) ?? ""
+    check(fixtures.contains("GILAMONSTER_SNAPSHOT_KEYCHAIN=\"${KEYCHAIN:-}\"") && fixtures.contains("\"\"|wait|denied) ;;"), "and the fixture script passes the switch on, refusing any other word")
     check(appModel.contains("guard KeychainWait.mayNotify(authorization: settings.authorizationStatus.rawValue, alertsOn: alertsOn) else { return }\n            center.add(request)"), "the notification is posted only after macOS says notifications are already allowed")
     let waitNotice = appModel.components(separatedBy: "static func keychainWait(").dropFirst().first?.components(separatedBy: "private static func show").first ?? ""
     check(!waitNotice.isEmpty && !waitNotice.contains("requestAuthorization"), "and nobody is asked for notification permission for it")

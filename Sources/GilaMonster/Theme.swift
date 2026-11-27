@@ -289,6 +289,14 @@ struct Callout<Actions: View>: View {
     let tone: Tone
     let title: String
     var detail: String?
+    /// Off when whoever shows it does the announcing, so nothing is said twice.
+    var announces = true
+    /// Read by VoiceOver as one element, title then detail, when there's nothing inside to press.
+    var spokenAsOne = false
+    /// On for a callout in the window's banner row, above the page. There, holding the detail to its full height
+    /// made the window work out its smallest size with the sentence one letter to a line, and the page was pushed up
+    /// out of view (seen in the K809 snapshots). The detail still wraps: the row gives it the height it asks for.
+    var inBannerRow = false
     @ViewBuilder var actions: Actions
     @State private var expanded = false
 
@@ -305,7 +313,7 @@ struct Callout<Actions: View>: View {
                 if let detail = text.detail {
                     Text(detail).foregroundStyle(Theme.ink)
                         .lineLimit(long && !expanded ? Overflow.detailLines : nil)
-                        .fixedSize(horizontal: false, vertical: true)
+                        .fixedSize(horizontal: false, vertical: !inBannerRow)
                         .textSelection(.enabled)
                     if long {
                         Button(expanded ? "Hide Details" : "Show Details") { expanded.toggle() }
@@ -321,21 +329,22 @@ struct Callout<Actions: View>: View {
         .frame(maxWidth: .infinity, alignment: .leading)
         .background(tone.wash, in: RoundedRectangle(cornerRadius: Theme.cardRadius))
         .overlay { RoundedRectangle(cornerRadius: Theme.cardRadius).strokeBorder(tone.color, lineWidth: 1) }
-        .accessibilityElement(children: .contain)
-        .accessibilityLabel("\(tone.announcement.prefix): \(text.title)")
+        .accessibilityElement(children: spokenAsOne && !long ? .ignore : .contain)
+        .accessibilityLabel(spokenAsOne && !long ? "\(tone.announcement.prefix): \(text.title). \(text.detail ?? "")" : "\(tone.announcement.prefix): \(text.title)")
         .onAppear { announce(text.title) }
         .onChange(of: title) { announce(Overflow.callout(title: title, detail: detail).title) }
     }
 
     private func announce(_ title: String) {
+        guard announces else { return }
         let word = tone.announcement
         Announcer.say("\(word.prefix): \(title)", urgent: word.urgent)
     }
 }
 
 extension Callout where Actions == EmptyView {
-    init(tone: Tone, title: String, detail: String? = nil) {
-        self.init(tone: tone, title: title, detail: detail) { EmptyView() }
+    init(tone: Tone, title: String, detail: String? = nil, announces: Bool = true, spokenAsOne: Bool = false, inBannerRow: Bool = false) {
+        self.init(tone: tone, title: title, detail: detail, announces: announces, spokenAsOne: spokenAsOne, inBannerRow: inBannerRow) { EmptyView() }
     }
 }
 
