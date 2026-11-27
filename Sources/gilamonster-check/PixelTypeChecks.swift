@@ -253,6 +253,7 @@ import GilaMonsterCore
     check(!theme.contains(".frame(minHeight: 20 * Theme.grow)") && theme.contains(".frame(minHeight: 24 * Theme.grow)") && source("LabViews.swift").contains(".frame(width: 24 * Theme.grow, height: 24 * Theme.grow).contentShape(Rectangle())"), "disclosure rows and the Lab's arrow are at least 24 pt to press")
     check(source("LabViews.swift").contains("@FocusState private var focused: Bool") && source("LabViews.swift").contains(".focused($focused)\n            .overlay { if focused { RoundedRectangle(cornerRadius: Theme.controlRadius + 2).strokeBorder(Theme.accent, lineWidth: 2)"), "the Upgrade field shows a focus ring")
     check(source("LabViews.swift").contains("Text(\"Restart log, \\(lines.count) \\(lines.count == 1 ? \"line\" : \"lines\")\").type(.label())"), "the Restart log's short label is in the label face")
+    check(type.contains("configuration.textFieldStyle(.roundedBorder)") && !type.contains("configuration.textFieldStyle(.growing)"), "the growing field is the system's rounded field at the default size and never itself (it recursed to a crash)")
     var fixedWidths: [String] = []
     for file in (try? FileManager.default.contentsOfDirectory(at: appSources, includingPropertiesForKeys: nil)) ?? [] where file.pathExtension == "swift" {
         for (n, line) in ((try? String(contentsOf: file, encoding: .utf8)) ?? "").split(separator: "\n", omittingEmptySubsequences: false).enumerated() where line.contains(".frame(width: 4") || line.contains(".frame(width: 5") || line.contains(".frame(width: 3") {

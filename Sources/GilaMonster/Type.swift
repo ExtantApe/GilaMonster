@@ -305,7 +305,7 @@ extension Theme {
 struct GrowingFieldStyle: TextFieldStyle {
     func _body(configuration: TextField<Self._Label>) -> some View {
         if Theme.grow == 1 {
-            configuration.textFieldStyle(.growing)
+            configuration.textFieldStyle(.roundedBorder)
         } else {
             configuration.textFieldStyle(.themed)
         }
