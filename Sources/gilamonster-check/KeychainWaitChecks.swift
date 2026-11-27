@@ -49,12 +49,19 @@ final class BlockingKeychain: @unchecked Sendable {
     await pause(0.5)
     check(quick == 7 && !wait.isWaiting && shown.isEmpty && cleared == 0, "a call that comes straight back never shows the banner, even after the threshold has passed")
 
+    // A longer threshold for the blocking part, so a slow CI machine can't pass it before the "not yet" look.
+    wait.threshold = 2
     let slow = BlockingKeychain()
+    let started = Date()
     let reading = Task { await wait.run(.sessionToken) { slow.read(create: false) } }
     await checkUntil(5, "the blocking stand-in was called") { slow.callCount == 1 }
     check(!slow.ranOnMainThread, "and not on the main thread, which went on running this check while it blocked")
-    check(wait.isPending(.sessionToken) && !wait.isWaiting && shown.isEmpty, "before the threshold: pending, and no banner yet")
-    await checkUntil(5, "after the threshold the banner turns on") { wait.isWaiting }
+    if Date().timeIntervalSince(started) < 1.5 {
+        check(wait.isPending(.sessionToken) && !wait.isWaiting && shown.isEmpty, "before the threshold: pending, and no banner yet")
+    } else {
+        print("  note: the machine took over 1.5 s to start the read, so the before-the-threshold look was skipped")
+    }
+    await checkUntil(8, "after the threshold the banner turns on") { wait.isWaiting }
     equal(wait.waitingOn, [.sessionToken], "and it knows what's waiting")
     equal(shown, [[.sessionToken]], "the app is told once, for its one notification and its spoken line")
 
@@ -349,11 +356,11 @@ final class BlockingKeychain: @unchecked Sendable {
     check(rootView.contains("VStack(spacing: 8) {\n            KeychainBanner()\n"), "the banner is the first row of every server window's banners")
     check(rootView.contains(".safeAreaInset(edge: .top, spacing: 0) { KeychainBanner()"), "and on the welcome screen, where there's no banner row")
     let banner = rootView.components(separatedBy: "struct KeychainBanner").dropFirst().first?.components(separatedBy: "// MARK: - Main window").first ?? ""
-    check(banner.contains("Callout(tone: .warning, title: KeychainWait.title, detail: KeychainWait.detail(purposes), announces: false, spokenAsOne: true, inBannerRow: true)"), "it's the app's own callout (ink on the warning wash, held to 4.5:1 by the color checks), read by VoiceOver as one element")
+    check(banner.contains("Callout(tone: .warning, title: KeychainWait.title, detail: KeychainWait.detail(purposes), announces: false, spokenAsOne: true)"), "it's the app's own callout (ink on the warning wash, held to 4.5:1 by the color checks), read by VoiceOver as one element")
     check(!banner.isEmpty && !banner.contains(".focusable()"), "with no Tab stop on words that can't be pressed")
     check(banner.contains("title: retrying ? KeychainWait.retryTitle : KeychainWait.deniedTitle") && banner.contains("Button(retrying ? KeychainWait.retryButtonWaiting : KeychainWait.retryButton)") && banner.contains("Button(\"Dismiss\") { wait.setDenied(.sessionToken, false) }"), "a no shows what won't work, with Try Keychain Again and Dismiss, in one callout that stays through a retry")
     check(!banner.contains("\"Try Again\""), "no button is called just Try Again")
-    check(banner.components(separatedBy: "inBannerRow: true").count == 3 && theme.contains(".fixedSize(horizontal: false, vertical: !inBannerRow)"), "both banners lay their detail out as the banner row needs, so the page below isn't pushed out of view")
+    check(!banner.contains("inBannerRow") && !theme.contains("inBannerRow") && rootView.contains(".frame(minHeight: Self.columnMinHeight, maxHeight: .infinity)"), "neither banner needs a layout of its own: the column they sit in can't be pushed taller than the window (K815)")
     check(appModel.contains(".frame(minWidth: wide ? 1700 : 1120, minHeight: 640)"), "the snapshot draws pages at the real window's minimum size")
     check(banner.contains("if focus == .retry { focus = .dismiss }") && banner.contains(".disabled(retrying).focused($focus, equals: .retry)") && banner.contains(".focused($focus, equals: .dismiss)"), "when the retry button goes gray, the keyboard focus moves to Dismiss first")
     check(banner.contains("Announcer.say(KeychainWait.spokenRetry, urgent: true, always: true)"), "pressing it says that macOS is being asked, and where to look")

@@ -34,7 +34,7 @@ final class AdvisorCenter {
     private(set) var claudePath: String?
     private var running: [String: Process] = [:]
     private var watching = false
-    private let defaults = UserDefaults.standard
+    private let defaults = AppDefaults.store
     /// Set when the Keychain needs a person's OK for the Advisor's key. The page then offers Allow Keychain Access.
     private(set) var keychainNeedsOK = false
 

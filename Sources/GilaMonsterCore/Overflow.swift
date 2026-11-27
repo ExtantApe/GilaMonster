@@ -91,14 +91,16 @@ public enum Overflow {
     /// Reads the snapshot's overflow-report.txt: "checked N of M pages", where M is every page the run was asked to
     /// draw, then one OVERFLOW line for each page wider than the window. A report that isn't in that form counts as
     /// not having run (0 of 0), and the check then fails: N must equal M, and M must be more than zero.
-    public static func readReport(_ text: String) -> (pages: Int, expected: Int, overflowing: [String]) {
+    /// `pushed` are pages whose column ran past the top or bottom of the window, as a too-tall banner makes it (K815),
+    /// and `placed` are the pages whose place could be measured at all.
+    public static func readReport(_ text: String) -> (pages: Int, expected: Int, overflowing: [String], pushed: [String], placed: [String]) {
         let lines = text.split(separator: "\n").map(String.init)
         var pages = 0, expected = 0
         for line in lines where line.hasPrefix("checked ") && line.hasSuffix(" pages") {
             let parts = line.dropFirst(8).dropLast(6).split(separator: " ")
             if parts.count == 3, parts[1] == "of", let n = Int(parts[0]), let m = Int(parts[2]) { pages = n; expected = m }
         }
-        return (pages, expected, lines.filter { $0.hasPrefix("OVERFLOW ") })
+        return (pages, expected, lines.filter { $0.hasPrefix("OVERFLOW ") }, lines.filter { $0.hasPrefix("PUSHED ") }, lines.filter { $0.hasPrefix("PLACED ") })
     }
 
     /// Which things go on which row when a row of buttons is laid out in `available` points: as many as fit, in

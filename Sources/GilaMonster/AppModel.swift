@@ -80,22 +80,22 @@ final class AppModel {
     /// Asks for the EULA before something that needs the Lab, then carries on with it.
     var labSetup: LabSetupRequest?
     /// A snapshot run draws every server in turn and must leave the saved choice alone (D226).
-    var selectedID: UUID? { didSet { if !Self.isSnapshot { UserDefaults.standard.set(selectedID?.uuidString, forKey: "selectedServer") } } }
+    var selectedID: UUID? { didSet { if !Self.isSnapshot { AppDefaults.store.set(selectedID?.uuidString, forKey: "selectedServer") } } }
     nonisolated static var isSnapshot: Bool { ProcessInfo.processInfo.environment["GILAMONSTER_SNAPSHOT"] != nil }
     var page: PageID = .overview { didSet { if let id = Sections.section(of: page.rawValue)?.id { lastPage[id] = page } } }
     /// Opened from the toolbar while nothing is open, to look at ignored issues. Not saved: the panel goes back to
     /// showing itself only when there's something open (UX audit finding 2).
     var issuesOpenedByHand = false
-    var showIssues = UserDefaults.standard.object(forKey: "showIssues") as? Bool ?? true {
-        didSet { UserDefaults.standard.set(showIssues, forKey: "showIssues") }
+    var showIssues = AppDefaults.store.object(forKey: "showIssues") as? Bool ?? true {
+        didSet { AppDefaults.store.set(showIssues, forKey: "showIssues") }
     }
     var showAddServer = false
     /// The file open on the Configs page, so other pages can jump to one.
     var configPath: String?
-    var showFolderSetup = AppPaths.needsServersFolderChoice
+    var showFolderSetup = AppPaths.asksForServersFolder
     var appUpdate: (version: String, url: URL)?
-    var checkAppUpdates = UserDefaults.standard.object(forKey: "checkAppUpdates") as? Bool ?? true {
-        didSet { UserDefaults.standard.set(checkAppUpdates, forKey: "checkAppUpdates") }
+    var checkAppUpdates = AppDefaults.store.object(forKey: "checkAppUpdates") as? Bool ?? true {
+        didSet { AppDefaults.store.set(checkAppUpdates, forKey: "checkAppUpdates") }
     }
 
     /// The page last open in each section, so a bead goes back to it (K786). Not saved between launches.
@@ -144,6 +144,7 @@ final class AppModel {
     /// own and the process runs in the server's folder, so stopping them with a SIGTERM (which saves) is safe.
     var leftOver: [ServerController] { servers.filter { if case .external = $0.state { true } else { false } } }
 
+    static let drillLog = Logger(subsystem: Bundle.main.bundleIdentifier ?? "GilaMonster", category: "backup-drills")
     static let cloneLog = Logger(subsystem: Bundle.main.bundleIdentifier ?? "GilaMonster", category: "backup-clones")
     /// True when another GilaMonster with this bundle identifier is running. It may be part-way through a backup.
     static var anotherCopyIsRunning: Bool {
@@ -158,7 +159,7 @@ final class AppModel {
         self.lab = lab
         if let found = lab.server, !opened.contains(where: { $0.id == found.id }) { opened.append(found) }
         servers = opened
-        selectedID = (Self.isSnapshot ? nil : UserDefaults.standard.string(forKey: "selectedServer").flatMap(UUID.init)) ?? servers.first?.id
+        selectedID = (Self.isSnapshot ? nil : AppDefaults.store.string(forKey: "selectedServer").flatMap(UUID.init)) ?? servers.first?.id
         // Only servers with "Start when GilaMonster opens" on, which is off by default (owner, 2026-11-16).
         for server in LaunchStart.servers(servers, advisorTrial: AdvisorTrial.isOn,
                                           snapshot: ProcessInfo.processInfo.environment["GILAMONSTER_SNAPSHOT"] != nil) {
@@ -178,6 +179,19 @@ final class AppModel {
         if ProcessInfo.processInfo.environment["GILAMONSTER_SNAPSHOT"] == nil {
             for swept in BackupClones.sweep(besideServers: servers.map(\.paths.root), serversFolder: AppPaths.servers, backupRunning: Backups.writing || Self.anotherCopyIsRunning) {
                 if let line = swept.result.line(swept.folder) { Self.cloneLog.notice("\(line, privacy: .public)") }
+            }
+        }
+        // A backup drill's copy left by a GilaMonster that went away during the drill (K813): its Java is stopped if
+        // it's still running, and the copy is removed. Only copies GilaMonster marked as its own. Off the main thread,
+        // since stopping a Java can take a few seconds.
+        if ProcessInfo.processInfo.environment["GILAMONSTER_SNAPSHOT"] == nil, !AdvisorTrial.isOn {
+            let roots = servers.map(\.paths.root)
+            let backupFolders = servers.flatMap { server in [Backups.destination(server.profile)] + server.backups.map { Backups.folder(of: $0, profile: server.profile) } }
+            let servers = AppPaths.servers, otherCopy = Self.anotherCopyIsRunning
+            Task.detached(priority: .utility) {
+                for swept in DrillCopies.sweep(besideServers: roots, serversFolder: servers, backupFolders: backupFolders, otherCopyRunning: otherCopy) {
+                    if let line = swept.result.line(swept.folder) { Self.drillLog.notice("\(line, privacy: .public)") }
+                }
             }
         }
         servers.forEach(Alerts.connect)
@@ -252,6 +266,8 @@ final class AppModel {
     /// `source` is why everything is stopping (a quit, the Mac shutting down, a signal), for each server's stop file.
     func stopAll(by source: StopSource) async {
         for server in servers {
+            // A backup drill's throwaway server isn't on the list, and used to be left running (K813).
+            server.stopDrill(by: source)
             server.stopTrialCopy()
             if server.isLab, lab.isBusy { server.forceStop(by: source) }
             if server.state.isLive { server.stop(by: source) }
@@ -261,6 +277,7 @@ final class AppModel {
             for server in leftOver { group.addTask { await server.stopExternalServer(by: source) } }
         }
         for _ in 0..<(180 * 4) where anyLive { try? await Task.sleep(for: .milliseconds(250)) }
+        DrillCopies.endAll()
     }
 
     /// Unsigned apps can't update themselves safely, so this only tells you where the new build is.
@@ -277,8 +294,8 @@ final class AppModel {
 /// Tells you when something goes wrong and GilaMonster isn't in front of you.
 @MainActor enum Alerts {
     static var enabled: Bool {
-        get { UserDefaults.standard.object(forKey: "macAlerts") as? Bool ?? true }
-        set { UserDefaults.standard.set(newValue, forKey: "macAlerts") }
+        get { AppDefaults.store.object(forKey: "macAlerts") as? Bool ?? true }
+        set { AppDefaults.store.set(newValue, forKey: "macAlerts") }
     }
 
     static func connect(_ server: ServerController) {
@@ -330,7 +347,11 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
     func applicationShouldTerminateAfterLastWindowClosed(_ sender: NSApplication) -> Bool { false }
 
     /// The last stop on every way out: nothing half-written is left behind (D213).
-    func applicationWillTerminate(_ notification: Notification) { Backups.cancelInFlight(wait: 2) }
+    /// A backup drill's Java is stopped and its copy removed here too, for a quit with no server running (K813).
+    func applicationWillTerminate(_ notification: Notification) {
+        Backups.cancelInFlight(wait: 2)
+        DrillCopies.endAll()
+    }
 
     /// Every build, release included: the quit handler reads why macOS is quitting the app (K650).
     func applicationWillFinishLaunching(_ notification: Notification) {
@@ -345,13 +366,7 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
     @MainActor func applicationDidFinishLaunching(_ notification: Notification) {
         // Killed with SIGTERM, SIGHUP or SIGINT (killall, a script, a terminal), the app used to vanish and leave its
         // servers running with nobody to stop them (K692). Now it stops them with a save first, as at a shutdown.
-        for sig in [SIGTERM, SIGHUP, SIGINT] {
-            signal(sig, SIG_IGN)
-            let source = DispatchSource.makeSignalSource(signal: sig, queue: .main)
-            source.setEventHandler { MainActor.assumeIsolated { AppDelegate.quitOnSignal(sig) } }
-            source.resume()
-            Self.signalSources.append(source)
-        }
+        Self.signalSources = QuitSignals.watch { sig in MainActor.assumeIsolated { AppDelegate.quitOnSignal(sig) } }
         NSWorkspace.shared.notificationCenter.addObserver(forName: NSWorkspace.willPowerOffNotification, object: nil, queue: .main) { _ in
             AppDelegate.poweringOff = true
         }
@@ -422,6 +437,9 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
         case "denied": KeychainWait.shared.preview(denied: [.sessionToken])
         default: break
         }
+        // GILAMONSTER_SNAPSHOT_BANNERS=external,trial-failed,update draws every page with those made-up banners on top, or
+        // `all` for one of each kind (K815). The names are ServerController.previewBannerNames, plus `update`.
+        let banners = Set((ProcessInfo.processInfo.environment["GILAMONSTER_SNAPSHOT_BANNERS"] ?? "").split(separator: ",").map(String.init))
         // GILAMONSTER_SNAPSHOT_PAGES=overview,console draws only those pages, for a quick look at one thing.
         let onlyPages = ProcessInfo.processInfo.environment["GILAMONSTER_SNAPSHOT_PAGES"].map { Set($0.split(separator: ",").map(String.init)) }
         Task { @MainActor in
@@ -433,8 +451,14 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
             let windowWidth: CGFloat = 1280
             var pagesChecked = 0
             var overflowing: [String] = []
+            var sizes: [String] = []
+            var pushed: [String] = []
             // GILAMONSTER_SNAPSHOT_FIRST draws only the first server's pages (the others still show in the sidebar).
             let drawn = ProcessInfo.processInfo.environment["GILAMONSTER_SNAPSHOT_FIRST"] != nil ? Array(model.servers.prefix(1)) : model.servers
+            if !banners.isEmpty {
+                drawn.forEach { $0.previewBanners(banners) }
+                if banners.contains("all") || banners.contains("update"), let page = URL(string: "https://example.com/releases") { model.appUpdate = ("9.9.9", page) }
+            }
             for server in drawn where ProcessInfo.processInfo.environment["GILAMONSTER_SNAPSHOT_DIALOGS_ONLY"] == nil {
                 // Players is drawn a second time with a made-up player picked, when the fixture has one (K786).
                 let shots: [(page: PageID, pick: String?)] = PageID.allCases.map { ($0, nil) } + [(.players, "MadeUpKid")]
@@ -443,6 +467,8 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
                     if pick != nil, !server.knownPlayers.contains(where: { $0.title == pick }) { continue }
                     model.selectedID = server.id
                     model.page = page
+                    SnapshotProbe.column = .null
+                    SnapshotProbe.banners = .null
                     // GILAMONSTER_SNAPSHOT_FORCE_WIDE=1 makes every page too wide on purpose, to prove the report catches it.
                     let wide = ProcessInfo.processInfo.environment["GILAMONSTER_SNAPSHOT_FORCE_WIDE"] != nil
                     // The real window's minimum size (see the WindowGroup below), so the picture is laid out as the app is.
@@ -456,6 +482,17 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
                     host.layoutSubtreeIfNeeded()
                     if pick == nil { pagesChecked += 1 }
                     let fitting = host.fittingSize.width
+                    // The column beside the spine holds the trail, the banners, the page and the activity bar. When a
+                    // banner comes out too tall, the column is taller than the window and its top is off the picture.
+                    let column = SnapshotProbe.column, bannerRow = SnapshotProbe.banners
+                    if column.isNull {
+                        pushed.append("PUSHED \(page.rawValue): the page's place in the window couldn't be measured")
+                    } else {
+                        if !sizes.contains(where: { $0.hasPrefix("PLACED \(page.rawValue):") }) { sizes.append("PLACED \(page.rawValue): top \(Int(column.minY.rounded())), bottom \(Int(column.maxY.rounded())) of \(Int(host.bounds.height.rounded())), banners \(bannerRow.isNull ? 0 : Int(bannerRow.height.rounded())) tall") }
+                        if column.minY < -0.5 || column.maxY > host.bounds.height + 0.5, !pushed.contains(where: { $0.hasPrefix("PUSHED \(page.rawValue):") }) {
+                            pushed.append("PUSHED \(page.rawValue): the page runs from \(Int(column.minY.rounded())) to \(Int(column.maxY.rounded())) in a window \(Int(host.bounds.height.rounded())) tall, under banners \(bannerRow.isNull ? 0 : Int(bannerRow.height.rounded())) tall")
+                        }
+                    }
                     // One line a page: Players is drawn twice (once with a player picked), and a page that is too wide
                     // both times is still one page too wide.
                     if fitting > windowWidth + 0.5, !overflowing.contains(where: { $0.hasPrefix("OVERFLOW \(page.rawValue):") }) {
@@ -470,7 +507,7 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
                     windows.append(window)
                 }
             }
-            let report = (["checked \(pagesChecked) of \(drawn.count * PageID.allCases.count) pages"] + overflowing).joined(separator: "\n") + "\n"
+            let report = (["checked \(pagesChecked) of \(drawn.count * PageID.allCases.count) pages"] + overflowing + pushed + sizes).joined(separator: "\n") + "\n"
             try? report.write(to: URL(fileURLWithPath: folder).appendingPathComponent("overflow-report.txt"), atomically: true, encoding: .utf8)
             // The dialogs too, which otherwise only appear after a click.
             // The quit question needs no server (D215).
@@ -623,15 +660,17 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
     @MainActor static func quitOnSignal(_ sig: Int32) {
         guard !signalled else { return }
         signalled = true
-        let name = sig == SIGTERM ? "SIGTERM" : sig == SIGHUP ? "SIGHUP" : "SIGINT"
+        let name = QuitSignals.name(sig)
         quitLog.notice("Asked to quit by \(name, privacy: .public): stopping servers with a save")
-        guard let model else { exit(0) }
+        guard let model else { DrillCopies.endAll(); exit(0) }
         for server in model.servers where server.state.isLive {
             server.appendWrapper("GilaMonster was asked to quit (\(name)), so it's stopping this server with a save.", level: .info)
         }
         Backups.cancelInFlight()
         Task { @MainActor in
             await model.stopAll(by: .signal(name))
+            // Nothing runs between this and the exit, so no drill can start in the gap (K813).
+            DrillCopies.endAll()
             exit(0)
         }
     }
@@ -705,8 +744,8 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
 struct GilaMonsterApp: App {
     @NSApplicationDelegateAdaptor(AppDelegate.self) private var delegate
     @State private var model: AppModel
-    @AppStorage("appearance") private var appearance = "auto"
-    @AppStorage(ThemeChoice.key) private var themeFlavor = Palette.Flavor.bold.rawValue
+    @AppStorage("appearance", store: AppDefaults.store) private var appearance = "auto"
+    @AppStorage(ThemeChoice.key, store: AppDefaults.store) private var themeFlavor = Palette.Flavor.bold.rawValue
 
     init() {
         // GILAMONSTER_SAMPLE_TICKET=<file.png>: draws a ticket with made-up data and quits, to look at the layout.
@@ -892,8 +931,8 @@ struct StatusMenu: View {
 struct SettingsView: View {
     @Bindable var model: AppModel
     @State private var serversFolder = AppPaths.servers.path
-    @AppStorage("appearance") private var appearance = "auto"
-    @AppStorage(ThemeChoice.key) private var themeFlavor = Palette.Flavor.bold.rawValue
+    @AppStorage("appearance", store: AppDefaults.store) private var appearance = "auto"
+    @AppStorage(ThemeChoice.key, store: AppDefaults.store) private var themeFlavor = Palette.Flavor.bold.rawValue
     var body: some View {
         Form {
             Picker("Theme", selection: Binding(get: { Palette.Flavor(rawValue: themeFlavor) ?? .bold }, set: { flavor in

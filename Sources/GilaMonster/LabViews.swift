@@ -12,7 +12,7 @@ struct LabPage: View {
     @State private var versions: [String] = []
     @State private var chosen = ""
     @State private var skipped: [String] = []
-    @AppStorage("labChecks") private var checksText = "plugins,upgrade,fresh"
+    @AppStorage("labChecks", store: AppDefaults.store) private var checksText = "plugins,upgrade,fresh"
 
     private var lab: LabController { model.lab }
     private var included: Set<LabStation> { Set(checksText.split(separator: ",").compactMap { LabStation(rawValue: String($0)) }) }

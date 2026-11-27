@@ -41,7 +41,9 @@ public final class ServerController: Identifiable {
     public private(set) var paths: ServerPaths
     public var profile: ServerProfile { didSet { if profile != oldValue { saveProfile() } } }
 
-    public private(set) var state: ServerState = .stopped
+    // What a connection check found belongs to the state it was run in. A start or stop clears it, so the
+    // Overview's Needs you never repeats an old answer; the connections card checks again.
+    public private(set) var state: ServerState = .stopped { didSet { if state != oldValue { connectionProblems = [] } } }
     public private(set) var startedAt: Date?
     public private(set) var players: Set<String> = []
     /// Who is connected, from the server's own login and disconnect lines. Plugins that hide or rewrite the join
@@ -76,6 +78,8 @@ public final class ServerController: Identifiable {
     public internal(set) var playerStats: [PlayerStats] = []
     public internal(set) var playerActivity: [PlayerActivity] = []
     public internal(set) var drillRunning = false
+    /// The throwaway server a backup drill has booted, while it's up (K813).
+    var drillChild: ServerController?
     var lastTPSRequest = Date.distantPast
     var lastSizeCheck = Date.distantPast
     var lagging = false
@@ -84,6 +88,10 @@ public final class ServerController: Identifiable {
     var bucket = MetricBucket()
     var gcReadOffset: UInt64 = 0
     public internal(set) var diskWarning: String?
+    #if DEBUG
+    /// On once a debug snapshot has put made-up banners here, so the disk and process checks leave them alone.
+    var previewingBanners = false
+    #endif
     public internal(set) var connectResult: ConnectResult?
     public internal(set) var trialPhase: TrialPhase?
     public internal(set) var trialReport: TrialReport?
@@ -513,6 +521,8 @@ public final class ServerController: Identifiable {
 
     private func launch() {
         guard state.canStart, process == nil else { return }
+        // GilaMonster is quitting: a throwaway copy that hasn't started yet doesn't start (K813).
+        guard !(isTrialCopy && DrillCopies.isClosing) else { return }
         guard let java = resolvedJava() else { return }
         let arguments = LaunchCommand.arguments(profile.launch, software: profile.software, javaMajor: java.major)
         try? FileOps.ensureDir(paths.meta)
@@ -686,6 +696,9 @@ public final class ServerController: Identifiable {
     /// A server left running by a previous session, or started outside GilaMonster.
     public func detectExternalServer() async {
         guard process == nil else { return }
+        #if DEBUG
+        if previewingBanners { return }   // A made-up banner stays for its picture.
+        #endif
         // After a reboot the saved number can belong to something else, even another Java program.
         // It's only this server if it's also running in this folder.
         if let pid: Int32 = try? JSONStore.decoder.decode(Int32.self, from: Data(contentsOf: paths.pid)),
@@ -2349,3 +2362,46 @@ public final class ServerController: Identifiable {
 
     public func stopTicker() { ticker?.cancel() }
 }
+
+#if DEBUG
+extension ServerController {
+    /// The made-up banners a debug snapshot can draw above the page (K815). `all` is one of each kind at once.
+    public static let previewBannerNames = ["disk", "trial-running", "trial-open", "trial-passed", "trial-failed", "notice", "long-title", "external"]
+
+    /// Debug snapshots only: puts made-up banners in the row above the page so they can be drawn. Nothing is behind
+    /// them: no process, no test copy and no disk check. Each has a second line, as the real ones can.
+    public func previewBanners(_ names: Set<String>) {
+        previewingBanners = true
+        let all = names.contains("all")
+        if all || names.contains("disk") {
+            diskWarning = "The drive holding this server has 1.2 GB free. Backups stop below 1 GB, and a server that can't save can lose its worlds, so free up space or move the backups to another drive."
+        }
+        if all || names.contains("notice") {
+            notice = "This server's GilaMonster settings couldn't be read, so they're back to their defaults. The old file was kept as server.json.corrupt in its .gilamonster folder."
+        }
+        // One sentence just under the 120 characters a callout's title may run to, so it stays a title and wraps.
+        if names.contains("long-title") {
+            notice = "The made-up change to plugins/MadeUpPlugin3/config.yml and two more like it will happen at the next restart"
+        }
+        if all || names.contains("external") { state = .external(pid: 4321) }
+        var report = TrialReport()
+        report.booted = true
+        report.seconds = 41
+        var phase: TrialPhase?
+        if names.contains("trial-running") { phase = .booting }
+        if names.contains("trial-open") { phase = .open }
+        if names.contains("trial-passed") { phase = .finished }
+        if all || names.contains("trial-failed") {
+            phase = .finished
+            report.failedPlugins = ["MadeUpPlugin2", "MadeUpPlugin5"]
+            report.problems = ["MadeUpPlugin2 couldn't read its config.yml: the value at storage.type isn't one it knows.", "MadeUpPlugin5 needs MadeUpPlugin2, which didn't load."]
+            report.notes = ["The copy ran on port 25601 with the allowlist on, so nobody could join it."]
+        }
+        if let phase {
+            trialChange = .pluginUpdate(name: "MadeUpPlugin1")
+            trialReport = report
+            trialPhase = phase
+        }
+    }
+}
+#endif

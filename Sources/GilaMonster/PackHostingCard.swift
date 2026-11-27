@@ -37,7 +37,7 @@ struct PackHostingCard: View {
                 Hint("Serves a zip exactly as it is, such as BlueMapMini's pack in plugins/BlueMapMini/pack, so its SHA-1 doesn't change.")
             }
             if built.isEmpty {
-                Hint("Build a recipe, and its address shows here.")
+                Hint("Build a recipe or add an exact pack, and its address shows here.")
             } else {
                 ForEach(built, id: \.self) { name in
                     Divider()

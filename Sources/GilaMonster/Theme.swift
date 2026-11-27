@@ -296,6 +296,29 @@ struct Badge: View {
     }
 }
 
+/// Where the column beside the spine and its banner row were drawn, for the debug snapshot's report (K815).
+/// Present in release builds too, because the views name it in closures; only debug snapshots ever write it.
+@MainActor enum SnapshotProbe {
+    static var column = CGRect.null
+    static var banners = CGRect.null
+}
+
+extension View {
+    /// Debug snapshots only: records where this view was drawn in the window. Does nothing in the app.
+    @ViewBuilder func snapshotProbe(_ record: @escaping @MainActor (CGRect) -> Void) -> some View {
+        #if DEBUG
+        if AppModel.isSnapshot {
+            background(GeometryReader { area in
+                let frame = area.frame(in: .global)
+                Color.clear.onAppear { record(frame) }.onChange(of: frame) { record(frame) }
+            })
+        } else { self }
+        #else
+        self
+        #endif
+    }
+}
+
 /// A full-width message with an optional action.
 struct Callout<Actions: View>: View {
     let tone: Tone
@@ -305,10 +328,6 @@ struct Callout<Actions: View>: View {
     var announces = true
     /// Read by VoiceOver as one element, title then detail, when there's nothing inside to press.
     var spokenAsOne = false
-    /// On for a callout in the window's banner row, above the page. There, holding the detail to its full height
-    /// made the window work out its smallest size with the sentence one letter to a line, and the page was pushed up
-    /// out of view (seen in the K809 snapshots). The detail still wraps: the row gives it the height it asks for.
-    var inBannerRow = false
     @ViewBuilder var actions: Actions
     @State private var expanded = false
 
@@ -325,7 +344,7 @@ struct Callout<Actions: View>: View {
                 if let detail = text.detail {
                     Text(detail).foregroundStyle(Theme.ink)
                         .lineLimit(long && !expanded ? Overflow.detailLines : nil)
-                        .fixedSize(horizontal: false, vertical: !inBannerRow)
+                        .fixedSize(horizontal: false, vertical: true)
                         .textSelection(.enabled)
                     if long {
                         Button(expanded ? "Hide Details" : "Show Details") { expanded.toggle() }
@@ -355,8 +374,8 @@ struct Callout<Actions: View>: View {
 }
 
 extension Callout where Actions == EmptyView {
-    init(tone: Tone, title: String, detail: String? = nil, announces: Bool = true, spokenAsOne: Bool = false, inBannerRow: Bool = false) {
-        self.init(tone: tone, title: title, detail: detail, announces: announces, spokenAsOne: spokenAsOne, inBannerRow: inBannerRow) { EmptyView() }
+    init(tone: Tone, title: String, detail: String? = nil, announces: Bool = true, spokenAsOne: Bool = false) {
+        self.init(tone: tone, title: title, detail: detail, announces: announces, spokenAsOne: spokenAsOne) { EmptyView() }
     }
 }
 

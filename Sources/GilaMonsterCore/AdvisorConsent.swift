@@ -9,7 +9,7 @@ public struct AdvisorConsent {
 
     let defaults: UserDefaults
 
-    public init(defaults: UserDefaults = .standard) { self.defaults = defaults }
+    public init(defaults: UserDefaults = AppDefaults.store) { self.defaults = defaults }
 
     public static func key(id: UUID, folder: URL) -> String { "\(id.uuidString)|\(folder.path)" }
 

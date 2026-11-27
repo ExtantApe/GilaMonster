@@ -12,6 +12,11 @@
 #   GILAMONSTER_SNAPSHOT_PIXEL=on|off|auto (the Pixel font setting, on if unset; auto is the first-launch default),
 #   GILAMONSTER_SNAPSHOT_BODY=<points> (the system's body size, 13 by default), GILAMONSTER_SNAPSHOT_BOLD=1 (Bold Text),
 #   GILAMONSTER_SNAPSHOT_SCALE=1|2 (screen pixels per point, 2 if unset), GILAMONSTER_SNAPSHOT_CONTRAST=1 (Increase Contrast).
+#   BACKUPS=none  leaves out the first server's made-up backups, to draw one that GilaMonster has never backed up.
+#   HEIGHT=1800  draws taller pictures, to see the bottom of a long page.
+#   BANNERS=external,trial-failed  puts those made-up banners above every page (K815): disk, trial-running, trial-open,
+#                         trial-passed, trial-failed, notice, long-title, external, update, or all for one of each kind.
+#                         The report then says where each page landed: a PUSHED line means a banner pushed it out of view.
 #   PAGES=overview,console  draws only those pages. SCRATCH=<folder>  builds there instead of .build.
 # Everything is made-up and lives under a temp folder that's removed at the end, pass or fail (D226). Nothing
 # starts: the snapshot only draws. Pictures land in OUT/<fixture>/<theme>-<light|dark>/.
@@ -121,19 +126,27 @@ fi
 { echo "["; for ((i = 0; i < ${#list[@]}; i++)); do printf '  "%s"' "${list[$i]}"; (( i < ${#list[@]} - 1 )) && echo "," || echo; done; echo "]"; } > "$home/servers.json"
 
 scratch="${SCRATCH:-.build}"
+for b in $(echo "${BANNERS:-}" | tr ',' ' '); do
+    case "$b" in disk|trial-running|trial-open|trial-passed|trial-failed|notice|long-title|external|update|all) ;; *) echo "BANNERS: no banner is called $b" >&2; exit 2;; esac
+done
 case "${KEYCHAIN:-}" in ""|wait|denied) ;; *) echo "KEYCHAIN is wait or denied" >&2; exit 2;; esac
 swift build --scratch-path "$scratch" --product GilaMonster >/dev/null
 # Made-up Lab results for the first server, so the Lab page's details, a skipped plugin and a restart log are drawn (K804).
 swift build --scratch-path "$scratch" --product gilamonster-check >/dev/null
 "$scratch/debug/gilamonster-check" --lab-fixture "$home" "$servers" "${list[0]}" >/dev/null
+# Made-up backups for the first server (K823): one from 23 hours ago, and an added storage folder with an older one.
+# BACKUPS=none leaves them out, to draw a server GilaMonster has never backed up.
+case "${BACKUPS:-}" in ""|none) ;; *) echo "BACKUPS is none or unset" >&2; exit 2;; esac
+[[ "${BACKUPS:-}" == none ]] || "$scratch/debug/gilamonster-check" --backup-fixture "$home" "$servers" "${list[0]}" >/dev/null
 for theme in ${THEMES:-bold quiet}; do
     for look in ${LOOKS:-light dark}; do
         dir="$out/$kind/$theme-$look"; mkdir -p "$dir"
         rm -f "$dir/overflow-report.txt" "$dir/dialog-report.txt"   # a run that draws nothing must not pass on an old report
         var=GILAMONSTER_SNAPSHOT_LIGHT; [[ $look == dark ]] && var=GILAMONSTER_SNAPSHOT_DARK
         [[ "$kind" == heavy ]] && height=2800 || height=1000   # tall enough that Show More and group headings are in the picture
+        height="${HEIGHT:-$height}"
         env GILAMONSTER_SNAPSHOT_HEIGHT=$height GILAMONSTER_HOME="$home" GILAMONSTER_SERVERS="$servers" GILAMONSTER_SNAPSHOT="$dir" GILAMONSTER_SNAPSHOT_FIRST=1 \
-            GILAMONSTER_SNAPSHOT_THEME=$theme GILAMONSTER_SNAPSHOT_KEYCHAIN="${KEYCHAIN:-}" ${PAGES:+GILAMONSTER_SNAPSHOT_PAGES="$PAGES"} "$var=1" \
+            GILAMONSTER_SNAPSHOT_THEME=$theme GILAMONSTER_SNAPSHOT_KEYCHAIN="${KEYCHAIN:-}" GILAMONSTER_SNAPSHOT_BANNERS="${BANNERS:-}" ${PAGES:+GILAMONSTER_SNAPSHOT_PAGES="$PAGES"} "$var=1" \
             perl -e 'alarm 900; exec @ARGV' "$scratch/debug/GilaMonster" >/dev/null 2>&1 || true
         echo "$kind $theme-$look: $(ls "$dir" | wc -l | tr -d ' ') pictures"
     done

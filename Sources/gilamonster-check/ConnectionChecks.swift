@@ -26,7 +26,13 @@ final class FakeConnectionProbe: ConnectionProbe, @unchecked Sendable {
     func fileInfo(_ path: String) -> (size: Int, mode: Int)? { files[path] }
     func tail(_ path: String, bytes: Int) -> String? { tails[path] }
     func keychain(_ account: String) -> SecretPresence { ask("keychain \(account)"); return secrets[account] ?? .missing }
-    func tcp(host: String, port: Int, timeout: TimeInterval) async -> Bool { ask("tcp \(host):\(port)"); return answering.contains("\(host):\(port)") }
+    var undecided: [String: String] = [:] // host:port where a connection gives no verdict, and why
+    func connect(host: String, port: Int, timeout: TimeInterval) async -> ConnectAnswer {
+        let at = "\(host):\(port)"
+        ask("tcp \(at)")
+        if let why = undecided[at] { return .undecided(why) }
+        return answering.contains(at) || gameAnswering.contains(at) ? .connected : .refused
+    }
     func minecraftStatus(host: String, port: Int, timeout: TimeInterval) async -> Bool { ask("ping \(host):\(port)"); return gameAnswering.contains("\(host):\(port)") }
     func httpStatus(_ url: URL, timeout: TimeInterval) async -> Int? { ask("http \(url.absoluteString)"); return web[url.absoluteString] }
     func resolve(_ host: String) async -> [String]? { ask("dns \(host)"); return names[host] }
@@ -329,6 +335,8 @@ final class FakeConnectionProbe: ConnectionProbe, @unchecked Sendable {
         check(false, "couldn't open a listener on 127.0.0.1")
     }
 
+    await localAnswerChecks()
+
     section("Connections: a real Keychain, with a made-up secret")
     // A throwaway keychain file, never the login Keychain (see the top of main.swift).
     let (path, _) = throwawayKeychain("connections")
@@ -369,4 +377,196 @@ func fakeListener(reply: Data) throws -> NWListener {
     listener.start(queue: queue)
     guard ready.wait(timeout: .now() + 3) == .success, listener.port != nil else { listener.cancel(); throw AppError("no listener") }
     return listener
+}
+
+// MARK: - Whether the local address answers (K822)
+
+/// A stand-in server on 127.0.0.1 over IPv4 only, made with plain sockets so nothing else decides how it binds.
+/// Closing it stops the thread and frees the port. It touches nothing but its own sockets.
+final class StandInServer: @unchecked Sendable {
+    enum Manner { case answers(Data), dropsWithoutAnswer, neverAccepts }
+    let port: Int
+    private let fd: Int32
+    private var fillers: [Int32] = []
+    private let lock = NSLock()
+    private var closed = false
+
+    /// `port` 0 picks a free one.
+    init?(_ manner: Manner, port wanted: Int = 0) {
+        let fd = socket(AF_INET, SOCK_STREAM, 0)
+        self.fd = fd
+        guard fd >= 0 else { port = 0; return nil }
+        var yes: Int32 = 1
+        setsockopt(fd, SOL_SOCKET, SO_REUSEADDR, &yes, socklen_t(MemoryLayout<Int32>.size))
+        var address = StandInServer.loopback(port: wanted)
+        let bound = withUnsafePointer(to: &address) { $0.withMemoryRebound(to: sockaddr.self, capacity: 1) { bind(fd, $0, socklen_t(MemoryLayout<sockaddr_in>.size)) } }
+        var backlog: Int32 = 16
+        if case .neverAccepts = manner { backlog = 1 }
+        guard bound == 0, listen(fd, backlog) == 0 else { close(fd); port = 0; return nil }
+        var got = sockaddr_in(); var length = socklen_t(MemoryLayout<sockaddr_in>.size)
+        _ = withUnsafeMutablePointer(to: &got) { $0.withMemoryRebound(to: sockaddr.self, capacity: 1) { getsockname(fd, $0, &length) } }
+        let port = Int(UInt16(bigEndian: got.sin_port))
+        self.port = port
+        switch manner {
+        case .neverAccepts:
+            // Nothing is ever accepted, so a few connections fill the queue and the next one hangs.
+            for _ in 0..<12 {
+                let c = socket(AF_INET, SOCK_STREAM, 0)
+                guard c >= 0 else { continue }
+                _ = fcntl(c, F_SETFL, fcntl(c, F_GETFL) | O_NONBLOCK)
+                var to = StandInServer.loopback(port: port)
+                _ = withUnsafePointer(to: &to) { $0.withMemoryRebound(to: sockaddr.self, capacity: 1) { Darwin.connect(c, $0, socklen_t(MemoryLayout<sockaddr_in>.size)) } }
+                fillers.append(c)
+            }
+            usleep(200_000)
+        case .answers, .dropsWithoutAnswer:
+            let listening = fd
+            Thread.detachNewThread {
+                while true {
+                    let c = accept(listening, nil, nil)
+                    guard c >= 0 else { return }
+                    var noSignal: Int32 = 1
+                    setsockopt(c, SOL_SOCKET, SO_NOSIGPIPE, &noSignal, socklen_t(MemoryLayout<Int32>.size))
+                    var wait = timeval(tv_sec: 1, tv_usec: 0)
+                    setsockopt(c, SOL_SOCKET, SO_RCVTIMEO, &wait, socklen_t(MemoryLayout<timeval>.size))
+                    var buffer = [UInt8](repeating: 0, count: 4096)
+                    let n = read(c, &buffer, buffer.count)
+                    if n > 0, case let .answers(reply) = manner { reply.withUnsafeBytes { _ = write(c, $0.baseAddress, $0.count) } }
+                    close(c)
+                }
+            }
+        }
+    }
+
+    static func loopback(port: Int) -> sockaddr_in {
+        var a = sockaddr_in()
+        a.sin_len = UInt8(MemoryLayout<sockaddr_in>.size)
+        a.sin_family = sa_family_t(AF_INET)
+        a.sin_port = UInt16(port).bigEndian
+        a.sin_addr.s_addr = inet_addr("127.0.0.1")
+        return a
+    }
+
+    func stop() {
+        lock.lock(); defer { lock.unlock() }
+        guard !closed else { return }
+        closed = true
+        for c in fillers { close(c) }
+        shutdown(fd, SHUT_RDWR)
+        close(fd)
+    }
+    deinit { stop() }
+
+    /// A port on 127.0.0.1 with nothing listening: bound once to find it, then let go.
+    static func freePort() -> Int? {
+        guard let s = StandInServer(.dropsWithoutAnswer) else { return nil }
+        let port = s.port
+        s.stop()
+        usleep(100_000)
+        return port
+    }
+}
+
+@MainActor func localAnswerChecks() async {
+    section("Connections: a listening server is seen as answering (K822)")
+    let real = SystemConnectionProbe()
+    let statusAnswer: Data = { let json = Array(#"{"version":{"name":"26.3","protocol":775},"description":"made up"}"#.utf8); let body = [0x00] + [UInt8(json.count)] + json; return Data([UInt8(body.count)] + body) }()
+    func game(_ port: Int, host: String = "127.0.0.1") -> ConnectionService {
+        ConnectionService(id: "play", name: "Game tunnel", provider: .other, traffic: .game, localAddress: "\(host):\(port)")
+    }
+    func context(_ port: Int, running: Bool = true, starting: Bool = false, proxy: Bool = false, status: Bool = true) -> ConnectionContext {
+        var c = ConnectionContext(serverRunning: running, serverIP: "127.0.0.1", serverPort: port)
+        c.serverStarting = starting; c.proxyProtocol = proxy; c.statusEnabled = status
+        return c
+    }
+    func needsYou(_ service: ConnectionService, _ status: ConnectionStatus) -> [String] { ConnectionCheck.problems([service], [service.id: status]) }
+
+    // The real case from 2026-11-26: a server with Paper's proxy-protocol on. It listens on 127.0.0.1 over IPv4 only
+    // and drops a status ping that arrives without the PROXY header, so the ping gets nothing while players get in.
+    guard let proxied = StandInServer(.dropsWithoutAnswer) else { check(false, "couldn't open a stand-in server on 127.0.0.1"); return }
+    var status = await ConnectionCheck.run(game(proxied.port), context: context(proxied.port, proxy: true), probe: real)
+    equal(status.health, .ready, "a server that listens but drops the ping, with proxy-protocol on, is ready: \(status.summary)")
+    check(status.details.contains { $0.contains("is listening at 127.0.0.1:\(proxied.port)") && $0.contains("PROXY header") }, "and the details say it's listening and why no ping is sent")
+    check(needsYou(game(proxied.port), status).isEmpty, "and it's kept out of Needs you")
+    status = await ConnectionCheck.run(game(proxied.port), context: context(proxied.port, status: false), probe: real)
+    equal(status.health, .ready, "the same with the server's status turned off: \(status.summary)")
+    status = await ConnectionCheck.run(game(proxied.port), context: context(proxied.port), probe: real)
+    equal(status.health, .unknown, "listening but silent to the ping, with no setting to explain it, is unknown: \(status.summary)")
+    check(status.summary.contains("Couldn't tell") && needsYou(game(proxied.port), status).isEmpty, "it says it couldn't tell, and stays out of Needs you")
+    let ipv6 = await real.connect(host: "::1", port: proxied.port, timeout: 2)
+    equal(ipv6, .refused, "the stand-in really is IPv4 only: ::1 is refused")
+    status = await ConnectionCheck.run(game(proxied.port, host: "localhost"), context: context(proxied.port, proxy: true), probe: real)
+    equal(status.health, .ready, "a tunnel written as localhost still finds the IPv4-only server: \(status.summary)")
+    proxied.stop()
+
+    let fake = FakeConnectionProbe(); fake.answering = ["127.0.0.1:25565"]
+    var proxyContext = ConnectionContext(serverRunning: true, serverIP: "127.0.0.1", serverPort: 25565); proxyContext.proxyProtocol = true
+    _ = await ConnectionCheck.run(game(25565), context: proxyContext, probe: fake)
+    check(fake.asked.contains("tcp 127.0.0.1:25565") && !fake.asked.contains { $0.hasPrefix("ping") }, "with proxy-protocol on, no status ping is sent to the server at all")
+
+    guard let answering = StandInServer(.answers(statusAnswer)) else { check(false, "couldn't open a stand-in server on 127.0.0.1"); return }
+    status = await ConnectionCheck.run(game(answering.port), context: context(answering.port), probe: real)
+    equal(status.health, .ready, "an IPv4-only server that answers the ping is ready: \(status.summary)")
+    check(status.details.contains("The server answers at 127.0.0.1:\(answering.port)."), "and says it answers")
+    answering.stop()
+
+    section("Connections: refused, timed out and still starting (K822)")
+    guard let closedPort = StandInServer.freePort() else { check(false, "couldn't find a free port"); return }
+    let closedAnswer = await real.connect(host: "127.0.0.1", port: closedPort, timeout: 2)
+    equal(closedAnswer, .refused, "a port with nothing on it is refused, not timed out")
+    status = await ConnectionCheck.run(game(closedPort), context: context(closedPort), probe: real)
+    equal(status.health, .notReady, "a running server with nothing listening where the tunnel points: not ready")
+    check(status.summary.contains("Nothing is listening at 127.0.0.1:\(closedPort)") && needsYou(game(closedPort), status).count == 1, "it says so, and that one is in Needs you")
+    status = await ConnectionCheck.run(game(closedPort), context: context(closedPort, running: false), probe: real)
+    equal(status.health, .warning, "a stopped server is still a warning")
+
+    // A delayed start: checked while the server loads, then again once it listens.
+    status = await ConnectionCheck.run(game(closedPort), context: context(closedPort, running: false, starting: true), probe: real)
+    equal(status.health, .unknown, "while the server is starting, a closed port is unknown: \(status.summary)")
+    check(status.summary.contains("still starting") && needsYou(game(closedPort), status).isEmpty, "it says the server is starting, and stays out of Needs you")
+    if let late = StandInServer(.answers(statusAnswer), port: closedPort) {
+        status = await ConnectionCheck.run(game(closedPort), context: context(closedPort), probe: real)
+        equal(status.health, .ready, "checked again once it listens, the same address is ready: \(status.summary)")
+        late.stop()
+    } else {
+        check(false, "couldn't start the stand-in server late on its port")
+    }
+
+    // A timeout: the queue is full and nothing is accepted, so a new connection gets no answer either way.
+    if let stuck = StandInServer(.neverAccepts) {
+        let started = Date()
+        let answer = await real.connect(host: "127.0.0.1", port: stuck.port, timeout: 1)
+        equal(answer, .undecided("no answer within 1 second"), "a connection that gets no answer in time is undecided")
+        check(Date().timeIntervalSince(started) < 4, "and the wait ends at its limit")
+        status = await ConnectionCheck.run(game(stuck.port), context: context(stuck.port), probe: real)
+        equal(status.health, .unknown, "a check that timed out is unknown, never not ready: \(status.summary)")
+        check(status.summary.hasPrefix("Couldn't check 127.0.0.1:\(stuck.port)") && needsYou(game(stuck.port), status).isEmpty, "it says it couldn't check, and stays out of Needs you")
+        let web = ConnectionService(id: "pack", name: "Pack server", provider: .other, traffic: .web, localAddress: "127.0.0.1:\(stuck.port)")
+        status = await ConnectionCheck.run(web, context: context(25565), probe: real)
+        equal(status.health, .unknown, "the same for a web service")
+        stuck.stop()
+    } else {
+        check(false, "couldn't open the stand-in that never accepts")
+    }
+    let webClosed = ConnectionService(id: "pack", name: "Pack server", provider: .other, traffic: .web, localAddress: "127.0.0.1:\(closedPort)")
+    status = await ConnectionCheck.run(webClosed, context: context(25565), probe: real)
+    equal(status.health, .warning, "a web service with nothing listening is still a warning")
+
+    let odd = FakeConnectionProbe(); odd.undecided = ["127.0.0.1:25565": "network is down"]
+    status = await ConnectionCheck.run(game(25565), context: context(25565), probe: odd)
+    check(status.health == .unknown && status.summary == "Couldn't check 127.0.0.1:25565: network is down.", "any other error is unknown, with the reason: \(status.summary)")
+
+    // Needs you takes only what was checked and found wanting.
+    let services = [game(1), ConnectionService(id: "b", name: "B", provider: .other, traffic: .web), ConnectionService(id: "c", name: "C", provider: .other, traffic: .web),
+                    ConnectionService(id: "d", name: "D", provider: .other, traffic: .web, enabled: false), ConnectionService(id: "e", name: "E", provider: .other, traffic: .web)]
+    let listed = ConnectionCheck.problems(services, ["play": ConnectionStatus(.unknown, "Couldn't check."), "b": ConnectionStatus(.notReady, "Down."),
+                                                     "c": ConnectionStatus(.warning, "Look."), "d": ConnectionStatus(.notReady, "Off anyway.")])
+    equal(listed, ["B: Down.", "C: Look."], "Needs you lists not ready and needs a look, and leaves out unknown, turned off and not checked yet")
+
+    section("Connections: Paper's proxy-protocol setting")
+    check(PaperGlobalSettings.proxyProtocol("proxies:\n  bungee-cord:\n    online-mode: true\n  proxy-protocol: true\n  velocity:\n    enabled: false\n"), "proxy-protocol: true under proxies is read")
+    check(!PaperGlobalSettings.proxyProtocol("proxies:\n  bungee-cord:\n    online-mode: true\n  proxy-protocol: false\n"), "false is read as off")
+    check(!PaperGlobalSettings.proxyProtocol("proxies:\n  # proxy-protocol: true\n  velocity:\n    proxy-protocol: true\nother:\n  proxy-protocol: true\n"), "a comment, a deeper key and another section don't count")
+    check(PaperGlobalSettings.proxyProtocol("_version: 31\nproxies:\n    proxy-protocol: \"true\" # on\n"), "other indents, quotes and a trailing comment are fine")
+    check(!PaperGlobalSettings.proxyProtocol(""), "no file means off")
 }

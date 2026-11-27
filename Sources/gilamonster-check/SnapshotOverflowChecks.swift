@@ -25,6 +25,7 @@ import Foundation
             let read = Overflow.readReport(text)
             check(read.expected > 0 && read.pages == read.expected, "heavy \(theme) \(look): every page was drawn (\(read.pages) of \(read.expected))")
             check(read.overflowing.isEmpty, "heavy \(theme) \(look): no page is wider than the window. \(read.overflowing.joined(separator: "; "))")
+            check(read.pushed.isEmpty && read.placed.count == read.expected, "heavy \(theme) \(look): every page sits inside the window. \(read.pushed.joined(separator: "; "))")
             dialogChecks("heavy \(theme) \(look)", out.appendingPathComponent("heavy/\(theme)-\(look)/dialog-report.txt"))
         }
     }
@@ -75,6 +76,26 @@ import Foundation
     let wide = Overflow.readReport((try? String(contentsOf: wideOut.appendingPathComponent("normal/bold-light/overflow-report.txt"), encoding: .utf8)) ?? "")
     check(wide.expected > 0 && wide.pages == wide.expected, "the too-wide run drew every page")
     equal(wide.overflowing.count, wide.expected, "and every page was reported as too wide")
+
+    // Every banner at once, each with a second line, over two pages (K815). When banners make the column taller than
+    // the window, the report says so.
+    section("Snapshot: banners with a second line leave the page in view")
+    let banners = ["KEYCHAIN": "denied", "BANNERS": "all", "PAGES": "overview,console", "THEMES": "bold"]
+    let bannerOut = folder("snapshot-banners")
+    equal(runScript(script, [bannerOut.path, "normal"], root: root, environment: banners), 0, "the run with every banner finished")
+    for look in ["light", "dark"] {
+        let read = Overflow.readReport((try? String(contentsOf: bannerOut.appendingPathComponent("normal/bold-\(look)/overflow-report.txt"), encoding: .utf8)) ?? "")
+        equal(read.placed.count, 2, "bold \(look): both pages were measured")
+        check(read.placed.allSatisfy { line in bannerHeight(line).map { $0 > 300 } == true }, "bold \(look): the banners were really drawn (over 300 points of them). \(read.placed.joined(separator: "; "))")
+        check(read.pushed.isEmpty, "bold \(look): no page is pushed out of view. \(read.pushed.joined(separator: "; "))")
+    }
+    // The measure has to be able to say no: with the column's hold on its height taken away on purpose, the same
+    // banners push both pages out.
+    section("Snapshot: a page pushed out of view by banners is caught")
+    let oldOut = folder("snapshot-banners-old")
+    equal(runScript(script, [oldOut.path, "normal"], root: root, environment: banners.merging(["LOOKS": "light", "GILAMONSTER_SNAPSHOT_FORCE_TALL_COLUMN": "1"]) { $1 }), 0, "the run without the hold finished")
+    let old = Overflow.readReport((try? String(contentsOf: oldOut.appendingPathComponent("normal/bold-light/overflow-report.txt"), encoding: .utf8)) ?? "")
+    equal(old.pushed.count, 2, "and both pages were reported as pushed out of view. \(old.placed.joined(separator: "; "))")
 }
 
 /// Every dialog was checked, none is clipped, and a report that isn't there fails.
@@ -95,4 +116,10 @@ import Foundation
     do { try run.run() } catch { check(false, "couldn't run the snapshot script: \(error)"); return -1 }
     run.waitUntilExit()
     return run.terminationStatus
+}
+
+/// The banner row's height from a PLACED line: "... banners 412 tall".
+private func bannerHeight(_ line: String) -> Int? {
+    guard let tail = line.components(separatedBy: ", banners ").last, tail.hasSuffix(" tall") else { return nil }
+    return Int(tail.dropLast(5))
 }

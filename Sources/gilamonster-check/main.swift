@@ -28,6 +28,12 @@ import Network
 import GilaMonsterAdvisor
 @testable import GilaMonsterCore
 
+// ... --drill-signal-child <folder> <java> <java major> <stand-in jar> <stop|terminate>
+//     Started by the drill checks themselves (DrillCopyChecks.swift): plays GilaMonster running a drill, to be signalled.
+if let flag = CommandLine.arguments.firstIndex(of: "--drill-signal-child") {
+    await runDrillSignalChild(Array(CommandLine.arguments[(flag + 1)...]))
+}
+
 // ... --demo-packs <folder> <zip>...  Fills a throwaway folder with these packs and a server, for clicking through the app.
 if let flag = CommandLine.arguments.firstIndex(of: "--demo-packs") {
     let demo = URL(fileURLWithPath: CommandLine.arguments[flag + 1])
@@ -72,6 +78,29 @@ if let flag = CommandLine.arguments.firstIndex(of: "--lab-fixture"), flag + 3 < 
                         "[12:03:09 INFO]: Done (7.904s)! For help, type \"help\"", "[12:03:10 INFO]: Disconnecting Alice: You are not on the made-up list.", "[GilaMonster] Lab: \(refused)"]
     let third = MirrorBatch(title: "Everything else 3", plugins: [names[names.count - 1]], fresh: [LabCheck("\(names[names.count - 1]) \(model.plugins[names.count - 1].version) loads", .skipped, "Skipped: needs MadeUpMaps (left out of the lab).")])
     lab.place(.plugins, outcome: .failed, model: model, groups: [first, second, third], note: LabController.note("Paper 26.3 build 1", skipped: 1), leftOut: ["MadeUpMaps reaches outside this Mac, so it doesn't run here."])
+    model.stopTicker()
+    exit(0)
+}
+
+// ... --backup-fixture <home> <servers> <server folder>  Made-up backups for the off-screen pictures (K823): one in the
+//     server's own backup folder from 23 hours ago, and an added storage folder under <home> with one from 4 days ago.
+//     Placeholder archives with GilaMonster's record beside them, all inside <home> and <servers>. The weekly drill
+//     is turned off for that server, so the snapshot has nothing to unpack or start. Starts nothing.
+if let flag = CommandLine.arguments.firstIndex(of: "--backup-fixture"), flag + 3 < CommandLine.arguments.count {
+    setenv("GILAMONSTER_HOME", CommandLine.arguments[flag + 1], 1)
+    setenv("GILAMONSTER_SERVERS", CommandLine.arguments[flag + 2], 1)
+    guard let model = ServerController.open(root: URL(fileURLWithPath: CommandLine.arguments[flag + 3], isDirectory: true)) else { print("no server there"); exit(1) }
+    let storage = URL(fileURLWithPath: CommandLine.arguments[flag + 1], isDirectory: true).appendingPathComponent("made-up-drive", isDirectory: true)
+    try FileOps.ensureDir(storage)
+    model.profile.backup.smart.targets = [storage.path]
+    model.profile.backup.enabled = true
+    // The app's ticker runs the weekly drill on any whole-folder backup it finds, in a snapshot too. These are
+    // placeholders, and a snapshot starts nothing, so the drill is off for this made-up server.
+    model.profile.backup.autoDrill = false
+    let there = Backups.targetFolder(storage.path, for: model.profile)
+    try Backups.claim(there, for: model.profile.id)
+    writeMadeUpBackup(in: Backups.destination(model.profile), madeAt: Date().addingTimeInterval(-23 * 3600), serverName: model.profile.name)
+    writeMadeUpBackup(in: there, madeAt: Date().addingTimeInterval(-4 * 86_400), serverName: model.profile.name, trigger: "scheduled")
     model.stopTicker()
     exit(0)
 }
@@ -172,7 +201,7 @@ nonisolated(unsafe) var passed = 0
 nonisolated(unsafe) var failures: [String] = []
 
 // ... --snapshot  Draws every page with heavy made-up data (scripts/snapshot-fixtures.sh) and fails if any page is wider
-//     than its window. Needs a debug build of GilaMonster and takes several minutes. GILAMONSTER_SNAPSHOT_OUT=<folder>
+//     than its window, or if a row of made-up banners pushes a page out of view (K815). Needs a debug build of GilaMonster and takes several minutes. GILAMONSTER_SNAPSHOT_OUT=<folder>
 //     keeps the pictures there; otherwise they go in a temporary folder that's deleted at the end.
 if CommandLine.arguments.contains("--snapshot") {
     await snapshotOverflowChecks()
@@ -197,6 +226,22 @@ if CommandLine.arguments.contains("--look") {
     exit(failures.isEmpty ? 0 : 1)
 }
 
+// ... --drills  Only the backup drill copy checks (K813), with the stand-in jar. Opens ports 25596 and 25597 on this Mac.
+if CommandLine.arguments.contains("--drills") {
+    drillCopyChecks()
+    let runtimes = await JavaManager.discover()
+    if let jdk = runtimes.first(where: { FileManager.default.isExecutableFile(atPath: URL(fileURLWithPath: $0.path).deletingLastPathComponent().appendingPathComponent("javac").path) }) {
+        let jar = folder("standin-drills").appendingPathComponent("standin.jar")
+        do {
+            try await buildStandIn(jdk: jdk, into: jar)
+            await drillCopyLifecycle(jar: jar, jdk: jdk)
+        } catch { failures.append("drills: \(error)") }
+    } else { print("  skipped the stand-in checks: no JDK found") }
+    cleanUpScratch()
+    print(failures.isEmpty ? "\(passed) passed" : "\(failures.count) FAILED:\n" + failures.joined(separator: "\n"))
+    exit(failures.isEmpty ? 0 : 1)
+}
+
 // ... --connections  Only the connection and color checks, which need no server or network.
 if CommandLine.arguments.contains("--connections") {
     await connectionChecks()
@@ -211,9 +256,11 @@ if CommandLine.arguments.contains("--connections") {
     pixelTypeChecks()
     stopLogChecks()
     backupCloneChecks()
+    drillCopyChecks()
     quitReasonChecks()
     await sessionAccessChecks()
     await keychainWaitChecks()
+    bannerRowChecks()
     commandPatternChecks()
     await sessionActionChecks()
     await todayGrantChecks()
@@ -226,11 +273,14 @@ if CommandLine.arguments.contains("--connections") {
     shutdownSignalChecks()
     needsYouChecks()
     await serverNameChecks()
+    backupSeenChecks()
     await driveFallbackChecks()
     sessionAskPlacementChecks()
     overflowChecks()
     inviteTicketChecks()
     await packPublishChecks()
+    await packCardChecks()
+    appDefaultsChecks()
     scratchDefaultsChecks()
     // --live: also asks this Mac's own playit agent, read-only, and prints only health and summaries.
     if CommandLine.arguments.contains("--live") {
@@ -1339,8 +1389,8 @@ do {
     d = RenameText.replaceAnchors("anchors:\n  home: creative:1.0,2.0,3.0:0.0:0.0\n  note: creative:notes\n", names: ["creative": "build"])
     check(d.0.contains("home: build:1.0"), "anchor"); check(d.0.contains("note: creative:notes"), "not an anchor")
     equal(RenameText.replaceToken("cd /srv/my-server && screen -S my-server; my-server2", old: "my-server", new: "x").1, 2, "whole tokens only")
-    equal(ServerRename.folderFormats(for: "Sonoran Realms"), ["sonoran-realms", "sonoranrealms", "SonoranRealms", "sonoran_realms"], "name formats")
-    equal(ServerRename.folderFormats(for: "sonoranRealms").first, "sonoran-realms", "from camel case"); check(ServerRename.folderFormats(for: "!!").isEmpty, "nothing usable")
+    equal(ServerRename.folderFormats(for: "Riverbend Mountain"), ["riverbend-mountain", "riverbendmountain", "RiverbendMountain", "riverbend_mountain"], "name formats")
+    equal(ServerRename.folderFormats(for: "riverbendMountain").first, "riverbend-mountain", "from camel case"); check(ServerRename.folderFormats(for: "!!").isEmpty, "nothing usable")
     check(WorldRename.problem(with: "Build", world: nil, existing: []) != nil, "uppercase refused"); check(WorldRename.problem(with: "a b", world: nil, existing: []) != nil, "spaces refused"); check(WorldRename.problem(with: "build", world: nil, existing: []) == nil, "fine")
     check(WorldRename.problem(with: "world", world: nil, existing: [WorldEntry(name: "minecraft:world")]) != nil, "taken")
 }
@@ -1454,17 +1504,17 @@ do {
     let sc = try await ServerController.adopt(root: server, name: "My Realm")
     defer { sc.stopTicker() }
     sc.profile.lastPluginCheck = Date(); sc.profile.software.lastCheck = Date(); sc.profile.backup.destination = folder("server-rename-backups").path
-    let sPlan = sc.serverRenamePlan(name: "Sonoran Realms", folder: "sonoran-realms")
+    let sPlan = sc.serverRenamePlan(name: "Riverbend Mountain", folder: "riverbend-mountain")
     let lp = sPlan.items.first { $0.description == "LuckPerms server name" }
     check(lp?.optional == true && lp?.selected == false && lp?.warning != nil, "permissions-sensitive name is opt-in")
-    try await sc.applyRename(sPlan, afterwards: { _ = try sc.rename(to: "Sonoran Realms", moveFolderTo: "sonoran-realms") })
-    let moved = server.deletingLastPathComponent().appendingPathComponent("sonoran-realms")
-    check(FileOps.exists(moved.appendingPathComponent("world/level.dat")), "folder renamed"); equal(sc.profile.name, "Sonoran Realms", "name")
+    try await sc.applyRename(sPlan, afterwards: { _ = try sc.rename(to: "Riverbend Mountain", moveFolderTo: "riverbend-mountain") })
+    let moved = server.deletingLastPathComponent().appendingPathComponent("riverbend-mountain")
+    check(FileOps.exists(moved.appendingPathComponent("world/level.dat")), "folder renamed"); equal(sc.profile.name, "Riverbend Mountain", "name")
     let script = try String(contentsOf: moved.appendingPathComponent("start.sh"), encoding: .utf8)
-    check(script.contains("screen -S sonoran-realms") && script.contains("/sonoran-realms\"") , "script updated: \(script)")
-    check((try String(contentsOf: moved.appendingPathComponent("server.properties"), encoding: .utf8)).contains("Welcome to Sonoran Realms!"), "motd follows")
+    check(script.contains("screen -S riverbend-mountain") && script.contains("/riverbend-mountain\"") , "script updated: \(script)")
+    check((try String(contentsOf: moved.appendingPathComponent("server.properties"), encoding: .utf8)).contains("Welcome to Riverbend Mountain!"), "motd follows")
     check((try String(contentsOf: moved.appendingPathComponent("plugins/LuckPerms/config.yml"), encoding: .utf8)).contains("server: my-realm"), "opt-in left alone unless chosen")
-    check((try String(contentsOf: moved.appendingPathComponent("plugins/Thing/config.yml"), encoding: .utf8)).contains("/sonoran-realms/plugins/x"), "absolute path updated")
+    check((try String(contentsOf: moved.appendingPathComponent("plugins/Thing/config.yml"), encoding: .utf8)).contains("/riverbend-mountain/plugins/x"), "absolute path updated")
 }
 
 section("Cleanup")
@@ -4135,6 +4185,9 @@ func localAddresses() -> [String] {
         s.profile.launch.preset = .none
         s.profile.lastPluginCheck = Date()
         await stopLogLifecycle(s, startupTimeout: 30)
+        // Backup drills that outlive the app (K813), once both ports are free again.
+        if s.state.isLive { s.stop(by: .app("for a check")); _ = await until(60) { !s.state.isLive } }
+        await drillCopyLifecycle(jar: root.appendingPathComponent("standin.jar"), jdk: jdk)
     } catch { failures.append("lifecycle: \(error)") }
 }
 
@@ -4205,6 +4258,8 @@ func buildStandIn(jdk: JavaRuntime, into jar: URL) async throws {
             default -> log("INFO", "Unknown command");
           }
         }
+        // Like a real server, which keeps running when its console closes (K813). Only when asked, so nothing else changes.
+        if (new File("outlive-console").exists()) { Thread.sleep(Long.MAX_VALUE); }
       }
     }
     """#
@@ -4945,9 +5000,11 @@ func makePack(_ name: String, _ files: [String: String], inside: String? = nil) 
     pixelTypeChecks()
     stopLogChecks()
     backupCloneChecks()
+    drillCopyChecks()
     quitReasonChecks()
     await sessionAccessChecks()
     await keychainWaitChecks()
+    bannerRowChecks()
     commandPatternChecks()
     await sessionActionChecks()
     await todayGrantChecks()
@@ -4960,11 +5017,14 @@ func makePack(_ name: String, _ files: [String: String], inside: String? = nil) 
     shutdownSignalChecks()
     needsYouChecks()
     await serverNameChecks()
+    backupSeenChecks()
     await driveFallbackChecks()
     sessionAskPlacementChecks()
     overflowChecks()
     inviteTicketChecks()
     await packPublishChecks()
+    await packCardChecks()
+    appDefaultsChecks()
     await packSongChecks()
     await pluginUpgradeChecks()
     await serverIconChecks()
@@ -6329,9 +6389,9 @@ exit(failures.isEmpty ? 0 : 1)
     equal(kinds(lab), [.issues], "the Lab: no backup, drive or connection items, but issues still show")
     let now = Date(timeIntervalSince1970: 1_800_000_000)
     equal(NeedsYou.statusLine(running: false, starting: false, since: nil, players: 0, software: "Paper 26.3 build 253", lastBackup: nil, isLab: false, now: now),
-          "Stopped. Paper 26.3 build 253. No backup yet.", "stopped, never backed up")
+          "Stopped. Paper 26.3 build 253. No GilaMonster backup yet.", "stopped, never backed up")
     let line = NeedsYou.statusLine(running: true, starting: false, since: now.addingTimeInterval(-7200), players: 3, software: "Paper", lastBackup: now.addingTimeInterval(-2400), isLab: false, now: now)
-    check(line.hasPrefix("Running for 2 hours. 3 players on. Last backup "), "running: how long, who's on, last backup (\(line))")
+    check(line.hasPrefix("Running for 2 hours. 3 players on. Last GilaMonster backup "), "running: how long, who's on, last backup (\(line))")
     equal(NeedsYou.statusLine(running: true, starting: false, since: now, players: 1, software: "Paper", lastBackup: nil, isLab: true, now: now),
           "Running for 1 minute. 1 player on.", "the Lab never mentions backups; under a minute reads as one")
     equal(NeedsYou.statusLine(running: false, starting: true, since: nil, players: 0, software: "Paper", lastBackup: nil, isLab: true, now: now), "Starting.", "starting")

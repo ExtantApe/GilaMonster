@@ -4,7 +4,7 @@ import SwiftUI
 
 struct RootView: View {
     @Bindable var model: AppModel
-    @AppStorage(ThemeChoice.key) private var themeFlavor = Palette.Flavor.bold.rawValue
+    @AppStorage(ThemeChoice.key, store: AppDefaults.store) private var themeFlavor = Palette.Flavor.bold.rawValue
 
     var body: some View {
         // Without the sheets: adding or setting up a server writes to its folder.
@@ -142,12 +142,12 @@ struct KeychainBanner: View {
         VStack(spacing: 8) {
             if let purposes = waitingPurposes {
                 // Read as one element: there's nothing in it to press, so it's no stop for the Tab key.
-                Callout(tone: .warning, title: KeychainWait.title, detail: KeychainWait.detail(purposes), announces: false, spokenAsOne: true, inBannerRow: true)
+                Callout(tone: .warning, title: KeychainWait.title, detail: KeychainWait.detail(purposes), announces: false, spokenAsOne: true)
             }
             if let retrying {
                 // One callout through a retry, so the buttons and the focus on them stay where they are.
                 Callout(tone: retrying ? .warning : .danger, title: retrying ? KeychainWait.retryTitle : KeychainWait.deniedTitle,
-                        detail: retrying ? KeychainWait.retryDetail : KeychainWait.deniedDetail(.sessionToken), announces: false, inBannerRow: true) {
+                        detail: retrying ? KeychainWait.retryDetail : KeychainWait.deniedDetail(.sessionToken), announces: false) {
                     VStack(alignment: .trailing, spacing: 6) {
                         Button(retrying ? KeychainWait.retryButtonWaiting : KeychainWait.retryButton) {
                             // The button is about to go gray, which would drop the focus: it moves to Dismiss first.
@@ -191,11 +191,17 @@ struct ServerWindow: View {
             Spine(model: model, server: server, renaming: $renaming)
             VStack(spacing: 0) {
                 Trail(model: model, server: server)
-                banners
+                banners.snapshotProbe { SnapshotProbe.banners = $0 }
                 pageView
                     .frame(maxWidth: .infinity, maxHeight: .infinity)
                 ActivityBar(server: server)
             }
+            // The column takes the height it's given and never asks for more. The inspector below measures it at a
+            // narrow width too, where a banner's wrapped text is many lines tall. Without this, that tall answer was
+            // used for the real layout: the column came out taller than the window and the page left the picture
+            // (K809, K815). It covers every banner and page, so none of them needs a layout of its own for it.
+            .frame(minHeight: Self.columnMinHeight, maxHeight: .infinity)
+            .snapshotProbe { SnapshotProbe.column = $0 }
             .background(Theme.background)
             .inspector(isPresented: Binding(
                 get: { model.showIssues && (model.issuesOpenedByHand || server.issues.contains { $0.status == .open }) },
@@ -212,6 +218,15 @@ struct ServerWindow: View {
         .toolbarBackground(Theme.background, for: .windowToolbar)
         .sheet(isPresented: blockersShown) { BlockersSheet(model: model, server: server) }
         .sheet(isPresented: $renaming) { RenameSheet(model: model, server: server) }
+    }
+
+    /// Zero, always. Debug snapshots only: GILAMONSTER_SNAPSHOT_FORCE_TALL_COLUMN=1 takes it away on purpose, to prove
+    /// the snapshot's check catches a page pushed out of view.
+    private static var columnMinHeight: CGFloat? {
+        #if DEBUG
+        if ProcessInfo.processInfo.environment["GILAMONSTER_SNAPSHOT_FORCE_TALL_COLUMN"] != nil { return nil }
+        #endif
+        return 0
     }
 
     private var blockersShown: Binding<Bool> {

@@ -172,18 +172,18 @@ public enum PixelType {
     }
 
     /// The saved choice, or nil when none has been made yet.
-    public static func saved(_ defaults: UserDefaults = .standard) -> Bool? { defaults.object(forKey: key) as? Bool }
+    public static func saved(_ defaults: UserDefaults = AppDefaults.store) -> Bool? { defaults.object(forKey: key) as? Bool }
 
     /// The saved choice. On a first launch it works out the default from this Mac and, with `remember`, saves it, so a
     /// monitor plugged in later doesn't change what the owner has been looking at.
-    public static func load(_ defaults: UserDefaults = .standard, bodySize: Double, boldText: Bool, screenScales: [Double], remember: Bool = true) -> Bool {
+    public static func load(_ defaults: UserDefaults = AppDefaults.store, bodySize: Double, boldText: Bool, screenScales: [Double], remember: Bool = true) -> Bool {
         if let saved = saved(defaults) { return saved }
         let start = firstLaunchDefault(bodySize: bodySize, boldText: boldText, screenScales: screenScales)
         if remember { defaults.set(start, forKey: key) }
         return start
     }
 
-    public static func save(_ on: Bool, _ defaults: UserDefaults = .standard) { defaults.set(on, forKey: key) }
+    public static func save(_ on: Bool, _ defaults: UserDefaults = AppDefaults.store) { defaults.set(on, forKey: key) }
 
     // MARK: Signs and arrows
 

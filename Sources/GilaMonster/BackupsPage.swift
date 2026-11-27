@@ -177,7 +177,9 @@ struct BackupsPage: View {
     @ViewBuilder private var targetsSection: some View {
         Text("Storage, in order").type(.label(.semibold)).foregroundStyle(Theme.ink)
         let targets = server.profile.backup.smart.targets
-        let checked = SmartBackup.check(targets.map { Backups.targetFolder($0, for: server.profile).path }, needed: 0)
+        let folders = targets.map { Backups.targetFolder($0, for: server.profile).path }
+        let checked = SmartBackup.check(folders, needed: 0)
+        let newest = BackupSeen.newestByFolder(server.backups)
         ForEach(Array(targets.enumerated()), id: \.offset) { index, path in
             HStack {
                 Badge(text: checked[index].usable ? "Ready" : "Not available", tone: checked[index].usable ? .good : .warning)
@@ -191,6 +193,8 @@ struct BackupsPage: View {
                     .accessibilityLabel("Remove \((path as NSString).lastPathComponent) from storage")
             }
             if !checked[index].usable { Hint(checked[index].reason) }
+            // Each storage folder's own newest backup (K823). Nothing is said about a drive that isn't connected.
+            if let line = BackupSeen.storageLine(newest: newest[folders[index]], readable: DriveCheck.isConnected(URL(fileURLWithPath: folders[index], isDirectory: true))) { Hint(line) }
         }
         HStack {
             Text("Then: this server's own folder").foregroundStyle(Theme.muted)
@@ -285,6 +289,7 @@ struct BackupsPage: View {
             if !server.state.canStart, !server.backups.isEmpty {
                 Hint("Stop the server to restore a backup.")
             }
+            Hint(BackupSeen.listNote)
         }
     }
 }

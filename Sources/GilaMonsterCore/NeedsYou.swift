@@ -20,6 +20,7 @@ public struct NeedsYouItem: Equatable, Sendable, Identifiable {
 }
 
 public struct NeedsYouFacts: Equatable, Sendable {
+    /// GilaMonster has made at least one backup of this server. Other tools' backups aren't seen (K823).
     public var hasBackup = false
     public var autoBackups = false
     /// One sentence about a backup drive running low, when one is.
@@ -43,8 +44,8 @@ public enum NeedsYou {
         var out: [NeedsYouItem] = []
         if !f.isLab {
             if !f.hasBackup {
-                out.append(.init(kind: .noBackup, tone: .warning, title: "No backup yet",
-                                 detail: "Nothing to restore if something goes wrong. A backup works while the server runs.",
+                out.append(.init(kind: .noBackup, tone: .warning, title: "No GilaMonster backup yet",
+                                 detail: "GilaMonster has made no backup of this server, so it has nothing to restore from. It can't see backups other tools make. A backup works while the server runs.",
                                  action: .backUpNow, actionTitle: "Back Up Now"))
             }
             if !f.autoBackups {
@@ -105,9 +106,9 @@ public enum NeedsYou {
             if let lastBackup {
                 let rel = RelativeDateTimeFormatter()
                 rel.unitsStyle = .full
-                parts.append("Last backup \(rel.localizedString(for: lastBackup, relativeTo: now)).")
+                parts.append("Last GilaMonster backup \(rel.localizedString(for: lastBackup, relativeTo: now)).")
             } else {
-                parts.append("No backup yet.")
+                parts.append("No GilaMonster backup yet.")
             }
         }
         return parts.joined(separator: " ")
@@ -125,7 +126,8 @@ public enum NeedsYou {
         }
     }
 
-    /// The one muted line under the sentence: "Paper 26.2 · up for 2 hours · backed up 25 minutes ago · nothing needs you".
+    /// The one muted line under the sentence: "Paper 26.2 · up for 2 hours · GilaMonster backup 25 minutes ago · nothing needs you".
+    /// The backup age is GilaMonster's own newest backup, and says so: other tools' backups aren't seen (K823).
     public static func factLine(software: String, running: Bool, since: Date?, lastBackup: Date?, isLab: Bool,
                                 needs: Int, openIssues: Int, now: Date = Date()) -> String {
         var parts = [software]
@@ -138,9 +140,9 @@ public enum NeedsYou {
             if let lastBackup {
                 let rel = RelativeDateTimeFormatter()
                 rel.unitsStyle = .full
-                parts.append("backed up \(rel.localizedString(for: lastBackup, relativeTo: now))")
+                parts.append("GilaMonster backup \(rel.localizedString(for: lastBackup, relativeTo: now))")
             } else {
-                parts.append("no backup yet")
+                parts.append("no GilaMonster backup yet")
             }
         }
         parts.append(needs == 0 ? "nothing needs you" : needs == 1 ? "1 thing needs you" : "\(needs) things need you")
