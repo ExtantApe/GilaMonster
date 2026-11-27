@@ -1096,8 +1096,8 @@ private final class PageClient {
     try FileOps.ensureDir(jars)
     var got: [URL] = []
     for (name, url, sha) in [
-        ("Sheriff-0.4.1.jar", "https://github.com/ExtantApe/Sheriff/releases/download/v0.4.1/Sheriff-0.4.1.jar", "4d1ff17d7603e58550503975e2aef794645a5b3722468f51363bcc2e44c31b0d"),
-        ("WelcomeWagon-0.3.0.jar", "https://github.com/ExtantApe/WelcomeWagon/releases/download/v0.3.0/WelcomeWagon-0.3.0.jar", "1dd0c76d88612c613afe84fab1658ddf2bf851d373b96df68d0771b4e9b67032"),
+        ("Sheriff-0.5.1.jar", "https://github.com/ExtantApe/Sheriff/releases/download/v0.5.1/Sheriff-0.5.1.jar", "5466edd8144dbd816860f9df4ce6fa8e632ad813409bb50ccbc9c6ea8b58f056"),
+        ("WelcomeWagon-0.7.0.jar", "https://github.com/ExtantApe/WelcomeWagon/releases/download/v0.7.0/WelcomeWagon-0.7.0.jar", "6f752f403a18f9a1b6b584c1856cc694ad1f3cccf91451e44f57075876dde2c5"),
     ] {
         let to = jars.appendingPathComponent(name)
         _ = try await HTTP.download(URL(string: url)!, to: to, expect: ExpectedHashes(sha256: sha))
