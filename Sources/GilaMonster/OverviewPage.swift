@@ -14,7 +14,7 @@ struct OverviewPage: View {
     @State private var pulse = false
 
     private let columns = [GridItem(.adaptive(minimum: 250), spacing: 14, alignment: .top)]
-    private let factColumns = [GridItem(.adaptive(minimum: 220), spacing: 12, alignment: .top)]
+    private var factColumns: [GridItem] { [GridItem(.adaptive(minimum: 220 * Theme.grow), spacing: 12, alignment: .top)] }
 
     var body: some View {
         ScrollView {
@@ -39,8 +39,8 @@ struct OverviewPage: View {
                 // Needs you and Players online side by side, stacked when the window is narrow.
                 ViewThatFits(in: .horizontal) {
                     HStack(alignment: .top, spacing: 12) {
-                        needsYou.frame(minWidth: 300)
-                        playersOnline.frame(minWidth: 260)
+                        needsYou.frame(minWidth: 300 * Theme.grow)
+                        playersOnline.frame(minWidth: 260 * Theme.grow)
                     }
                     VStack(alignment: .leading, spacing: 12) {
                         needsYou
@@ -84,7 +84,7 @@ struct OverviewPage: View {
                 GlyphView(glyph: server.state.glyph, size: 22)
                     .scaleEffect(pulse ? 1.35 : 1)
                 Text(server.headline)
-                    .font(Theme.display(28)).foregroundStyle(Theme.ink)
+                    .type(.display(28)).foregroundStyle(Theme.ink)
                     .fixedSize(horizontal: false, vertical: true)
                     .accessibilityAddTraits(.isHeader)
                     .accessibilityLabel(server.headlineSpoken)
@@ -174,7 +174,7 @@ struct OverviewPage: View {
                 HStack(alignment: .firstTextBaseline, spacing: 8) {
                     Image(systemName: tone.icon).foregroundStyle(tone.color).accessibilityHidden(true)
                     VStack(alignment: .leading, spacing: 2) {
-                        Text(item.title).font(.body.weight(.semibold)).foregroundStyle(Theme.ink).fixedSize(horizontal: false, vertical: true)
+                        Text(item.title).type(.label(.semibold)).foregroundStyle(Theme.ink).fixedSize(horizontal: false, vertical: true)
                         if !item.detail.isEmpty { Text(item.detail).foregroundStyle(Theme.muted).fixedSize(horizontal: false, vertical: true) }
                         if let action = item.action, let title = item.actionTitle {
                             Button(title) { perform(action) }
@@ -258,7 +258,7 @@ struct OverviewPage: View {
             Fact(label: "Server message", value: server.serverMessage ?? "Not set")
             Fact(label: "Players online", value: server.state == .running ? "\(server.players.count)" : "None")
             if !server.players.isEmpty {
-                Text(server.players.sorted().joined(separator: ", ")).font(.body).foregroundStyle(Theme.ink)
+                Text(server.players.sorted().joined(separator: ", ")).type(.body).foregroundStyle(Theme.ink)
             }
             if !server.isLab { ConnectCheckRow(server: server) }
             if let local {
@@ -314,7 +314,7 @@ struct OverviewPage: View {
             Fact(label: "Plugins installed", value: "\(server.plugins.filter(\.enabled).count)")
             Fact(label: "Plugin updates", value: "\(updates)")
             Fact(label: "Plugins without a source", value: "\(server.plugins.filter { !server.record(for: $0).source.isSet }.count)")
-            HStack {
+            WrapRow {
                 Button("Open Software") { model.page = .software }.buttonStyle(.themed)
                 Button("Open Plugins") { model.page = .plugins }.buttonStyle(.themed)
             }
@@ -421,9 +421,9 @@ struct ServerIconCard: View {
                     }
                 }
                 .overlay(RoundedRectangle(cornerRadius: 4).stroke(icon.inUse ? Theme.accent : Theme.controlBorder, lineWidth: icon.inUse ? 3 : 1))
-                Text(icon.name).font(.body).foregroundStyle(Theme.ink).lineLimit(2).multilineTextAlignment(.center).frame(width: 76)
-                if icon.inUse { Text("In use").font(.body.weight(.semibold)).foregroundStyle(Theme.accent) }
-                else if !icon.fits { Text("\(icon.width)×\(icon.height)").font(.body).foregroundStyle(Theme.warning) }
+                Text(icon.name).type(.body).foregroundStyle(Theme.ink).lineLimit(2).multilineTextAlignment(.center).frame(width: 76)
+                if icon.inUse { Text("In use").type(.label(.semibold)).foregroundStyle(Theme.accent) }
+                else if !icon.fits { Text("\(icon.width)×\(icon.height)").type(.body).foregroundStyle(Theme.warning) }
             }
         }
         .buttonStyle(.plain)

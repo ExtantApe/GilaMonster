@@ -180,6 +180,23 @@ if CommandLine.arguments.contains("--snapshot") {
     exit(failures.isEmpty ? 0 : 1)
 }
 
+// ... --look  Only the checks of the look: colors, the desert look, controls and pixel type. They read the palette, the
+//     fonts in brand/ and the app's source, and start no process, so they need no test-server lock.
+if CommandLine.arguments.contains("--look") {
+    paletteChecks()
+    linkButtonColorChecks()
+    themeChoiceChecks()
+    noHardCodedColorChecks()
+    sidebarChecks()
+    desertChecks()
+    controlLookChecks()
+    pixelTypeChecks()
+    overflowChecks()
+    scratchDefaultsChecks()
+    print(failures.isEmpty ? "\(passed) passed" : "\(failures.count) FAILED:\n" + failures.joined(separator: "\n"))
+    exit(failures.isEmpty ? 0 : 1)
+}
+
 // ... --connections  Only the connection and color checks, which need no server or network.
 if CommandLine.arguments.contains("--connections") {
     await connectionChecks()
@@ -191,6 +208,7 @@ if CommandLine.arguments.contains("--connections") {
     sidebarChecks()
     desertChecks()
     controlLookChecks()
+    pixelTypeChecks()
     stopLogChecks()
     backupCloneChecks()
     quitReasonChecks()
@@ -4924,6 +4942,7 @@ func makePack(_ name: String, _ files: [String: String], inside: String? = nil) 
     sidebarChecks()
     desertChecks()
     controlLookChecks()
+    pixelTypeChecks()
     stopLogChecks()
     backupCloneChecks()
     quitReasonChecks()

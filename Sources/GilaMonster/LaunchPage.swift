@@ -33,8 +33,8 @@ struct LaunchPage: View {
                         }
                     } label: {
                         VStack(alignment: .leading, spacing: 0) {
-                            Text(preset.title).font(.body.weight(.medium))
-                            Text(preset.detail).font(.body)
+                            Text(preset.title).type(.label(.medium))
+                            Text(preset.detail).type(.body)
                         }
                         .padding(.vertical, 4)
                     }
@@ -132,18 +132,18 @@ struct LaunchPage: View {
             if server.profile.launch.preset == .recommended {
                 DisclosureGroup("Show the flags", isExpanded: $showFlags) {
                     Text((server.profile.software.recommendedFlags.isEmpty ? fallbackRecommendedFlags : server.profile.software.recommendedFlags).joined(separator: "\n"))
-                        .font(.system(.body, design: .monospaced)).foregroundStyle(Theme.ink).textSelection(.enabled)
+                        .type(.mono).foregroundStyle(Theme.ink).textSelection(.enabled)
                         .frame(maxWidth: .infinity, alignment: .leading).padding(.top, 4)
                 }
                 .foregroundStyle(Theme.ink)
             }
             LabeledContent("Extra JVM arguments") {
                 TextField("Extra JVM arguments", text: $server.profile.launch.extraJVMArgs, prompt: Text("-Dfoo=bar"))
-                    .labelsHidden().textFieldStyle(.roundedBorder).font(.system(.body, design: .monospaced))
+                    .labelsHidden().textFieldStyle(.roundedBorder).type(.mono)
             }
             LabeledContent("Server arguments") {
                 TextField("Server arguments", text: $server.profile.launch.serverArgs, prompt: Text("--port 25566 --world-dir worlds"))
-                    .labelsHidden().textFieldStyle(.roundedBorder).font(.system(.body, design: .monospaced))
+                    .labelsHidden().textFieldStyle(.roundedBorder).type(.mono)
             }
             Toggle("Hide Minecraft's own server window (nogui)", isOn: $server.profile.launch.noGUI)
             Hint("Leave this on: GilaMonster is your console, and the extra window uses memory.")
@@ -181,7 +181,7 @@ struct LaunchPage: View {
     private var commandCard: some View {
         Card(title: "Full command", systemImage: "terminal") {
             let command = LaunchCommand.display(java: server.resolvedJava()?.path ?? "java", server.profile.launch, software: server.profile.software, javaMajor: server.resolvedJava()?.major ?? 0)
-            Text(command).font(.system(.body, design: .monospaced)).foregroundStyle(Theme.ink).textSelection(.enabled)
+            Text(command).type(.mono).foregroundStyle(Theme.ink).textSelection(.enabled)
                 .fixedSize(horizontal: false, vertical: true)
             Button("Copy") {
                 NSPasteboard.general.clearContents()

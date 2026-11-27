@@ -51,7 +51,7 @@ struct InviteTicketSheet: View {
     var body: some View {
         VStack(spacing: 14) {
             InviteTicketView(ticket: ticket)
-            if let problem { Text(problem).foregroundStyle(Theme.danger).font(.body) }
+            if let problem { Text(problem).foregroundStyle(Theme.danger).type(.body) }
             HStack {
                 Button("Copy as Text") {
                     NSPasteboard.general.clearContents()

@@ -655,7 +655,7 @@ struct AdvisorPage: View {
                 Toggle(isOn: Binding(get: { center.isAutomatic(server) }, set: { center.setAutomatic(server, $0) })) {
                     VStack(alignment: .leading, spacing: 2) {
                         Text("Check by itself when something new goes wrong").foregroundStyle(Theme.ink)
-                        Text("At most every six hours, while GilaMonster is open. Quiet servers cost nothing.").font(.body).foregroundStyle(Theme.muted)
+                        Text("At most every six hours, while GilaMonster is open. Quiet servers cost nothing.").type(.body).foregroundStyle(Theme.muted)
                     }
                 }
             }
@@ -692,8 +692,8 @@ private struct AdvisorCard: View {
                 HStack(alignment: .top, spacing: 8) {
                     Image(systemName: item.severity.tone.icon).foregroundStyle(item.severity.tone.color).accessibilityHidden(true)
                     VStack(alignment: .leading, spacing: 2) {
-                        Text(verbatim: item.title).font(.body.weight(.semibold)).foregroundStyle(Theme.ink).textSelection(.enabled)
-                        Text("Written by AI · \(item.severity.label)").font(.body).foregroundStyle(Theme.muted)
+                        Text(verbatim: item.title).type(.label(.semibold)).foregroundStyle(Theme.ink).textSelection(.enabled)
+                        Text("Written by AI · \(item.severity.label)").type(.body).foregroundStyle(Theme.muted)
                     }
                     Spacer(minLength: 0)
                 }
@@ -723,11 +723,11 @@ private struct AdvisorPreview: View {
 
     var body: some View {
         VStack(alignment: .leading, spacing: 12) {
-            Text("What the Advisor would see").font(.title3.weight(.semibold)).foregroundStyle(Theme.ink).accessibilityAddTraits(.isHeader)
+            Text("What the Advisor would see").type(.title(15, .title3)).foregroundStyle(Theme.ink).accessibilityAddTraits(.isHeader)
             Hint("Nothing has been sent. This is everything \(server.displayName) would share if a check ran now. Names like Player-1a2b3c4d are code names that only this Mac can translate.")
             ScrollView {
                 Text(verbatim: AdvisorCenter.shared.previews[server.paths.root.path] ?? "Reading…")
-                    .font(.system(.body, design: .monospaced)).foregroundStyle(Theme.ink)
+                    .type(.mono).foregroundStyle(Theme.ink)
                     .frame(maxWidth: .infinity, alignment: .leading).textSelection(.enabled).padding(10)
             }
             .background(Theme.surface, in: RoundedRectangle(cornerRadius: Theme.controlRadius))

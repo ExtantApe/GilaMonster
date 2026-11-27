@@ -93,7 +93,7 @@ struct InvitesCard: View {
         if let warning = new.warning { Callout(tone: .warning, title: warning) }
         HStack(spacing: 12) {
             Text(new.code)
-                .font(.system(size: 28, weight: .semibold, design: .monospaced))
+                .font(.system(size: 28 * Theme.textFactor, weight: .semibold, design: .monospaced))   // type-exempt: a one-time code, set large in the system's fixed-width face
                 .foregroundStyle(Theme.ink)
                 .textSelection(.enabled)
                 .accessibilityLabel("Invite code: \(new.code.map(String.init).joined(separator: " "))")
@@ -106,8 +106,8 @@ struct InvitesCard: View {
         }
         if let url = address.url {
             VStack(alignment: .leading, spacing: 2) {
-                Text("Sign in at").font(.body).foregroundStyle(Theme.muted)
-                Text(url).font(.title3.weight(.semibold)).foregroundStyle(Theme.ink).textSelection(.enabled)
+                Text("Sign in at").type(.body).foregroundStyle(Theme.muted)
+                Text(url).type(.title(15, .title3)).foregroundStyle(Theme.ink).textSelection(.enabled)
                     .accessibilityLabel("Sign-in page: \(url)")
             }
             .accessibilityElement(children: .combine)
@@ -139,7 +139,7 @@ struct InvitesCard: View {
 
     @ViewBuilder private var listView: some View {
         let open = invites.filter { $0.isOpen() }
-        Text("Invites (\(open.count) waiting)").font(.body.weight(.semibold)).foregroundStyle(Theme.ink)
+        Text("Invites (\(open.count) waiting)").type(.label(.semibold)).foregroundStyle(Theme.ink)
         if invites.isEmpty { Hint("None yet.") }
         if more { Hint("Showing the newest \(invites.count). Older invites are in WelcomeWagon's own list: /welcomewagon invite list.") }
         ForEach(invites) { invite in
@@ -218,10 +218,10 @@ struct WebSignInSection: View {
             case nil: Hint("Asking WelcomeWagon about web sign-ins…")
             case .unsupported?: EmptyView()
             case .problem(let why)?:
-                Text("Web sign-in").font(.body.weight(.semibold)).foregroundStyle(Theme.ink)
+                Text("Web sign-in").type(.label(.semibold)).foregroundStyle(Theme.ink)
                 Callout(tone: .warning, title: "Couldn't check web sign-ins", detail: why)
             case .signedIn(let n)?:
-                Text("Web sign-in").font(.body.weight(.semibold)).foregroundStyle(Theme.ink)
+                Text("Web sign-in").type(.label(.semibold)).foregroundStyle(Theme.ink)
                 HStack {
                     Hint(n == 0 ? "\(name) isn't signed in to the web pages anywhere." : "\(name) is signed in to the web pages on \(n) browser\(n == 1 ? "" : "s").")
                     Spacer()

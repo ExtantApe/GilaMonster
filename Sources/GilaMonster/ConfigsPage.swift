@@ -91,7 +91,7 @@ struct ConfigEditor: View {
     var body: some View {
         VStack(alignment: .leading, spacing: 10) {
             VStack(alignment: .leading, spacing: 2) {
-                Text(file.title).font(.title2.weight(.semibold)).foregroundStyle(Theme.ink).accessibilityAddTraits(.isHeader)
+                Text(file.title).type(.title(17, .title2)).foregroundStyle(Theme.ink).accessibilityAddTraits(.isHeader)
                 Hint(file.summary.isEmpty ? file.path : "\(file.summary) (\(file.path))")
             }
             stateCallout
@@ -275,9 +275,9 @@ struct DynamicConfigForm: View {
                 collapsed = current
             } label: {
                 HStack {
-                    Image(systemName: open ? "chevron.down" : "chevron.right").font(.body).foregroundStyle(Theme.muted).accessibilityHidden(true)
-                    Text(section.name).font(.headline).foregroundStyle(Theme.ink).multilineTextAlignment(.leading)
-                    Text("\(section.fields.count)").font(.body).foregroundStyle(Theme.muted)
+                    Image(systemName: open ? "chevron.down" : "chevron.right").font(Theme.symbol()).foregroundStyle(Theme.muted).accessibilityHidden(true)
+                    Text(section.name).type(.headline).foregroundStyle(Theme.ink).multilineTextAlignment(.leading)
+                    Text("\(section.fields.count)").type(.body).foregroundStyle(Theme.muted)
                     Spacer()
                 }
                 .padding(10)
@@ -342,7 +342,7 @@ struct ConfigFieldRow: View {
             }
             .labelsHidden().fixedSize()
         case .readOnly:
-            Text(field.value).font(.body).foregroundStyle(Theme.muted).lineLimit(1)
+            Text(field.value).type(.body).foregroundStyle(Theme.muted).lineLimit(1)
                 .helped("Edit this in the Full File view")
         case .int, .number:
             TextField(field.title, text: Binding(get: { field.value }, set: { onChange($0) }))

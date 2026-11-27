@@ -61,7 +61,7 @@ struct LinksPage: View {
                     savePage()
                 })) { EmptyView() }
                 .toggleStyle(.checkbox).labelsHidden().accessibilityLabel("Show \(row.name) to players")
-                Text(row.name).font(.body.weight(.semibold)).foregroundStyle(Theme.ink).textSelection(.enabled)
+                Text(row.name).type(.label(.semibold)).foregroundStyle(Theme.ink).textSelection(.enabled)
                 Hint(row.version.isEmpty ? "Version unknown" : row.version)
                 Spacer()
                 if let link = row.link, let url = URL(string: link.url) {
@@ -143,7 +143,7 @@ struct LinksPage: View {
             Hint("GilaMonster only listens on this Mac. Getting it to players needs HTTPS that ends on this Mac, set up in Caddy with a tunnel. See the README.")
             mapSection
             if let web = server.linksWeb, !web.signedIn.isEmpty {
-                Text("Signed in now (\(web.signedIn.count))").font(.body.weight(.semibold)).foregroundStyle(Theme.ink)
+                Text("Signed in now (\(web.signedIn.count))").type(.label(.semibold)).foregroundStyle(Theme.ink)
                 ForEach(web.signedIn) { session in
                     HStack {
                         Text(session.name).foregroundStyle(Theme.ink).rowName(session.name)
@@ -160,7 +160,7 @@ struct LinksPage: View {
             }
             if !log.isEmpty {
                 let cut = Overflow.slice(log, limit: Overflow.Limit.recentSignIns, expanded: showAllSignIns)
-                Text("Recent sign-ins (\(log.count))").font(.body.weight(.semibold)).foregroundStyle(Theme.ink)
+                Text("Recent sign-ins (\(log.count))").type(.label(.semibold)).foregroundStyle(Theme.ink)
                 ForEach(cut.shown) { event in
                     Hint("\(event.date.formatted(date: .abbreviated, time: .shortened)): \(event.name), \(event.kind.title)")
                 }

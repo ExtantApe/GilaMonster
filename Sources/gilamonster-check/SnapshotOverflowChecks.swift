@@ -28,6 +28,20 @@ import Foundation
         }
     }
 
+    // Pixel type (K820) is on in every run above, at the default text size. The same heavy data again at the two larger
+    // label sizes, 16.5 pt (body 16) and 22 pt (body 23), where buttons, columns and the sidebar have grown with the text.
+    section("Snapshot: no page is wider than its window with larger pixel type (heavy data)")
+    for (body, label) in [("16", "16.5 pt labels"), ("23", "22 pt labels")] {
+        let larger = out.appendingPathComponent("body-\(body)")
+        try? FileManager.default.removeItem(at: larger.appendingPathComponent("heavy/bold-light/overflow-report.txt"))
+        let status = runScript(script, [larger.path, "heavy"], root: root,
+                               environment: ["THEMES": "bold", "LOOKS": "light", "GILAMONSTER_SNAPSHOT_PIXEL": "on", "GILAMONSTER_SNAPSHOT_BODY": body, "GILAMONSTER_SNAPSHOT_DIALOGS_ONLY": ""].filter { !$0.value.isEmpty })
+        equal(status, 0, "\(label): the snapshot script finished")
+        let read = Overflow.readReport((try? String(contentsOf: larger.appendingPathComponent("heavy/bold-light/overflow-report.txt"), encoding: .utf8)) ?? "")
+        check(read.expected > 0 && read.pages == read.expected, "\(label): every page was drawn (\(read.pages) of \(read.expected))")
+        check(read.overflowing.isEmpty, "\(label): no page is wider than the window. \(read.overflowing.joined(separator: "; "))")
+    }
+
     // The measure has to be able to say no: with every page made too wide on purpose, each must be reported.
     section("Snapshot: a deliberately too-wide page is caught")
     let wideOut = folder("snapshot-wide")

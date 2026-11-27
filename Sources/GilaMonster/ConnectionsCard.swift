@@ -87,18 +87,18 @@ struct ConnectionsCard: View {
         let status = statuses[service.id] ?? (service.enabled ? ConnectionStatus(.unknown, "Not checked yet.") : ConnectionStatus(.off, "Turned off."))
         VStack(alignment: .leading, spacing: 4) {
             HStack(alignment: .firstTextBaseline) {
-                Text(service.name).font(.body.weight(.semibold)).foregroundStyle(Theme.ink)
-                Text(service.provider.title).font(.body).foregroundStyle(Theme.muted)
+                Text(service.name).type(.label(.semibold)).foregroundStyle(Theme.ink)
+                Text(service.provider.title).type(.body).foregroundStyle(Theme.muted)
                 Spacer(minLength: 8)
                 Badge(text: status.health.title, tone: status.health.tone)
             }
-            Text(status.summary).font(.body).foregroundStyle(Theme.ink).fixedSize(horizontal: false, vertical: true)
+            Text(status.summary).type(.body).foregroundStyle(Theme.ink).fixedSize(horizontal: false, vertical: true)
             if !status.details.isEmpty {
                 DisclosureGroup(isExpanded: Binding(get: { expanded.contains(service.id) }, set: { if $0 { expanded.insert(service.id) } else { expanded.remove(service.id) } })) {
                     VStack(alignment: .leading, spacing: 2) {
-                        ForEach(Array(status.details.enumerated()), id: \.offset) { Text("• \($0.element)").font(.body).foregroundStyle(Theme.muted) }
+                        ForEach(Array(status.details.enumerated()), id: \.offset) { Text("• \($0.element)").type(.body).foregroundStyle(Theme.muted) }
                     }
-                } label: { Text("What was checked").font(.body) }
+                } label: { Text("What was checked").type(.body) }
             }
         }
         .padding(.vertical, 4)
@@ -112,12 +112,12 @@ struct ConnectionsCard: View {
         let status = urlStatuses[key] ?? (url.isEmpty ? ConnectionStatus(.off, "Not set.") : ConnectionStatus(.unknown, "Not checked yet."))
         VStack(alignment: .leading, spacing: 2) {
             HStack(alignment: .firstTextBaseline) {
-                Text(label).foregroundStyle(Theme.muted)
+                Text(label).type(.label()).foregroundStyle(Theme.muted)
                 Spacer(minLength: 8)
-                Text(url.isEmpty ? "Not set" : url).foregroundStyle(Theme.ink).textSelection(.enabled).lineLimit(1).truncationMode(.middle)
+                Text(url.isEmpty ? "Not set" : url).type(.label()).foregroundStyle(Theme.ink).textSelection(.enabled).lineLimit(1).truncationMode(.middle)
                 if !url.isEmpty { Badge(text: status.health.title, tone: status.health.tone) }
             }
-            if !url.isEmpty, status.health != .unknown { Text(status.summary).font(.body).foregroundStyle(Theme.muted) }
+            if !url.isEmpty, status.health != .unknown { Text(status.summary).type(.body).foregroundStyle(Theme.muted) }
         }
         .accessibilityElement(children: .combine)
     }
@@ -179,7 +179,7 @@ struct ConnectionsEditor: View {
 
     var body: some View {
         VStack(alignment: .leading, spacing: 14) {
-            Text("Connections").font(.title2.weight(.semibold)).accessibilityAddTraits(.isHeader)
+            Text("Connections").type(.title(17, .title2)).accessibilityAddTraits(.isHeader)
             Hint("Addresses and names are saved in this server's .gilamonster/connections.json. Secrets are never saved there: they go in your Keychain, or stay in the service's own file.")
             if loaded.unreadable {
                 Callout(tone: .warning, title: "The old file couldn't be read", detail: "Saving moves it aside as connections.json.unreadable, so nothing is lost.")
@@ -214,7 +214,7 @@ struct ConnectionsEditor: View {
                 }
                 .fixedSize()
                 Spacer()
-                if let error { Text(error).foregroundStyle(Theme.danger).font(.body) }
+                if let error { Text(error).foregroundStyle(Theme.danger).type(.body) }
                 Button("Cancel") { dismiss() }.keyboardShortcut(.cancelAction)
                 Button("Save") { save() }.keyboardShortcut(.defaultAction).buttonStyle(.themedPrimary)
             }
@@ -288,7 +288,7 @@ private struct ServiceEditor: View {
     var body: some View {
         VStack(alignment: .leading, spacing: 8) {
             HStack {
-                Toggle(isOn: $service.enabled) { Text(service.name.isEmpty ? service.id : service.name).font(.headline) }
+                Toggle(isOn: $service.enabled) { Text(service.name.isEmpty ? service.id : service.name).type(.headline) }
                     .toggleStyle(.switch)
                 Spacer()
                 Button("Remove…", role: .destructive, action: remove).buttonStyle(.themed).accessibilityLabel("Remove \(service.name)")

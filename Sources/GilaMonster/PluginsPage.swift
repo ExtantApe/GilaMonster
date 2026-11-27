@@ -68,7 +68,7 @@ struct PluginsPage: View {
             TableColumn("Name") { p in
                 VStack(alignment: .leading) {
                     Text(p.name).foregroundStyle(p.enabled ? Theme.ink : Theme.muted)
-                    if !p.enabled { Text("Disabled").font(.body).foregroundStyle(Theme.muted) }
+                    if !p.enabled { Text("Disabled").type(.body).foregroundStyle(Theme.muted) }
                 }
             }
             TableColumn("Version") { p in Text(p.version).foregroundStyle(Theme.ink) }.width(min: 70, ideal: 110)
@@ -119,7 +119,7 @@ struct PluginDetail: View {
         ScrollView {
             VStack(alignment: .leading, spacing: 10) {
                 HStack(alignment: .firstTextBaseline) {
-                    Text("\(plugin.name) \(plugin.version)").font(.title3.weight(.semibold)).foregroundStyle(Theme.ink)
+                    Text("\(plugin.name) \(plugin.version)").type(.title(15, .title3)).foregroundStyle(Theme.ink)
                     Spacer()
                     Picker("When updates appear", selection: policyBinding(record)) {
                         ForEach(PluginRecord.Policy.allCases) { Text($0.title).tag($0) }
@@ -443,7 +443,7 @@ struct FindSourcesSheet: View {
     @ViewBuilder private func row(_ proposal: SourceProposal) -> some View {
         VStack(alignment: .leading, spacing: 3) {
             HStack {
-                Text(proposal.plugin.name).font(.body.weight(.semibold)).foregroundStyle(Theme.ink)
+                Text(proposal.plugin.name).type(.label(.semibold)).foregroundStyle(Theme.ink)
                 Hint("You have \(proposal.plugin.version)")
             }
             if proposal.options.isEmpty {

@@ -53,7 +53,7 @@ struct PackContributionsView: View {
     private func summary(_ item: PackContribution) -> some View {
         VStack(alignment: .leading, spacing: 2) {
             HStack {
-                Text(item.title).font(.body.weight(.semibold)).foregroundStyle(Theme.ink).lineLimit(1).truncationMode(.middle)
+                Text(item.title).type(.label(.semibold)).foregroundStyle(Theme.ink).lineLimit(1).truncationMode(.middle)
                 Spacer()
                 Button("Show Its Files") {
                     pack = item.pack
@@ -107,7 +107,7 @@ struct PackContributionsView: View {
                 thumbnail(file, copy)
             }
             VStack(alignment: .leading, spacing: 1) {
-                Text(file.path).font(.body).foregroundStyle(Theme.ink).lineLimit(1).truncationMode(.head).textSelection(.enabled).help(file.path)
+                Text(file.path).type(.body).foregroundStyle(Theme.ink).lineLimit(1).truncationMode(.head).textSelection(.enabled).help(file.path)
                 Hint("\(file.reasonText): \(title(file.winner))")
             }
             Spacer()

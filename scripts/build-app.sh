@@ -83,6 +83,11 @@ cp brand/MenuBarTemplate.png brand/MenuBarTemplate@2x.png "$app/Contents/Resourc
 mkdir -p "$app/Contents/Resources/Fonts"
 cp brand/fonts/lilitaone/LilitaOne-Regular.ttf "$app/Contents/Resources/Fonts/"
 cp brand/fonts/lilitaone/OFL.txt "$app/Contents/Resources/Fonts/LilitaOne-OFL.txt"
+# The pixel faces (K820): Departure Mono and Pixelify Sans, both SIL OFL 1.1, each with its licence.
+cp brand/fonts/departuremono/DepartureMono-Regular.otf "$app/Contents/Resources/Fonts/"
+cp brand/fonts/departuremono/OFL.txt "$app/Contents/Resources/Fonts/DepartureMono-OFL.txt"
+cp "brand/fonts/pixelifysans/PixelifySans[wght].ttf" "$app/Contents/Resources/Fonts/"
+cp brand/fonts/pixelifysans/OFL.txt "$app/Contents/Resources/Fonts/PixelifySans-OFL.txt"
 
 cat > "$app/Contents/Info.plist" <<PLIST
 <?xml version="1.0" encoding="UTF-8"?>

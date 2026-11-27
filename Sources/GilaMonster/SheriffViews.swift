@@ -121,7 +121,7 @@ struct ProfileChoiceCard: View {
         let cut = Overflow.slice(profiles, limit: Overflow.Limit.profiles, expanded: expanded)
         let hiddenTicked = profiles.dropFirst(cut.shown.count).filter { chosen.contains($0.id) }.count
         VStack(alignment: .leading, spacing: 6) {
-            Text(profiles.isEmpty ? "Profiles" : "Profiles (\(profiles.count))").font(.headline).foregroundStyle(Theme.ink)
+            Text(profiles.isEmpty ? "Profiles" : "Profiles (\(profiles.count))").type(.headline).foregroundStyle(Theme.ink)
                 .accessibilityAddTraits(.isHeader)
             if profiles.isEmpty { Hint(empty) }
             ForEach(cut.shown) { profile in
@@ -157,7 +157,7 @@ struct QuestionsCard: View {
             let cut = Overflow.slice(questions, limit: Overflow.Limit.profiles, expanded: expanded)
             VStack(alignment: .leading, spacing: 6) {
                 Label("Sheriff asks first (\(questions.count))", systemImage: Tone.warning.icon)
-                    .font(.headline).foregroundStyle(Theme.ink).accessibilityAddTraits(.isHeader)
+                    .type(.headline).foregroundStyle(Theme.ink).accessibilityAddTraits(.isHeader)
                 Hint(intro)
                 ForEach(cut.shown, id: \.id) { q in
                     Toggle(q.question, isOn: Binding(get: { answered.contains(q.id) }, set: { on in

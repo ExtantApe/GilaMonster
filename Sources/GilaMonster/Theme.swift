@@ -51,23 +51,31 @@ enum Theme {
     static let sourceColors: [String: (wash: Color, accent: Color)] = Dictionary(uniqueKeysWithValues:
         Palette.sources.map { ($0.name, (dynamic($0.wash), dynamic($0.accent))) })
 
-    static let controlHeight: CGFloat = 32
+    /// Buttons are 32 pt tall at the default text size and grow with the text (K820).
+    static var controlHeight: CGFloat { 32 * grow }
     static let controlRadius: CGFloat = 8
     static let cardRadius: CGFloat = 10
 
     /// The palette's numbers live in GilaMonsterCore, where `gilamonster-check` holds every pair to WCAG AA.
     /// Bold or Quiet, read each time a color is drawn. Set by the Theme setting, which also redraws every window.
     nonisolated(unsafe) static var flavor: Palette.Flavor = ThemeChoice.load()
+    #if DEBUG
+    nonisolated(unsafe) static var snapshotContrast = false
+    #endif
 
     private static func dynamic(_ swatch: Palette.Swatch) -> Color {
         Color(nsColor: NSColor(name: nil) { appearance in
             let match = appearance.bestMatch(from: [.aqua, .darkAqua, .accessibilityHighContrastAqua, .accessibilityHighContrastDarkAqua])
-            let mode: Palette.Mode = switch match {
+            var mode: Palette.Mode = switch match {
             case .accessibilityHighContrastAqua: .contrastLight
             case .accessibilityHighContrastDarkAqua: .contrastDark
             case .darkAqua: .dark
             default: .light
             }
+            #if DEBUG
+            // A snapshot's stand-in for Increase Contrast: an off-screen window's appearance alone doesn't reach here.
+            if snapshotContrast { mode = (mode == .dark || mode == .contrastDark) ? .contrastDark : .contrastLight }
+            #endif
             return nsColor(swatch.hex(mode, flavor))
         })
     }
@@ -112,9 +120,9 @@ struct ThemeButtonStyle: ButtonStyle {
             configuration.label
                 .lineLimit(1)
                 .fixedSize(horizontal: true, vertical: false)
-                .font(.body.weight(kind == .primary ? .semibold : .regular))
+                .type(.label(kind == .primary ? .semibold : .regular))
                 .foregroundStyle(foreground)
-                .padding(.horizontal, 12)
+                .padding(.horizontal, 12 * Theme.grow)
                 .frame(minWidth: 24, minHeight: Theme.controlHeight)
                 .background(fill, in: RoundedRectangle(cornerRadius: Theme.controlRadius))
                 .overlay {
@@ -180,13 +188,13 @@ struct Card<Content: View>: View {
         VStack(alignment: .leading, spacing: 10) {
             if let title {
                 Label {
-                    Text(title).font(.headline).foregroundStyle(Theme.ink)
+                    Text(title).type(.headline).foregroundStyle(Theme.ink).accessibilityLabel(title).padding(.bottom, TypeState.shared.conditions.pixelLabels ? 2 : 0)
                 } icon: {
                     if let systemImage { Image(systemName: systemImage).foregroundStyle(Theme.accent) }
                 }
                 .accessibilityAddTraits(.isHeader)
             }
-            if let subtitle { Text(subtitle).font(.body).foregroundStyle(Theme.muted).fixedSize(horizontal: false, vertical: true) }
+            if let subtitle { Text(subtitle).type(.body).foregroundStyle(Theme.muted).fixedSize(horizontal: false, vertical: true) }
             content
         }
         .padding(14)
@@ -222,7 +230,7 @@ struct PageHeading: View {
     var oneLine = false
     var body: some View {
         VStack(alignment: .leading, spacing: 2) {
-            Text(title).font(.largeTitle.weight(.semibold)).foregroundStyle(Theme.ink).accessibilityAddTraits(.isHeader)
+            Text(title).type(.title(26, .largeTitle)).foregroundStyle(Theme.ink).accessibilityAddTraits(.isHeader)
             if let subtitle {
                 if oneLine {
                     Text(subtitle).foregroundStyle(Theme.muted).lineLimit(1).truncationMode(.middle).help(subtitle)
@@ -273,13 +281,13 @@ struct Badge: View {
 
     var body: some View {
         Label {
-            Text(text).font(.body.weight(.medium)).foregroundStyle(Theme.ink).lineLimit(1).truncationMode(.tail).help(text)
+            Text(text).type(.label(.medium)).foregroundStyle(Theme.ink).lineLimit(1).truncationMode(.tail).help(text)
         } icon: {
-            Image(systemName: icon ?? tone.icon).font(.body).foregroundStyle(tone.color)
+            Image(systemName: icon ?? tone.icon).font(Theme.symbol()).foregroundStyle(tone.color)
         }
         .labelStyle(.titleAndIcon)
-        .padding(.horizontal, 8)
-        .padding(.vertical, 3)
+        .padding(.horizontal, 8 * Theme.grow)
+        .padding(.vertical, 3 * Theme.grow)
         .background(tone.wash, in: Capsule())
     }
 }
@@ -306,9 +314,9 @@ struct Callout<Actions: View>: View {
         let text = Overflow.callout(title: title, detail: detail)
         let long = Overflow.isLong(text.detail)
         HStack(alignment: .top, spacing: 10) {
-            Image(systemName: tone.icon).foregroundStyle(tone.color).font(.title3).accessibilityHidden(true)
+            Image(systemName: tone.icon).foregroundStyle(tone.color).font(Theme.symbol(.title3)).accessibilityHidden(true)
             VStack(alignment: .leading, spacing: 3) {
-                Text(text.title).font(.body.weight(.semibold)).foregroundStyle(Theme.ink)
+                Text(text.title).type(.label(.semibold)).foregroundStyle(Theme.ink)
                     .fixedSize(horizontal: false, vertical: true)
                 if let detail = text.detail {
                     Text(detail).foregroundStyle(Theme.ink)
@@ -317,7 +325,7 @@ struct Callout<Actions: View>: View {
                         .textSelection(.enabled)
                     if long {
                         Button(expanded ? "Hide Details" : "Show Details") { expanded.toggle() }
-                            .buttonStyle(.disclosureLink(expanded ? "chevron.up" : "chevron.down")).font(.body)
+                            .buttonStyle(.disclosureLink(expanded ? "chevron.up" : "chevron.down")).type(.body)
                             .accessibilityHint(expanded ? "Shows only the first lines" : "Shows the whole message")
                     }
                 }
@@ -354,8 +362,8 @@ struct EmptyMessage: View {
     var detail: String?
     var body: some View {
         VStack(spacing: 6) {
-            Image(systemName: icon).font(.largeTitle).foregroundStyle(Theme.accent).accessibilityHidden(true)
-            Text(title).font(.headline).foregroundStyle(Theme.ink)
+            Image(systemName: icon).font(Theme.symbol(.largeTitle)).foregroundStyle(Theme.accent).accessibilityHidden(true)
+            Text(title).type(.headline).foregroundStyle(Theme.ink)
             if let detail { Text(detail).foregroundStyle(Theme.muted).multilineTextAlignment(.center) }
         }
         .padding(24)
@@ -371,14 +379,14 @@ struct Fact: View {
         // Side by side when it fits (about 280 pt and up), stacked below that so a long value gets a whole line.
         ViewThatFits(in: .horizontal) {
             HStack(alignment: .firstTextBaseline) {
-                Text(label).foregroundStyle(Theme.muted).lineLimit(1)
+                Text(label).type(.label()).foregroundStyle(Theme.muted).lineLimit(1)
                 Spacer(minLength: 8)
-                Text(value).foregroundStyle(Theme.ink).lineLimit(1).textSelection(.enabled)
+                Text(value).type(.value(value)).foregroundStyle(Theme.ink).lineLimit(1).textSelection(.enabled)
             }
-            .frame(minWidth: 280)
+            .frame(minWidth: 280 * Theme.grow)
             VStack(alignment: .leading, spacing: 1) {
-                Text(label).foregroundStyle(Theme.muted)
-                Text(value).foregroundStyle(Theme.ink).fixedSize(horizontal: false, vertical: true).textSelection(.enabled)
+                Text(label).type(.label()).foregroundStyle(Theme.muted)
+                Text(value).type(.value(value)).foregroundStyle(Theme.ink).fixedSize(horizontal: false, vertical: true).textSelection(.enabled)
             }
             .frame(maxWidth: .infinity, alignment: .leading)
         }
@@ -390,7 +398,7 @@ struct Hint: View {
     let text: String
     init(_ text: String) { self.text = text }
     var body: some View {
-        Text(text).font(.body).foregroundStyle(Theme.muted).fixedSize(horizontal: false, vertical: true)
+        Text(text).type(.body).foregroundStyle(Theme.muted).fixedSize(horizontal: false, vertical: true)
     }
 }
 
@@ -471,14 +479,14 @@ struct SourceBadges: View {
             let colors = Theme.sourceColors[source.kind.rawValue] ?? (Theme.raised, Theme.muted)
             HStack(spacing: 4) {
                 Label {
-                    Text(b.source).font(.body.weight(.semibold)).foregroundStyle(Theme.ink).lineLimit(1).truncationMode(.tail).help(b.source)
+                    Text(b.source).type(.label(.semibold)).foregroundStyle(Theme.ink).lineLimit(1).truncationMode(.tail).help(b.source)
                 } icon: {
-                    Image(systemName: source.kind.symbol).font(.body).foregroundStyle(colors.accent)
+                    Image(systemName: source.kind.symbol).font(Theme.symbol()).foregroundStyle(colors.accent)
                 }
                 .labelStyle(.titleAndIcon)
                 .padding(.horizontal, 8).padding(.vertical, 3)
                 .background(colors.wash, in: Capsule())
-                Text(b.id).font(.body.monospaced()).foregroundStyle(Theme.ink).lineLimit(1).truncationMode(.middle)
+                Text(b.id).type(.mono).foregroundStyle(Theme.ink).lineLimit(1).truncationMode(.middle)
                     .padding(.horizontal, 8).padding(.vertical, 3)
                     .overlay { Capsule().strokeBorder(Theme.controlBorder, lineWidth: 1) }
             }
@@ -536,21 +544,23 @@ struct ThemedSwitchStyle: ToggleStyle {
 
         var body: some View {
             let look = ControlLook.switchParts(on: isOn, enabled: enabled)
+            // The switch grows with the labels beside it (K820): 40 by 22 at the default text size.
+            let grow = Theme.grow
             Capsule().fill(Theme.named(look.track))
                 .overlay { Capsule().strokeBorder(Theme.named(look.edge), style: StrokeStyle(lineWidth: 1, dash: enabled ? [] : [3, 2])) }
                 .overlay(alignment: look.knobTrailing ? .leading : .trailing) {
                     if let lock = look.lock {
-                        Image(systemName: "lock.fill").resizable().scaledToFit().frame(width: 9, height: 10).foregroundStyle(Theme.named(lock)).padding(.horizontal, 6).accessibilityHidden(true)
+                        Image(systemName: "lock.fill").resizable().scaledToFit().frame(width: 9 * grow, height: 10 * grow).foregroundStyle(Theme.named(lock)).padding(.horizontal, 6 * grow).accessibilityHidden(true)
                     }
                 }
                 // Locked on has a filled gray track, so its dashes go inside, in the knob's color, which the checks hold on it.
                 .overlay { if !enabled && isOn { Capsule().strokeBorder(Theme.named(look.knob), style: StrokeStyle(lineWidth: 1, dash: [3, 2])).padding(2) } }
                 // A fixed size, so the alignment can move it: a bare Circle fills the track and sits in the middle.
-                .overlay(alignment: look.knobTrailing ? .trailing : .leading) { Circle().fill(Theme.named(look.knob)).frame(width: 16, height: 16).padding(3) }
-                .frame(width: 40, height: 22)
+                .overlay(alignment: look.knobTrailing ? .trailing : .leading) { Circle().fill(Theme.named(look.knob)).frame(width: 16 * grow, height: 16 * grow).padding(3 * grow) }
+                .frame(width: 40 * grow, height: 22 * grow)
                 .overlay { if focused { Capsule().strokeBorder(Theme.accent, lineWidth: 2).padding(-3) } }
                 .opacity(pressed ? 0.8 : 1)
-                .frame(minHeight: 24)
+                .frame(minHeight: 24 * grow)
                 .contentShape(Rectangle())
                 .animation(reduceMotion ? nil : .easeOut(duration: 0.12), value: isOn)
                 .accessibilityAddTraits(.isToggle)
@@ -562,6 +572,43 @@ struct ThemedSwitchStyle: ToggleStyle {
 extension ToggleStyle where Self == ThemedSwitchStyle {
     static var themedSwitch: ThemedSwitchStyle { ThemedSwitchStyle() }
     static func themedSwitch(lockedBecause: String) -> ThemedSwitchStyle { ThemedSwitchStyle(lockedBecause: lockedBecause) }
+}
+
+/// A disclosure row whose arrow grows with the text (K820). The system's arrow stays one size. The whole heading is the
+/// button, so it is a larger target, and VoiceOver hears whether it is open.
+struct ThemedDisclosureStyle: DisclosureGroupStyle {
+    func makeBody(configuration: Configuration) -> some View {
+        VStack(alignment: .leading, spacing: 6) {
+            Button { configuration.isExpanded.toggle() } label: { configuration.label }
+                .buttonStyle(Heading(open: configuration.isExpanded))
+                .accessibilityValue(configuration.isExpanded ? "Open" : "Closed")
+            if configuration.isExpanded { configuration.content }
+        }
+    }
+
+    private struct Heading: ButtonStyle {
+        let open: Bool
+        func makeBody(configuration: Configuration) -> some View { Row(configuration: configuration, open: open) }
+    }
+
+    private struct Row: View {
+        let configuration: ButtonStyleConfiguration
+        let open: Bool
+        @Environment(\.isFocused) private var focused
+
+        var body: some View {
+            HStack(alignment: .firstTextBaseline, spacing: 5 * Theme.grow) {
+                Image(systemName: "chevron.right").font(Theme.symbol(weight: .semibold)).imageScale(.small).foregroundStyle(Theme.muted)
+                    .rotationEffect(.degrees(open ? 90 : 0)).accessibilityHidden(true)
+                configuration.label
+                Spacer(minLength: 0)
+            }
+            .frame(minHeight: 20 * Theme.grow)
+            .contentShape(Rectangle())
+            .opacity(configuration.isPressed ? 0.7 : 1)
+            .overlay { if focused { RoundedRectangle(cornerRadius: 6).strokeBorder(Theme.accent, lineWidth: 2).padding(-3) } }
+        }
+    }
 }
 
 /// Disables a control and says why, as a tooltip and a VoiceOver hint, so a grey button is never a mystery
@@ -590,7 +637,7 @@ struct ShowMoreButton: View {
     var body: some View {
         if expanded || hidden > 0 {
             Button(expanded ? "Show Fewer" : "Show \(hidden) More") { expanded.toggle() }
-                .buttonStyle(.disclosureLink(expanded ? "chevron.up" : "chevron.down")).font(.body)
+                .buttonStyle(.disclosureLink(expanded ? "chevron.up" : "chevron.down")).type(.body)
         }
     }
 }
@@ -607,9 +654,9 @@ struct ProblemList: View {
         } else if !problems.isEmpty {
             let cut = Overflow.slice(problems, limit: Overflow.Limit.warnings, expanded: expanded)
             HStack(alignment: .top, spacing: 10) {
-                Image(systemName: tone.icon).foregroundStyle(tone.color).font(.title3).accessibilityHidden(true)
+                Image(systemName: tone.icon).foregroundStyle(tone.color).font(Theme.symbol(.title3)).accessibilityHidden(true)
                 VStack(alignment: .leading, spacing: 4) {
-                    Text("\(what): \(problems.count) problems").font(.body.weight(.semibold)).foregroundStyle(Theme.ink)
+                    Text("\(what): \(problems.count) problems").type(.label(.semibold)).foregroundStyle(Theme.ink)
                     ForEach(Array(cut.shown.enumerated()), id: \.offset) { _, problem in
                         HStack(alignment: .firstTextBaseline, spacing: 6) {
                             Text("•").foregroundStyle(Theme.muted).accessibilityHidden(true)
@@ -642,7 +689,7 @@ struct GroupHeading: View {
     var help: String?
     init(_ text: String, help: String? = nil) { self.text = text; self.help = help }
     var body: some View {
-        Text(text).font(.headline).foregroundStyle(Theme.ink).accessibilityAddTraits(.isHeader)
+        Text(text).type(.headline).foregroundStyle(Theme.ink).accessibilityLabel(text).accessibilityAddTraits(.isHeader)
             .help(help ?? "")
     }
 }
@@ -659,7 +706,7 @@ struct SheetTitle: View {
     let text: String
     init(_ text: String) { self.text = text }
     var body: some View {
-        Text(text).font(.title2.weight(.semibold)).foregroundStyle(Theme.ink)
+        Text(text).type(.title(17, .title2)).foregroundStyle(Theme.ink)
             .accessibilityAddTraits(.isHeader)
     }
 }
@@ -687,11 +734,11 @@ struct DisclosureLinkStyle: ButtonStyle {
         @Environment(\.isEnabled) private var enabled
         var body: some View {
             HStack(spacing: 4) {
-                configuration.label.underline()
-                Image(systemName: symbol).font(.body.weight(.semibold)).accessibilityHidden(true)
+                configuration.label.type(.label()).underline()
+                Image(systemName: symbol).font(Theme.symbol(weight: .semibold)).accessibilityHidden(true)
             }
             .foregroundStyle(Theme.ink)
-            .frame(minHeight: 24)
+            .frame(minHeight: 24 * Theme.grow)
             .contentShape(Rectangle())
             .opacity(enabled ? (configuration.isPressed ? 0.6 : 1) : 0.5)
         }
@@ -710,7 +757,7 @@ struct ThemedFieldStyle: TextFieldStyle {
             .textFieldStyle(.plain)
             .foregroundStyle(Theme.ink)
             .padding(.horizontal, 8)
-            .frame(minHeight: 28)
+            .frame(minHeight: 28 * Theme.grow)
             .background(Theme.surface, in: RoundedRectangle(cornerRadius: Theme.controlRadius))
             .overlay { RoundedRectangle(cornerRadius: Theme.controlRadius).strokeBorder(Theme.controlBorder, lineWidth: 1) }
     }

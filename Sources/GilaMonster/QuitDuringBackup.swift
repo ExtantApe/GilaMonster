@@ -34,7 +34,7 @@ struct QuitDuringBackupView: View {
 
     var body: some View {
         VStack(alignment: .leading, spacing: 14) {
-            Text(state.reason.backupHeading).font(.headline).foregroundStyle(Theme.ink)
+            Text(state.reason.backupHeading).type(.headline).foregroundStyle(Theme.ink)
                 .accessibilityAddTraits(.isHeader)
             ForEach(Array(state.progress.enumerated()), id: \.offset) { _, p in
                 VStack(alignment: .leading, spacing: 6) {

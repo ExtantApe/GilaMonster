@@ -206,7 +206,7 @@ struct ChangeVersionCard: View {
 
     private func readinessList(_ rows: [ReadinessRow]) -> some View {
         VStack(alignment: .leading, spacing: 6) {
-            Text("Plugins on \(target)").font(.body.weight(.semibold)).foregroundStyle(Theme.ink)
+            Text("Plugins on \(target)").type(.label(.semibold)).foregroundStyle(Theme.ink)
             let blocked = rows.filter { $0.verdict == .incompatible }.count
             if blocked > 0 { Callout(tone: .warning, title: "\(blocked) plugin\(blocked == 1 ? " has" : "s have") no release for \(target) yet") }
             ForEach(rows) { row in
@@ -365,7 +365,7 @@ struct PluginPlanView: View {
 
     var body: some View {
         VStack(alignment: .leading, spacing: 8) {
-            Text("Plugins on \(plan.target), from Preflight").font(.body.weight(.semibold)).foregroundStyle(Theme.ink)
+            Text("Plugins on \(plan.target), from Preflight").type(.label(.semibold)).foregroundStyle(Theme.ink)
             if let stop = plan.stop {
                 Callout(tone: .warning, title: "Nothing to offer", detail: stop) {
                     if plan.sharedDatabase { Button("Check Anyway…") { confirmingDatabase = true }.buttonStyle(.themed) }
@@ -385,15 +385,15 @@ struct PluginPlanView: View {
                 }
             }
             if !plan.notChecked.isEmpty {
-                Text("Not checked").font(.body.weight(.semibold)).foregroundStyle(Theme.ink)
+                Text("Not checked").type(.label(.semibold)).foregroundStyle(Theme.ink)
                 ForEach(plan.notChecked) { item in row(badge: "Not checked", tone: .neutral, name: item.name, lines: [item.why]) }
             }
             if !plan.warnings.isEmpty {
-                Text("For you to decide").font(.body.weight(.semibold)).foregroundStyle(Theme.ink)
+                Text("For you to decide").type(.label(.semibold)).foregroundStyle(Theme.ink)
                 ForEach(plan.warnings, id: \.self) { Hint($0) }
             }
             if !plan.recheck.isEmpty {
-                Text("Check by hand after the upgrade").font(.body.weight(.semibold)).foregroundStyle(Theme.ink)
+                Text("Check by hand after the upgrade").type(.label(.semibold)).foregroundStyle(Theme.ink)
                 ForEach(plan.recheck) { item in Hint("\(item.plugin): \(item.note)") }
             }
             HStack {

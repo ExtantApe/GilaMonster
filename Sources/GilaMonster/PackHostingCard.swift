@@ -88,13 +88,13 @@ struct PackHostingCard: View {
                 VStack(alignment: .leading, spacing: 2) {
                     Text("Only players joining this server").foregroundStyle(Theme.ink)
                     Text("A pack goes only to a game that names a player on the allowlist the server shows connecting in the last 5 minutes, or online now. Anyone else, a browser included, is told there's nothing there.")
-                        .font(.body).foregroundStyle(Theme.muted).fixedSize(horizontal: false, vertical: true)
+                        .type(.body).foregroundStyle(Theme.muted).fixedSize(horizontal: false, vertical: true)
                 }
             }
             if settings.joiningOnly, let tokenPath = server.packCheckTokenPath {
                 LabeledContent("Packmule's token file") {
                     HStack {
-                        Text((tokenPath as NSString).abbreviatingWithTildeInPath).font(.body.monospaced()).foregroundStyle(Theme.ink)
+                        Text((tokenPath as NSString).abbreviatingWithTildeInPath).type(.mono).foregroundStyle(Theme.ink)
                             .lineLimit(1).truncationMode(.middle).textSelection(.enabled)
                         Button("Copy Path") { NSPasteboard.general.clearContents(); NSPasteboard.general.setString(tokenPath, forType: .string) }
                             .buttonStyle(.themed).accessibilityLabel("Copy the path of Packmule's token file")
@@ -118,7 +118,7 @@ struct PackHostingCard: View {
         let url = perWorld ? newest.flatMap { server.packBuildAddress(recipe: name, sha1: $0) } : server.packAddress(recipe: name)
         return VStack(alignment: .leading, spacing: 5) {
             HStack {
-                Text(name).font(.body.weight(.semibold)).foregroundStyle(Theme.ink)
+                Text(name).type(.label(.semibold)).foregroundStyle(Theme.ink)
                 if isElsewhere { Badge(text: "Hosted elsewhere", tone: .info) }
                 if exact { Badge(text: "Exact file", tone: .info) }
                 Spacer()

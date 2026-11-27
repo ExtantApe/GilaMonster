@@ -224,7 +224,7 @@ final class SessionPrompts: NSObject, UNUserNotificationCenterDelegate, @uncheck
 /// How the ask window looks (K786): a thin bead band across the top and the sand surface below it. Looks only: the list
 /// inside, its wording, buttons, focus and guard are SessionAskList's, unchanged.
 struct AskPanelLook<Content: View>: View {
-    static var minWidth: CGFloat { 580 }
+    static var minWidth: CGFloat { 580 * Theme.grow }
     @ViewBuilder var content: Content
     var body: some View {
         VStack(spacing: 0) {
@@ -236,12 +236,51 @@ struct AskPanelLook<Content: View>: View {
         // at 580 pt. The window is sized from those, so larger text makes it wider instead of squeezing a button.
         .frame(minWidth: AskPanelLook.minWidth)
         .background(Theme.surface)
+        .typeRoot()
     }
 }
 
 extension Notification.Name {
     /// Sent when the ask panel was opened by the owner, so the first Deny takes focus.
     static let askPanelFocus = Notification.Name("gilamonster.askPanelFocus")
+}
+
+/// The ask's sentence, with the server's name always whole (K820). This is a security prompt, so the name is never
+/// broken across lines. A name that fits on a line is kept together by no-break spaces and hyphens, and the sentence
+/// wraps before it. A longer name gets a line to itself and the window grows to show it. Only a name wider than the
+/// widest window is cut in the middle, with the whole name in its tooltip. VoiceOver always gets the plain sentence.
+struct AskSentence: View {
+    let sentence: String
+    let server: String
+
+    /// The words' column at the default text size, and the widest it grows for a long name.
+    static var normalColumn: CGFloat { 262 * Theme.grow }
+    static var widestColumn: CGFloat { 560 * Theme.grow }
+
+    /// How wide the name is on one line in the prompt's font.
+    static func width(of name: String) -> CGFloat {
+        let font = NSFont.systemFont(ofSize: TypeToken.prompt.size, weight: .semibold)
+        return ceil(NSAttributedString(string: name, attributes: [.font: font]).size().width) + 2
+    }
+
+    /// The column the words ask for: wider than usual only when the name needs it.
+    static func column(for name: String) -> CGFloat { min(widestColumn, max(normalColumn, width(of: name))) }
+
+    var body: some View {
+        if Self.width(of: server) > Self.normalColumn, let parts = PixelType.split(sentence, around: server) {
+            VStack(alignment: .leading, spacing: 2) {
+                if !parts.before.isEmpty { Text(parts.before).type(.prompt).fixedSize(horizontal: false, vertical: true) }
+                Text(server).type(.prompt).lineLimit(1).truncationMode(.middle).help(server)
+                if !parts.after.isEmpty { Text(parts.after).type(.prompt).fixedSize(horizontal: false, vertical: true) }
+            }
+            .foregroundStyle(Theme.ink)
+            .accessibilityElement(children: .ignore)
+            .accessibilityLabel(sentence)
+        } else {
+            Text(PixelType.unbroken(sentence, name: server))
+                .type(.prompt).foregroundStyle(Theme.ink).fixedSize(horizontal: false, vertical: true).accessibilityLabel(sentence)
+        }
+    }
 }
 
 /// Each waiting ask with Deny and Allow. Used by the ask window and by Settings.
@@ -284,19 +323,19 @@ struct SessionAskList: View {
             ForEach(Array(service.waiting.enumerated()), id: \.element.id) { index, ask in
                 HStack(alignment: .firstTextBaseline) {
                     VStack(alignment: .leading, spacing: 2) {
-                        Text(ask.sentence).font(Theme.display(19)).foregroundStyle(Theme.ink).fixedSize(horizontal: false, vertical: true)
+                        AskSentence(sentence: ask.sentence, server: ask.server)
                         if let family = ask.action.todayFamily {
                             Text("Allow for Today covers \(family.words) on every server until midnight.")
-                                .font(.body).foregroundStyle(Theme.muted).fixedSize(horizontal: false, vertical: true)
+                                .type(.body).foregroundStyle(Theme.muted).fixedSize(horizontal: false, vertical: true)
                         }
                         TimelineView(.periodic(from: .now, by: 1)) { context in
                             let left = max(0, Int(ask.deadline.timeIntervalSince(context.date).rounded(.up)))
                             Text("The name is the session's own. No answer in \(left / 60):\(String(format: "%02d", left % 60)) means no.")
-                                .font(.body).monospacedDigit().foregroundStyle(Theme.muted).fixedSize(horizontal: false, vertical: true)
+                                .type(.body).monospacedDigit().foregroundStyle(Theme.muted).fixedSize(horizontal: false, vertical: true)
                                 // A second-by-second label would make VoiceOver chatter, so it says the minutes.
                                 .accessibilityLabel("The name is the session's own. No answer in about \(max(1, (left + 30) / 60)) minutes means no.")
                         }
-                    }.frame(idealWidth: 262, alignment: .leading)
+                    }.frame(idealWidth: AskSentence.column(for: ask.server), alignment: .leading)
                     Spacer(minLength: 12)
                     VStack(alignment: .trailing, spacing: 6) {
                         HStack {
@@ -307,7 +346,7 @@ struct SessionAskList: View {
                             Button("Allow") { if settled() { service.resolve(ask.id, allow: true) } }.buttonStyle(.themedPrimary).fixedSize()
                                 .accessibilityLabel("Allow: \(ask.sentence)").opacity(dropped ? 0.4 : 1)
                             if let family = ask.action.todayFamily {
-                                Divider().frame(height: 18).padding(.horizontal, 6)
+                                Divider().frame(height: 18 * Theme.grow).padding(.horizontal, 6)
                                 Button("Allow for Today") { if settled() { service.resolveForToday(ask.id) } }.buttonStyle(.themed).fixedSize()
                                     .helped("Allows \(family.words) on every server without asking again until midnight. Each one still checks nobody is online.")
                                     .accessibilityLabel("Allow for today: \(ask.sentence). Covers \(family.words) on every server until midnight.")
@@ -320,12 +359,12 @@ struct SessionAskList: View {
                                 Announcer.say("One minute added, \(left - 1) left", force: true)
                             }
                         }
-                        .buttonStyle(.disclosureLink("plus")).font(.body).fixedSize()
+                        .buttonStyle(.disclosureLink("plus")).type(.body).fixedSize()
                         .disabled(left <= 0)
                         .help("Waits another minute before the answer becomes no. Nothing is allowed by this.")
                         .accessibilityLabel("Need more time for: \(ask.sentence). Adds a minute, \(left) left. Nothing is allowed.")
                         if left <= 0 {
-                            Text("No more time can be added. No answer means no.").font(.body).foregroundStyle(Theme.muted)
+                            Text("No more time can be added. No answer means no.").type(.body).foregroundStyle(Theme.muted)
                         }
                     }
                 }

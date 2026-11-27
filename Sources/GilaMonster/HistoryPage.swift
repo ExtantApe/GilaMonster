@@ -73,10 +73,10 @@ struct HealthSummary: View {
 
     private func tile(_ label: String, _ value: String, _ tone: Tone) -> some View {
         Card {
-            Text(label).font(.body).foregroundStyle(Theme.muted)
+            Text(label).type(.body).foregroundStyle(Theme.muted)
             HStack(spacing: 6) {
                 if tone == .warning { Image(systemName: tone.icon).foregroundStyle(tone.color).accessibilityHidden(true) }
-                Text(value).font(.title2.weight(.semibold)).foregroundStyle(Theme.ink)
+                Text(value).type(.title(17, .title2)).foregroundStyle(Theme.ink)
             }
         }
         .accessibilityElement(children: .combine)
@@ -152,7 +152,7 @@ struct TimelineCard: View {
                         if let detail = event.detail { Hint(detail) }
                     }
                     Spacer()
-                    Text(event.date.formatted(date: .abbreviated, time: .shortened)).font(.body).foregroundStyle(Theme.muted)
+                    Text(event.date.formatted(date: .abbreviated, time: .shortened)).type(.body).foregroundStyle(Theme.muted)
                 }
                 .accessibilityElement(children: .combine)
             }
@@ -224,7 +224,7 @@ struct RegularsCard: View {
                         Text(player.name).foregroundStyle(Theme.ink)
                         Badge(text: player.status.rawValue, tone: tone(player.status))
                         Spacer()
-                        Text("\(player.sessions) visit\(player.sessions == 1 ? "" : "s"), last \(player.lastSeen.formatted(.relative(presentation: .named)))").font(.body).foregroundStyle(Theme.muted)
+                        Text("\(player.sessions) visit\(player.sessions == 1 ? "" : "s"), last \(player.lastSeen.formatted(.relative(presentation: .named)))").type(.body).foregroundStyle(Theme.muted)
                     }
                 }
                 Hint("From the server's logs, so it only goes back as far as they do.")

@@ -15,12 +15,12 @@ struct RenamePlanView: View {
                         Toggle(isOn: $item.selected) {
                             VStack(alignment: .leading, spacing: 1) {
                                 Text(item.description).foregroundStyle(Theme.ink)
-                                Text(item.location).font(.body).foregroundStyle(Theme.muted).lineLimit(1).truncationMode(.middle)
+                                Text(item.location).type(.body).foregroundStyle(Theme.muted).lineLimit(1).truncationMode(.middle)
                             }
                         }
                         .toggleStyle(.checkbox)
                         ForEach(item.changes.prefix(6), id: \.self) { change in
-                            Text(change).font(.system(.body, design: .monospaced)).foregroundStyle(Theme.ink).padding(.leading, 22)
+                            Text(change).type(.mono).foregroundStyle(Theme.ink).padding(.leading, 22)
                         }
                         if item.changes.count > 6 { Hint("and \(item.changes.count - 6) more").padding(.leading, 22) }
                         if let warning = item.warning { Callout(tone: .warning, title: warning) }
@@ -28,14 +28,14 @@ struct RenamePlanView: View {
                 }
                 if !plan.notes.isEmpty {
                     Divider()
-                    Text("Can't be changed from here").font(.body.weight(.semibold)).foregroundStyle(Theme.ink)
+                    Text("Can't be changed from here").type(.label(.semibold)).foregroundStyle(Theme.ink)
                     ForEach(plan.notes, id: \.self) { Hint($0) }
                 }
                 if !plan.mentions.isEmpty {
                     Divider()
-                    Text("Also mention this name, and won't be changed").font(.body.weight(.semibold)).foregroundStyle(Theme.ink)
+                    Text("Also mention this name, and won't be changed").type(.label(.semibold)).foregroundStyle(Theme.ink)
                     ForEach(plan.mentions, id: \.self) {
-                        Text($0).font(.system(.body, design: .monospaced)).foregroundStyle(Theme.muted)
+                        Text($0).type(.mono).foregroundStyle(Theme.muted)
                     }
                 }
             }
@@ -275,7 +275,7 @@ struct PlayersPage: View {
     }
 
     private func rosterHeading(_ text: String) -> some View {
-        Text(text).font(.body.weight(.semibold)).foregroundStyle(Theme.ink).padding(.horizontal, 8).padding(.top, 2)
+        Text(text).type(.label(.semibold)).foregroundStyle(Theme.ink).padding(.horizontal, 8).padding(.top, 2)
             .accessibilityAddTraits(.isHeader)
     }
 
@@ -351,7 +351,7 @@ struct PlayersPage: View {
                     HStack {
                         Text(session.name).foregroundStyle(Theme.ink)
                         Spacer()
-                        Text(when(session)).font(.body).foregroundStyle(Theme.muted)
+                        Text(when(session)).type(.body).foregroundStyle(Theme.muted)
                     }
                 }
             }
@@ -396,10 +396,10 @@ struct PlayerDetail: View {
             HStack(alignment: .center, spacing: 14) {
                 FaceView(name: player.title, size: 64)
                 VStack(alignment: .leading, spacing: 3) {
-                    Text(player.title).font(Theme.display(26)).foregroundStyle(Theme.ink).rowName(player.title).accessibilityAddTraits(.isHeader)
+                    Text(player.title).type(.display(26)).foregroundStyle(Theme.ink).rowName(player.title).accessibilityAddTraits(.isHeader)
                     HStack(spacing: 5) {
                         GlyphView(glyph: online ? .up : .stopped, size: 12)
-                        Text(online ? "On now" : "Offline").font(.body.weight(.semibold)).foregroundStyle(Theme.ink)
+                        Text(online ? "On now" : "Offline").type(.label(.semibold)).foregroundStyle(Theme.ink)
                     }
                     .accessibilityElement(children: .combine)
                     Text(subtitle).foregroundStyle(Theme.muted).lineLimit(1).truncationMode(.middle).help(subtitle).textSelection(.enabled)
@@ -456,7 +456,7 @@ struct PlayerDetail: View {
                         }
                         ForEach(snapshot.containers.filter { $0.hasPrefix("worlds/") }, id: \.self) { container in
                             if let summary = PlayerFiles.summary(ofInventoryFile: folder.appendingPathComponent("inventories/\(container)")) {
-                                Text("In \(container.components(separatedBy: "/")[1])").font(.body.weight(.semibold)).foregroundStyle(Theme.ink).padding(.top, 4)
+                                Text("In \(container.components(separatedBy: "/")[1])").type(.label(.semibold)).foregroundStyle(Theme.ink).padding(.top, 4)
                                 InventoryView(summary: summary)
                             }
                         }
@@ -498,7 +498,7 @@ struct InventoryView: View {
             if summary.items.isEmpty { Hint("Inventory is empty.") }
             LazyVGrid(columns: columns, alignment: .leading, spacing: 6) { ForEach(summary.items) { slot($0) } }
             if !summary.enderItems.isEmpty {
-                Text("Ender chest").font(.body.weight(.semibold)).foregroundStyle(Theme.ink).padding(.top, 4)
+                Text("Ender chest").type(.label(.semibold)).foregroundStyle(Theme.ink).padding(.top, 4)
                 LazyVGrid(columns: columns, alignment: .leading, spacing: 6) { ForEach(summary.enderItems) { slot($0) } }
             }
             if let level = summary.level { Hint("Level \(level)" + (summary.dimension.map { " · in \($0.replacingOccurrences(of: "minecraft:", with: ""))" } ?? "")) }
@@ -538,7 +538,7 @@ struct PlayerRestoreSheet: View {
                 Text("Everything: position, XP, health too").tag(false)
             }
             if !snapshot.containers.isEmpty {
-                Text("Worlds and groups (Multiverse-Inventories)").font(.body.weight(.semibold)).foregroundStyle(Theme.ink)
+                Text("Worlds and groups (Multiverse-Inventories)").type(.label(.semibold)).foregroundStyle(Theme.ink)
                 ForEach(snapshot.containers, id: \.self) { container in
                     Toggle(title(container), isOn: Binding(
                         get: { chosen.contains(container) },
@@ -614,7 +614,7 @@ struct MergeSheet: View {
                 if let refusal { Callout(tone: .warning, title: "This merge can't be done here", detail: refusal) }
                 let conflicts = PlayerMerge.conflicts(current, paths: server.paths)
                 if !conflicts.isEmpty {
-                    Text("Both have an inventory in these worlds or groups").font(.body.weight(.semibold)).foregroundStyle(Theme.ink)
+                    Text("Both have an inventory in these worlds or groups").type(.label(.semibold)).foregroundStyle(Theme.ink)
                     ForEach(conflicts, id: \.self) { container in
                         Picker(container, selection: Binding(get: { current.useOldContainer[container] ?? false }, set: { plan?.useOldContainer[container] = $0 })) {
                             Text("Keep \(current.to.title)'s").tag(false)
@@ -624,8 +624,8 @@ struct MergeSheet: View {
                 }
                 let others = PlayerMerge.otherFiles(uuid: current.from.uuid, paths: server.paths)
                 if !others.isEmpty {
-                    Text("Plugin files for the old profile, not changed").font(.body.weight(.semibold)).foregroundStyle(Theme.ink)
-                    ForEach(others.prefix(8), id: \.self) { Text($0).font(.system(.body, design: .monospaced)).foregroundStyle(Theme.muted) }
+                    Text("Plugin files for the old profile, not changed").type(.label(.semibold)).foregroundStyle(Theme.ink)
+                    ForEach(others.prefix(8), id: \.self) { Text($0).type(.mono).foregroundStyle(Theme.muted) }
                 }
                 Hint("The server stops while this happens. A restore point is made and verified first, and what's replaced is kept beside the backups. Permissions in LuckPerms and data in plugin databases can't be merged from here.")
             }
@@ -785,14 +785,14 @@ struct BackupDiffSheet: View {
                 section("Settings") {
                     ForEach(d.settings) { setting in
                         VStack(alignment: .leading, spacing: 1) {
-                            Text("\(setting.file): \(setting.key)").font(.body).foregroundStyle(Theme.muted)
-                            Text("\(setting.before ?? "(not set)") → \(setting.after ?? "(removed)")").font(.system(.body, design: .monospaced)).foregroundStyle(Theme.ink)
+                            Text("\(setting.file): \(setting.key)").type(.body).foregroundStyle(Theme.muted)
+                            Text("\(setting.before ?? "(not set)") → \(setting.after ?? "(removed)")").type(.mono).foregroundStyle(Theme.ink)
                         }
                     }
                 }
             }
             if !d.otherSettingsFiles.isEmpty {
-                section("Other files that changed") { ForEach(d.otherSettingsFiles, id: \.self) { Text($0).font(.system(.body, design: .monospaced)).foregroundStyle(Theme.ink) } }
+                section("Other files that changed") { ForEach(d.otherSettingsFiles, id: \.self) { Text($0).type(.mono).foregroundStyle(Theme.ink) } }
             }
             if !d.worlds.isEmpty {
                 section("Worlds") { ForEach(d.worlds) { Text(describe($0)).foregroundStyle(Theme.ink) } }
@@ -817,7 +817,7 @@ struct BackupDiffSheet: View {
 
     private func section<Content: View>(_ title: String, @ViewBuilder content: () -> Content) -> some View {
         VStack(alignment: .leading, spacing: 4) {
-            Text(title).font(.headline).foregroundStyle(Theme.ink).accessibilityAddTraits(.isHeader)
+            Text(title).type(.headline).foregroundStyle(Theme.ink).accessibilityAddTraits(.isHeader)
             content()
         }
     }

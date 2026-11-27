@@ -56,7 +56,7 @@ struct ConsolePage: View {
                 Image(systemName: "chevron.right").foregroundStyle(Theme.accent).accessibilityHidden(true)
                 TextField("Command", text: $command, prompt: Text(server.state.isLive ? "Type a command, such as list or say Hello" : "Start the server to send commands"))
                     .textFieldStyle(.plain)
-                    .font(.system(.body, design: .monospaced))
+                    .type(.mono)
                     .focused($commandFocused)
                     .disabled(!server.state.isLive)
                     .onSubmit(send)

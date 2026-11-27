@@ -8,6 +8,10 @@
 #                                             and no name of the owner's, so the message names it (K824). RENAME='Pebble Garden'
 #                                             adds the owner's own name on top. TWIN=1 adds a second server with the same
 #                                             server message. The switcher's rows are drawn as dialog-switcher-rows.png.
+#   Text and screen, stood in for because a snapshot can't change System Settings (K820). They pass straight through:
+#   GILAMONSTER_SNAPSHOT_PIXEL=on|off|auto (the Pixel font setting, on if unset; auto is the first-launch default),
+#   GILAMONSTER_SNAPSHOT_BODY=<points> (the system's body size, 13 by default), GILAMONSTER_SNAPSHOT_BOLD=1 (Bold Text),
+#   GILAMONSTER_SNAPSHOT_SCALE=1|2 (screen pixels per point, 2 if unset), GILAMONSTER_SNAPSHOT_CONTRAST=1 (Increase Contrast).
 #   PAGES=overview,console  draws only those pages. SCRATCH=<folder>  builds there instead of .build.
 # Everything is made-up and lives under a temp folder that's removed at the end, pass or fail (D226). Nothing
 # starts: the snapshot only draws. Pictures land in OUT/<fixture>/<theme>-<light|dark>/.

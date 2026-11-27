@@ -114,7 +114,7 @@ import GilaMonsterCore
     check(line.contains("backed up") && line.contains("2 things need you") && line.hasSuffix("1 open issue") && !line.contains("up for"), "backups, what needs you and open issues, and no uptime when stopped (\(line))")
     check(!NeedsYou.factLine(software: "Paper", running: false, since: nil, lastBackup: nil, isLab: true, needs: 1, openIssues: 0, now: now).contains("backup"), "the Lab has no backup words")
     let overview = source("OverviewPage.swift")
-    check(overview.contains("Theme.display(28)") && overview.contains("GlyphView(glyph: server.state.glyph, size: 22)"), "the sentence is in the display face beside the glyph")
+    check(overview.contains(".type(.display(28))") && overview.contains("GlyphView(glyph: server.state.glyph, size: 22)"), "the sentence is the screen's title beside the glyph (Pixelify Sans, or the display face with pixel type off)")
     check(overview.contains("server.start()") && overview.contains("server.stop(by: .button(\"Overview\"))") && overview.contains("server.restart(by: .button(\"Overview\"))"), "Start, Stop and Restart are still on Overview")
     check(overview.contains("ConnectCheckRow") && overview.contains("Copy Network Address") && overview.contains("Back Up Now") && overview.contains("ConnectionsCard"), "every action the old cards had is still there")
 
@@ -134,11 +134,17 @@ import GilaMonsterCore
     // from main at 69f6036). Any change to wording, buttons, order, default, focus, countdown or guard changes it.
     if let start = prompts.range(of: "/// Each waiting ask with Deny and Allow.") {
         let list = String(prompts[start.lowerBound...])
-        let fonts = try! NSRegularExpression(pattern: #"\.font\([^()]*(?:\([^()]*\)[^()]*)*\)"#)
+        let fonts = try! NSRegularExpression(pattern: #"\.(?:font|type)\([^()]*(?:\([^()]*\)[^()]*)*\)"#)
         // K800 added layout only, and each piece is taken out by its exact text before hashing: `.fixedSize()` on the
         // four buttons, and the width the words' column asks for.
-        let layout = [".fixedSize()", ".frame(idealWidth: 262, alignment: .leading)"]
-        let bare = layout.reduce(fonts.stringByReplacingMatches(in: list, range: NSRange(list.startIndex..., in: list), withTemplate: "")) { $0.replacingOccurrences(of: $1, with: "") }
+        // K820 changed type and sizes only, and each piece is put back by its exact text: fonts are `.type(...)`, the
+        // sentence is drawn by AskSentence so the server's name stays whole, the words' column grows for a long name,
+        // and the divider grows with the text.
+        let layout = [".fixedSize()", ".frame(idealWidth: AskSentence.column(for: ask.server), alignment: .leading)"]
+        let k820 = [("AskSentence(sentence: ask.sentence, server: ask.server)", "Text(ask.sentence).foregroundStyle(Theme.ink).fixedSize(horizontal: false, vertical: true)"),
+                    ("Divider().frame(height: 18 * Theme.grow)", "Divider().frame(height: 18)")]
+        let stripped = layout.reduce(fonts.stringByReplacingMatches(in: list, range: NSRange(list.startIndex..., in: list), withTemplate: "")) { $0.replacingOccurrences(of: $1, with: "") }
+        let bare = k820.reduce(stripped) { $0.replacingOccurrences(of: $1.0, with: $1.1) }
         var h: UInt64 = 0xcbf29ce484222325
         for b in bare.utf8 { h ^= UInt64(b); h = h &* 0x100000001b3 }
         equal(String(h, radix: 16), "e23c502b945538b5", "SessionAskList is unchanged apart from its fonts and the K800 layout modifiers")
@@ -155,7 +161,7 @@ import GilaMonsterCore
             check(tail.contains(".fixedSize()"), "\(label) never shrinks below its label")
         }
         check(!list.contains("truncationMode") && !list.contains("lineLimit"), "no label in the list is cut short")
-        check(list.contains("}.frame(idealWidth: 262, alignment: .leading)\n                    Spacer(minLength: 12)"), "the words keep a 262 pt column beside the buttons")
+        check(list.contains("}.frame(idealWidth: AskSentence.column(for: ask.server), alignment: .leading)\n                    Spacer(minLength: 12)") && prompts.contains("static var normalColumn: CGFloat { 262 * Theme.grow }"), "the words keep a 262 pt column beside the buttons, wider only for larger text or a long name")
     } else { check(false, "SessionAskList is in SessionPrompts.swift") }
     func at(_ s: String) -> Int { prompts.range(of: s).map { prompts.distance(from: prompts.startIndex, to: $0.lowerBound) } ?? -1 }
     let deny = at("Button(\"Deny\") { if settled() { service.resolve(ask.id, allow: false) } }")
@@ -172,7 +178,7 @@ import GilaMonsterCore
     check(prompts.contains("SessionAskPlacement.accepts(pointer: pointer, sinceChange: Date().timeIntervalSince(changed))"), "the click guard is still there")
     check(prompts.contains("override func cancelOperation(_ sender: Any?) {\n            if let first = SessionAccessService.shared.waiting.first { SessionAccessService.shared.resolve(first.id, allow: false) }"), "Escape still denies")
     check(prompts.contains("AskPanelLook { SessionAskList(service: .shared, focusFirst: true) }") && prompts.contains("BeadBandView(height: 6)"), "the ask window wears the bead band and sand surface")
-    check(prompts.contains(".frame(minWidth: AskPanelLook.minWidth)") && prompts.contains("static var minWidth: CGFloat { 580 }") && !prompts.contains(".frame(width: 580)"), "the ask window is 580 pt at least and grows when the buttons need more")
+    check(prompts.contains(".frame(minWidth: AskPanelLook.minWidth)") && prompts.contains("static var minWidth: CGFloat { 580 * Theme.grow }") && !prompts.contains(".frame(width: 580)"), "the ask window is 580 pt at least and grows when the buttons need more")
     check(prompts.contains("panel.contentView?.fittingSize"), "and it is sized from what its content asks for, every time it opens")
     let style = source("Theme.swift")
     check(style.contains("configuration.label\n                .lineLimit(1)\n                .fixedSize(horizontal: true, vertical: false)"), "a themed button's label is one line at its full width")
@@ -197,7 +203,7 @@ import GilaMonsterCore
             if tiny.firstMatch(in: s, range: NSRange(s.startIndex..., in: s)) != nil { small.append("\(file.lastPathComponent):\(n + 1)") }
         }
     }
-    check(small.isEmpty, "no view sets text under 13 pt: \(small.joined(separator: ", "))")
+    check(small.isEmpty, "no view sets system text under 13 pt (pixel labels are 11 pt by the K820 decision, and the Pixel font switch turns them off): \(small.joined(separator: ", "))")
     check(!desert.contains("SF Pro") && !desert.contains("\"Helvetica") && desert.contains("static let lilita = \"LilitaOne\""), "the display face is Lilita One, never a macOS font by name")
 
     section("Motion: Reduce Motion stops the slide and the pulse")

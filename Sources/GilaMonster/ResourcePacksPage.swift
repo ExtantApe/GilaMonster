@@ -218,7 +218,7 @@ struct ResourcePacksPage: View {
                         HStack(spacing: 10) {
                             Text(row.category).foregroundStyle(Theme.ink).frame(width: 130, alignment: .leading)
                             ProgressView(value: Double(row.covered), total: Double(max(row.total, 1))).frame(maxWidth: 200).accessibilityLabel("\(row.category): \(row.percent) percent")
-                            Text("\(row.covered) of \(row.total)").font(.body).foregroundStyle(Theme.muted)
+                            Text("\(row.covered) of \(row.total)").type(.body).foregroundStyle(Theme.muted)
                         }
                     }
                     Hint("Anything not covered uses the game's own art. A pack listed lower down fills in gaps from the ones above it.")
@@ -258,7 +258,7 @@ struct ResourcePacksPage: View {
             VStack(alignment: .leading, spacing: 10) {
                 ForEach(enabled, id: \.pack) { entry in
                     VStack(alignment: .leading, spacing: 4) {
-                        Text(packs.first { $0.id == entry.pack }?.title ?? entry.pack).font(.body.weight(.semibold)).foregroundStyle(Theme.ink)
+                        Text(packs.first { $0.id == entry.pack }?.title ?? entry.pack).type(.label(.semibold)).foregroundStyle(Theme.ink)
                         LazyVGrid(columns: [GridItem(.adaptive(minimum: 130), alignment: .leading)], alignment: .leading, spacing: 4) {
                             ForEach(ResourcePacks.categories, id: \.self) { category in
                                 Toggle(category, isOn: Binding(get: { !entry.excluded.contains(category) }, set: { keep in
@@ -292,7 +292,7 @@ struct ResourcePacksPage: View {
         let off = entry.songsOff ?? []
         let missing = off.subtracting(list.songs.map(\.id)).sorted()
         return VStack(alignment: .leading, spacing: 6) {
-            Text(packs.first { $0.id == entry.pack }?.title ?? entry.pack).font(.body.weight(.semibold)).foregroundStyle(Theme.ink)
+            Text(packs.first { $0.id == entry.pack }?.title ?? entry.pack).type(.label(.semibold)).foregroundStyle(Theme.ink)
             ForEach(list.problems, id: \.self) { Callout(tone: .warning, title: "Songs can't be switched off one by one", detail: $0) }
             ForEach(list.songs) { song in
                 Toggle(isOn: Binding(get: { !off.contains(song.id) }, set: { keep in
@@ -660,10 +660,10 @@ struct UpdateReviewSheet: View {
 
     @ViewBuilder private func section(_ title: String, _ items: [PackChanges.Change]) -> some View {
         if !items.isEmpty {
-            Text("\(title) (\(items.count))").font(.body.weight(.semibold)).foregroundStyle(Theme.ink)
+            Text("\(title) (\(items.count))").type(.label(.semibold)).foregroundStyle(Theme.ink)
             ForEach(items.prefix(40)) { item in
                 VStack(alignment: .leading, spacing: 0) {
-                    Text(item.path).font(.body).foregroundStyle(Theme.ink).lineLimit(1).truncationMode(.head)
+                    Text(item.path).type(.body).foregroundStyle(Theme.ink).lineLimit(1).truncationMode(.head)
                     Hint(item.detail)
                 }
             }
@@ -788,7 +788,7 @@ struct PackBrowser: View {
                         AsyncTexture(url: item.url)
                             .frame(width: 72, height: 72)
                             .background(Theme.raised, in: RoundedRectangle(cornerRadius: 6))
-                        Text((item.path as NSString).lastPathComponent).font(.body).foregroundStyle(Theme.muted).lineLimit(1).truncationMode(.middle)
+                        Text((item.path as NSString).lastPathComponent).type(.body).foregroundStyle(Theme.muted).lineLimit(1).truncationMode(.middle)
                     }
                     .help(item.path)
                     .accessibilityElement(children: .ignore)

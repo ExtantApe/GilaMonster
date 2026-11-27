@@ -20,7 +20,9 @@ struct RootView: View {
             }
             // A new theme redraws the page content, since colors are read when drawn. The sheets above it, and the
             // window, are left alone, so a sheet that's open stays open.
-            .id(themeFlavor)
+            // The Pixel font setting does the same (K820). Text size, Bold Text and a move to another screen redraw
+            // through TypeState without this, so nothing typed is lost to them.
+            .id("\(themeFlavor) \(TypeState.shared.on)")
             .onChange(of: model.page) { Announcer.pageChanged() }
             .onChange(of: model.selectedID) { Announcer.pageChanged() }
             .sheet(isPresented: $model.showAddServer) { AddServerSheet(model: model) }
@@ -108,7 +110,7 @@ struct WelcomeView: View {
     var body: some View {
         VStack(spacing: 14) {
             Image(nsImage: NSApp.applicationIconImage).resizable().frame(width: 96, height: 96).accessibilityHidden(true)
-            Text("GilaMonster").font(.largeTitle.weight(.semibold)).foregroundStyle(Theme.ink)
+            Text("GilaMonster").type(.title(26, .largeTitle)).foregroundStyle(Theme.ink)
             Text("A lean home for your Minecraft server.").foregroundStyle(Theme.muted)
             Button("Add a Server") { model.showAddServer = true }.buttonStyle(.themedPrimary)
         }
@@ -323,7 +325,7 @@ struct ActivityBar: View {
                 } else {
                     ProgressView().controlSize(.small)
                 }
-                Text(activity).font(.body).foregroundStyle(Theme.ink)
+                Text(activity).type(.body).foregroundStyle(Theme.ink)
                 Spacer()
             }
             .padding(.horizontal, 20)
@@ -347,7 +349,7 @@ struct BlockersSheet: View {
             ForEach(server.blockers) { blocker in
                 Card {
                     VStack(alignment: .leading, spacing: 8) {
-                        Text(blocker.title).font(.headline).foregroundStyle(Theme.ink)
+                        Text(blocker.title).type(.headline).foregroundStyle(Theme.ink)
                         Text(blocker.detail).foregroundStyle(Theme.muted).fixedSize(horizontal: false, vertical: true)
                         fix(for: blocker)
                     }
@@ -522,7 +524,7 @@ struct AddServerSheet: View {
 
             if mode == .existing, !available.isEmpty {
                 VStack(alignment: .leading, spacing: 4) {
-                    Text("In \(serversPath)").font(.body.weight(.semibold)).foregroundStyle(Theme.ink)
+                    Text("In \(serversPath)").type(.label(.semibold)).foregroundStyle(Theme.ink)
                     ForEach(available, id: \.path) { candidate in
                         Button {
                             folder = candidate

@@ -8,29 +8,32 @@ import SwiftUI
 
 // MARK: - Fonts
 
-/// The brand's display face, loaded from the app's own Resources/Fonts, or from brand/fonts in a debug build. Only
-/// SIL OFL fonts, with their licence beside them (brand/fonts/lilitaone/OFL.txt).
+/// The brand's faces, loaded from the app's own Resources/Fonts, or from brand/fonts in a debug build. Only SIL OFL
+/// fonts, each with its licence beside it in brand/fonts. Lilita One is the display face from before the pixel type,
+/// drawn when the Pixel font setting is off. Departure Mono and Pixelify Sans are the pixel faces (K820).
+/// A face that can't be loaded is simply not used: its text is drawn in the system font.
 enum BrandFonts {
     static let lilita = "LilitaOne"
     nonisolated(unsafe) private(set) static var lilitaLoaded = false
+    nonisolated(unsafe) private(set) static var departureLoaded = false
+    nonisolated(unsafe) private(set) static var pixelifyLoaded = false
 
+    /// Once at launch.
     static func register() {
-        guard !lilitaLoaded else { return }
-        let file = "LilitaOne-Regular.ttf"
+        if !lilitaLoaded { lilitaLoaded = load("LilitaOne-Regular.ttf", folder: "lilitaone", name: lilita) }
+        if !departureLoaded { departureLoaded = load("DepartureMono-Regular.otf", folder: "departuremono", name: PixelType.departureName) }
+        if !pixelifyLoaded { pixelifyLoaded = load("PixelifySans[wght].ttf", folder: "pixelifysans", name: PixelType.pixelifyName) }
+    }
+
+    private static func load(_ file: String, folder: String, name: String) -> Bool {
         var candidates: [URL] = []
         if let resources = Bundle.main.resourceURL { candidates.append(resources.appendingPathComponent("Fonts/\(file)")) }
         #if DEBUG
         // A debug build runs straight from .build, so it reads the font from the repo it was built from.
         let repo = URL(fileURLWithPath: #filePath).deletingLastPathComponent().deletingLastPathComponent().deletingLastPathComponent()
-        candidates.append(repo.appendingPathComponent("brand/fonts/lilitaone/\(file)"))
+        candidates.append(repo.appendingPathComponent("brand/fonts/\(folder)/\(file)"))
         #endif
-        for url in candidates where FileManager.default.fileExists(atPath: url.path) {
-            var error: Unmanaged<CFError>?
-            if CTFontManagerRegisterFontsForURL(url as CFURL, .process, &error) || NSFont(name: lilita, size: 12) != nil {
-                lilitaLoaded = NSFont(name: lilita, size: 12) != nil
-                if lilitaLoaded { return }
-            }
-        }
+        return FontFiles.register(candidates, postScriptName: name)
     }
 }
 
@@ -77,18 +80,19 @@ struct GlyphView: View {
     var color: Color?
     var body: some View {
         PixelGrid(width: 8, height: 8, cells: glyph.pixels.map { ($0.x, $0.y, color ?? glyph.color) })
-            .frame(width: size, height: size)
+            // Status glyphs grow with the labels beside them (K820).
+            .frame(width: size * Theme.grow, height: size * Theme.grow)
     }
 }
 
 /// A state as its glyph and its word together.
 struct StateLabel: View {
     let state: ServerState
-    var font: Font = .body.weight(.semibold)
+    var font: TypeToken = .label(.semibold)
     var body: some View {
         HStack(spacing: 5) {
             GlyphView(glyph: state.glyph)
-            Text(state.title).font(font).foregroundStyle(Theme.ink)
+            Text(state.title).type(font).foregroundStyle(Theme.ink)
         }
         .accessibilityElement(children: .combine)
     }
@@ -166,7 +170,7 @@ struct Spine: View {
             Spacer(minLength: 0)
         }
         .padding(.vertical, 14)
-        .frame(width: 76)
+        .frame(width: 76 * Theme.grow)
         .frame(maxHeight: .infinity)
         .background(Theme.spine)
     }
@@ -178,17 +182,17 @@ struct Spine: View {
         return VStack(spacing: 4) {
             RoundedRectangle(cornerRadius: 9)
                 .fill(on ? Theme.beadOn : Theme.beadIdle)
-                .frame(width: 32, height: 32)
+                .frame(width: 32 * Theme.grow, height: 32 * Theme.grow)
                 .overlay { RoundedRectangle(cornerRadius: 9).strokeBorder(on ? Theme.beadRing : Theme.beadEdge, lineWidth: on ? 2 : 1.5) }
                 .overlay(alignment: .topTrailing) {
                     if waiting > 0 {
-                        Text("\(waiting)").font(.body.weight(.semibold)).monospacedDigit().foregroundStyle(Theme.onPill)
+                        Text("\(waiting)").type(.label(.semibold)).monospacedDigit().foregroundStyle(Theme.onPill)
                             .padding(.horizontal, 5).background(Theme.pill, in: Capsule())
                             .offset(x: 10, y: -7)
                     }
                 }
             Text(section.title)
-                .font(.body.weight(on ? .bold : .regular))
+                .type(.label(on ? .bold : .regular))
                 .foregroundStyle(on ? Theme.spineInk : Theme.spineMuted)
                 .lineLimit(1).fixedSize()
         }
@@ -268,11 +272,11 @@ struct ServerSwitcher: View {
                         if let icon {
                             Image(nsImage: icon).interpolation(.none).resizable()
                         } else {
-                            Text(PixelFace.initials(server.displayName)).font(.body.weight(.bold)).foregroundStyle(Theme.ink)
+                            Text(PixelFace.initials(server.displayName)).type(.label(.bold)).foregroundStyle(Theme.ink)
                                 .frame(maxWidth: .infinity, maxHeight: .infinity).background(Theme.surface)
                         }
                     }
-                    .frame(width: 34, height: 34)
+                    .frame(width: 34 * Theme.grow, height: 34 * Theme.grow)
                     .clipShape(RoundedRectangle(cornerRadius: 7))
                     .overlay { RoundedRectangle(cornerRadius: 7).strokeBorder(Theme.beadEdge, lineWidth: 1) }
                     GlyphView(glyph: server.state.glyph, size: 12)
@@ -280,12 +284,12 @@ struct ServerSwitcher: View {
                         .offset(x: 5, y: 5)
                 }
                 // Two lines, broken between words, so the name can be read (owner, 2026-11-26). The whole name is in
-                // the tooltip and the VoiceOver label below.
-                Text(ServerName.sidebarLines(server.displayName).joined(separator: "\n") + " ▾").accessibilityHidden(true)
-                    .font(.body).foregroundStyle(Theme.spineMuted).multilineTextAlignment(.center)
-                    .lineLimit(2).truncationMode(.tail).frame(maxWidth: 70)
+                // the tooltip and the VoiceOver label below. The triangle is set in the system font (K820).
+                SymbolText(ServerName.sidebarLines(server.displayName).joined(separator: "\n") + " ▾", .label()).accessibilityHidden(true)
+                    .foregroundStyle(Theme.spineMuted).multilineTextAlignment(.center)
+                    .lineLimit(2).truncationMode(.tail).frame(maxWidth: 70 * Theme.grow)
             }
-            .frame(width: 70)
+            .frame(width: 70 * Theme.grow)
             .contentShape(Rectangle())
         }
         .menuStyle(.button)
@@ -338,10 +342,10 @@ struct Trail: View {
         let count = model.badge(for: page, server: server)
         return HStack(spacing: 5) {
             Text(page.title)
-                .font(.body.weight(on ? .semibold : .medium))
+                .type(.label(on ? .semibold : .medium))
                 .foregroundStyle(on ? Theme.ink : Theme.muted)
             if count > 0 {
-                Text("\(count)").font(.body.weight(.semibold)).monospacedDigit().foregroundStyle(Theme.ink)
+                Text("\(count)").type(.label(.semibold)).monospacedDigit().foregroundStyle(Theme.ink)
                     .padding(.horizontal, 6).background(Theme.accentWash, in: Capsule())
             }
         }
@@ -383,7 +387,7 @@ struct FactCard<Content: View>: View {
 
     var body: some View {
         VStack(alignment: .leading, spacing: 8) {
-            Text(title).font(.body.weight(.semibold)).foregroundStyle(Theme.muted).accessibilityAddTraits(.isHeader)
+            Text(title).type(.factHeading).foregroundStyle(Theme.muted).accessibilityLabel(title).accessibilityAddTraits(.isHeader).padding(.bottom, TypeState.shared.conditions.pixelLabels ? 4 : 0)
             content
         }
         .padding(14)

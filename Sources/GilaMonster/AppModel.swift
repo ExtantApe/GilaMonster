@@ -361,12 +361,42 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
     }
 
     #if DEBUG
+    /// A bitmap at the snapshot's screen pixels per point, so the picture shows what that screen would.
+    nonisolated(unsafe) private static var snapshotScale: CGFloat = 2
+    @MainActor private static func snapshotRep(_ host: NSView) -> NSBitmapImageRep? {
+        let scale = snapshotScale
+        guard scale != 1 else { return host.bitmapImageRepForCachingDisplay(in: host.bounds) }
+        let rep = NSBitmapImageRep(bitmapDataPlanes: nil, pixelsWide: Int(host.bounds.width * scale), pixelsHigh: Int(host.bounds.height * scale), bitsPerSample: 8,
+                                   samplesPerPixel: 4, hasAlpha: true, isPlanar: false, colorSpaceName: .deviceRGB, bytesPerRow: 0, bitsPerPixel: 0)
+        rep?.size = host.bounds.size
+        return rep
+    }
+
     /// Debug builds only: draws every page of every listed server to images, off screen, then quits.
     /// `GILAMONSTER_SNAPSHOT=<folder>`, for checking screens nobody has clicked yet. Starts nothing.
     @MainActor private func snapshotIfAsked() {
         guard let folder = ProcessInfo.processInfo.environment["GILAMONSTER_SNAPSHOT"], let model = Self.model else { return }
         // GILAMONSTER_SNAPSHOT_THEME=bold|quiet picks the theme for this run, without saving it.
         if let name = ProcessInfo.processInfo.environment["GILAMONSTER_SNAPSHOT_THEME"], let flavor = Palette.Flavor(rawValue: name) { Theme.flavor = flavor }
+        // What the Mac would say about text, stood in for here, since a snapshot can't change System Settings (K820).
+        // The type rules that follow are the app's own. Nothing is saved.
+        //   GILAMONSTER_SNAPSHOT_PIXEL=on|off|auto   the Pixel font setting; auto is the first-launch default. On if unset.
+        //   GILAMONSTER_SNAPSHOT_BODY=<points>       the system's body size (13 is the default Text Size)
+        //   GILAMONSTER_SNAPSHOT_BOLD=1              Bold Text
+        //   GILAMONSTER_SNAPSHOT_SCALE=1|2           screen pixels per point (2 if unset)
+        //   GILAMONSTER_SNAPSHOT_CONTRAST=1          Increase Contrast
+        let environment = ProcessInfo.processInfo.environment
+        Self.snapshotScale = CGFloat(environment["GILAMONSTER_SNAPSHOT_SCALE"].flatMap(Double.init) ?? 2)
+        let boldText = environment["GILAMONSTER_SNAPSHOT_BOLD"] != nil
+        let pixel: Bool? = switch environment["GILAMONSTER_SNAPSHOT_PIXEL"] { case "off": false; case "auto": nil; default: true }
+        TypeState.shared.fix(on: pixel, bodySize: environment["GILAMONSTER_SNAPSHOT_BODY"].flatMap(Double.init), boldText: boldText, scale: Double(Self.snapshotScale))
+        Theme.snapshotContrast = environment["GILAMONSTER_SNAPSHOT_CONTRAST"] != nil
+        func look(_ host: NSView) {
+            let dark = environment["GILAMONSTER_SNAPSHOT_DARK"] != nil
+            if environment["GILAMONSTER_SNAPSHOT_LIGHT"] != nil { host.appearance = NSAppearance(named: .aqua) }
+            if dark { host.appearance = NSAppearance(named: .darkAqua) }
+            if Theme.snapshotContrast { host.appearance = NSAppearance(named: dark ? .accessibilityHighContrastDarkAqua : .accessibilityHighContrastAqua) }
+        }
         NSApp.setActivationPolicy(.accessory)
         NSApp.windows.forEach { $0.close() }
         // GILAMONSTER_SNAPSHOT_KEYCHAIN=wait|denied draws every page with a made-up Keychain banner on top (K809).
@@ -399,9 +429,8 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
                     // GILAMONSTER_SNAPSHOT_FORCE_WIDE=1 makes every page too wide on purpose, to prove the report catches it.
                     let wide = ProcessInfo.processInfo.environment["GILAMONSTER_SNAPSHOT_FORCE_WIDE"] != nil
                     // The real window's minimum size (see the WindowGroup below), so the picture is laid out as the app is.
-                    let host = NSHostingView(rootView: AnyView(RootView(model: model).tint(Theme.accent).frame(minWidth: wide ? 1700 : 1120, minHeight: 640)))
-                    if ProcessInfo.processInfo.environment["GILAMONSTER_SNAPSHOT_LIGHT"] != nil { host.appearance = NSAppearance(named: .aqua) }
-                    if ProcessInfo.processInfo.environment["GILAMONSTER_SNAPSHOT_DARK"] != nil { host.appearance = NSAppearance(named: .darkAqua) }
+                    let host = NSHostingView(rootView: AnyView(RootView(model: model).typeRoot().environment(\.legibilityWeight, boldText ? .bold : .regular).tint(Theme.accent).frame(minWidth: wide ? 1700 : 1120, minHeight: 640)))
+                    look(host)
                     let window = NSWindow(contentRect: NSRect(x: -6000, y: -6000, width: 1280, height: ProcessInfo.processInfo.environment["GILAMONSTER_SNAPSHOT_HEIGHT"].flatMap(Double.init).map { CGFloat($0) } ?? 1000), styleMask: [.borderless], backing: .buffered, defer: false)
                     window.isReleasedWhenClosed = false
                     window.contentView = host
@@ -411,7 +440,7 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
                     if pick == nil { pagesChecked += 1 }
                     let fitting = host.fittingSize.width
                     if fitting > windowWidth + 0.5 { overflowing.append("OVERFLOW \(page.rawValue): fitting width \(Int(fitting.rounded())) is over the window's \(Int(windowWidth))") }
-                    if let rep = host.bitmapImageRepForCachingDisplay(in: host.bounds) {
+                    if let rep = Self.snapshotRep(host) {
                         host.cacheDisplay(in: host.bounds, to: rep)
                         let name = "\(server.profile.name.replacingOccurrences(of: " ", with: "-"))-\(page.rawValue)\(pick == nil ? "" : "-selected").png"
                         try? rep.representation(using: .png, properties: [:])?.write(to: URL(fileURLWithPath: folder).appendingPathComponent(name))
@@ -433,6 +462,11 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
             // The Allow prompt, from a separate made-up service: the shared one is never touched (K786).
             let askPreview = SessionAccessService.preview(caller: "helper", action: .stop, server: "Made-up Server", wait: 107)
             quitDialogs.append(("allow-prompt", AnyView(AskPanelLook { SessionAskList(service: askPreview, focusFirst: true) })))
+            // Long server names (K820): one that gets a line to itself, and one wider than the widest window.
+            let longName = SessionAccessService.preview(caller: "helper", action: .stop, server: "Made-up Survival World - Season Two Creative", wait: 107)
+            quitDialogs.append(("allow-prompt-long-name", AnyView(AskPanelLook { SessionAskList(service: longName, focusFirst: true) })))
+            let longestName = SessionAccessService.preview(caller: "helper", action: .stop, server: "A Made-up Server With A Name Long Enough To Need Truncating Even In The Widest Window It Can Have", wait: 107)
+            quitDialogs.append(("allow-prompt-longest-name", AnyView(AskPanelLook { SessionAskList(service: longestName, focusFirst: true) })))
             var serverDialogs: [(String, AnyView)] = []
             if let server = model.servers.first(where: { !$0.isLab }) {
                 let build = PackVersion(file: "new.zip", version: "2.0", sha1: "abc", added: Date(), size: 1000, format: 75, description: "", fileCount: 3, imageCount: 1)
@@ -458,9 +492,8 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
                 ]
             }
             for (name, view) in quitDialogs + serverDialogs {
-                    let host = NSHostingView(rootView: view.tint(Theme.accent).background(Theme.background))
-                    if ProcessInfo.processInfo.environment["GILAMONSTER_SNAPSHOT_LIGHT"] != nil { host.appearance = NSAppearance(named: .aqua) }
-                    if ProcessInfo.processInfo.environment["GILAMONSTER_SNAPSHOT_DARK"] != nil { host.appearance = NSAppearance(named: .darkAqua) }
+                    let host = NSHostingView(rootView: view.typeRoot().environment(\.legibilityWeight, boldText ? .bold : .regular).tint(Theme.accent).background(Theme.background))
+                    look(host)
                     let size = host.fittingSize
                     host.frame = NSRect(origin: .zero, size: NSSize(width: max(size.width, 320), height: max(min(size.height, 1100), 200)))
                     let window = NSWindow(contentRect: NSRect(x: -6000, y: -6000, width: host.frame.width, height: host.frame.height), styleMask: [.borderless], backing: .buffered, defer: false)
@@ -468,7 +501,7 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
                     window.contentView = host
                     window.orderBack(nil)
                     try? await Task.sleep(for: .seconds(2))
-                    if let rep = host.bitmapImageRepForCachingDisplay(in: host.bounds) {
+                    if let rep = Self.snapshotRep(host) {
                         host.cacheDisplay(in: host.bounds, to: rep)
                         try? rep.representation(using: .png, properties: [:])?.write(to: URL(fileURLWithPath: folder).appendingPathComponent("dialog-\(name).png"))
                     }
@@ -641,6 +674,7 @@ struct GilaMonsterApp: App {
             exit(0)
         }
         BrandFonts.register()
+        TypeState.shared.start()
         let model = AppModel()
         AppDelegate.model = model
         _model = State(initialValue: model)
@@ -657,6 +691,7 @@ struct GilaMonsterApp: App {
     var body: some Scene {
         Window("GilaMonster", id: "main") {
             RootView(model: model)
+                .typeRoot()
                 .frame(minWidth: 1120, minHeight: 640)
                 .tint(Theme.accent)
                 .preferredColorScheme(scheme)
@@ -668,7 +703,7 @@ struct GilaMonsterApp: App {
             if AdvisorTrial.isOn {
                 Text("This trial has no settings.").padding(40)
             } else {
-                SettingsView(model: model).tint(Theme.accent).preferredColorScheme(scheme)
+                SettingsView(model: model).typeRoot().tint(Theme.accent).preferredColorScheme(scheme)
             }
         }
 
@@ -836,6 +871,14 @@ struct SettingsView: View {
                 Text("Light").tag("light")
                 Text("Dark").tag("dark")
             }
+            // K820. On by default (owner, 2026-11-26: "On by default (Recommended)"). A snapshot draws it and saves nothing.
+            Toggle("Pixel font", isOn: Binding(get: { TypeState.shared.on }, set: { on in
+                Announcer.pageChanged()   // the page redraws in the other typeface; its callouts aren't news
+                TypeState.shared.on = on
+                if !AppModel.isSnapshot { PixelType.save(on) }
+                Announcer.say(on ? "Pixel font on" : "Pixel font off", force: true)
+            }))
+            Hint("Headings, labels, buttons and numbers use a pixel typeface. Turn this off to use the system font everywhere.")
             Toggle("Tell me when a new GilaMonster is on GitHub", isOn: $model.checkAppUpdates)
             Toggle("Notify me about crashes, failed backups and low disk space", isOn: Binding(get: { Alerts.enabled }, set: { Alerts.enabled = $0 }))
             LabeledContent("Version", value: GilaMonster.version)
@@ -862,7 +905,7 @@ struct SettingsView: View {
                         Label {
                             VStack(alignment: .leading, spacing: 2) {
                                 Text(module.title).foregroundStyle(Theme.ink)
-                                Text(module.summary).font(.body).foregroundStyle(Theme.muted)
+                                Text(module.summary).type(.body).foregroundStyle(Theme.muted)
                             }
                         } icon: {
                             Image(systemName: module.icon).foregroundStyle(Theme.accent)
@@ -873,7 +916,7 @@ struct SettingsView: View {
                 Text("Features")
             } footer: {
                 Text("Turning one off hides it and stops its background work. Nothing it has saved is deleted, and turning it back on picks up where it left off.")
-                    .font(.body).foregroundStyle(Theme.muted)
+                    .type(.body).foregroundStyle(Theme.muted)
             }
             SessionAccessSection()
         }

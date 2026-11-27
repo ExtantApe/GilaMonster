@@ -64,7 +64,7 @@ struct WorldsPage: View {
             DisclosureGroup(isExpanded: Binding(get: { showNotLoaded || !filter.isEmpty }, set: { showNotLoaded = $0 })) {
                 VStack(spacing: 10) { ForEach(notLoaded) { row($0) } }.padding(.top, 6)
             } label: {
-                Text("Not loaded (\(notLoaded.count))").font(.headline).foregroundStyle(Theme.ink)
+                Text("Not loaded (\(notLoaded.count))").type(.headline).foregroundStyle(Theme.ink)
             }
             .accessibilityHint("Folders Multiverse doesn't load at startup, or that are missing")
         }
@@ -136,14 +136,14 @@ private struct OperationCard: View {
                 if operation.finished {
                     Badge(text: operation.succeeded ? "Done" : "Check the output", tone: operation.succeeded ? .good : .warning)
                 }
-                Text(operation.title).font(.headline).foregroundStyle(Theme.ink)
+                Text(operation.title).type(.headline).foregroundStyle(Theme.ink)
                 Spacer()
                 if operation.finished {
                     Button("Dismiss") { server.dismissWorldOperation() }.buttonStyle(.themed)
                 }
             }
             Text(output)
-                .font(.system(.body, design: .monospaced)).foregroundStyle(Theme.ink).textSelection(.enabled)
+                .type(.mono).foregroundStyle(Theme.ink).textSelection(.enabled)
                 .frame(maxWidth: .infinity, alignment: .leading)
                 .padding(8)
                 .background(Theme.raised, in: RoundedRectangle(cornerRadius: 6))
@@ -173,8 +173,8 @@ private struct WorldRow: View {
         Card {
             HStack(alignment: .firstTextBaseline, spacing: 8) {
                 Image(systemName: icon).foregroundStyle(Theme.accent).accessibilityHidden(true)
-                Text(world.title).font(.headline).foregroundStyle(Theme.ink).rowName(world.title)
-                if world.title != world.name, world.multiverse?.alias.isEmpty == false { Text(world.name).font(.body).foregroundStyle(Theme.muted).rowName(world.name) }
+                Text(world.title).type(.headline).foregroundStyle(Theme.ink).rowName(world.title)
+                if world.title != world.name, world.multiverse?.alias.isEmpty == false { Text(world.name).type(.body).foregroundStyle(Theme.muted).rowName(world.name) }
                 Spacer()
                 badges
             }

@@ -26,18 +26,14 @@ struct LabPage: View {
                     Text("Each run builds a practice server, the Lab, with its own worlds and bot players, listening only on this Mac. It's deleted when the run ends, pass or fail. The results and the report stay.")
                         .foregroundStyle(Theme.ink).fixedSize(horizontal: false, vertical: true)
                     HStack {
-                        Text("Upgrade to").foregroundStyle(Theme.muted)
-                        Picker("Version to upgrade to", selection: $chosen) {
-                            Text("Choose…").tag("")
-                            ForEach(versions, id: \.self) { Text($0).tag($0) }
-                        }
-                        .labelsHidden().frame(maxWidth: 200).disabled(lab.isBusy)
+                        Text("Upgrade to").type(.label()).foregroundStyle(Theme.muted)
+                        UpgradePicker(chosen: $chosen, versions: versions).frame(maxWidth: 200 * Theme.grow).disabled(lab.isBusy)
                         .onChange(of: chosen) { _, version in pick(version) }
                         if let target = lab.target { Hint("\(target.flavor.title) \(target.label)") }
                         Spacer()
-                        Text("Now \(server.profile.software.label)").foregroundStyle(Theme.muted)
+                        Text("Now \(server.profile.software.label)").type(.label()).foregroundStyle(Theme.muted)
                     }
-                    Text("Checks to run").font(.body.weight(.semibold)).foregroundStyle(Theme.ink).padding(.top, 4)
+                    Text("Checks to run").type(.label(.semibold)).foregroundStyle(Theme.ink).padding(.top, 4)
                         .accessibilityAddTraits(.isHeader)
                     ForEach(LabStation.allCases) { station in
                         LabStationRow(station: station, lab: lab, server: server, included: Binding(get: { included.contains(station) }, set: { on in
@@ -204,18 +200,18 @@ struct LabStationRow: View {
                     .help(lab.isBusy ? "A run is going now, so the checks can't be changed until it ends." : included ? "In the next run." : "Left out of the next run.")
                 VStack(alignment: .leading, spacing: 2) {
                     HStack(spacing: 8) {
-                        Text(station.title).font(.body.weight(.semibold)).foregroundStyle(Theme.ink)
-                        if station.isOptional { Text("Optional").font(.body).foregroundStyle(Theme.muted) }
+                        Text(station.title).type(.label(.semibold)).foregroundStyle(Theme.ink)
+                        if station.isOptional { Text("Optional").type(.label()).foregroundStyle(Theme.muted) }
                     }
                     Hint(detailLine)
-                    if case .failed = light, let next = nextStep { Text(next).font(.body).foregroundStyle(Theme.ink).fixedSize(horizontal: false, vertical: true) }
-                    if light == .running, let step = lab.step { Text(step).font(.body).foregroundStyle(Theme.ink) }
+                    if case .failed = light, let next = nextStep { Text(next).type(.body).foregroundStyle(Theme.ink).fixedSize(horizontal: false, vertical: true) }
+                    if light == .running, let step = lab.step { Text(step).type(.body).foregroundStyle(Theme.ink) }
                 }
                 Spacer(minLength: 8)
                 StatusLight(light: light)
                 Button { open.toggle() } label: {
-                    Image(systemName: "chevron.right").rotationEffect(.degrees(open ? 90 : 0)).foregroundStyle(Theme.muted)
-                        .frame(width: 20, height: 20).contentShape(Rectangle())
+                    Image(systemName: "chevron.right").font(Theme.symbol()).rotationEffect(.degrees(open ? 90 : 0)).foregroundStyle(Theme.muted)
+                        .frame(width: 20 * Theme.grow, height: 20 * Theme.grow).contentShape(Rectangle())
                 }
                 .buttonStyle(.plain).opacity(hasDetails ? 1 : 0).disabled(!hasDetails)
                 .accessibilityLabel("Details for \(station.title)").accessibilityValue(open ? "Shown" : "Hidden")
@@ -256,6 +252,48 @@ struct LabStationRow: View {
     }
 }
 
+/// The version to rehearse. At the default text size it is the system's picker. A system picker's words can't be made
+/// larger, so above that size it is a menu behind a field of GilaMonster's own, whose words and arrows grow with the
+/// text (K820). The menu that opens is the system's either way.
+struct UpgradePicker: View {
+    @Binding var chosen: String
+    let versions: [String]
+    @Environment(\.isEnabled) private var enabled
+
+    private var options: some View {
+        Picker("Version to upgrade to", selection: $chosen) {
+            Text("Choose…").tag("")
+            ForEach(versions, id: \.self) { Text($0).tag($0) }
+        }
+    }
+
+    var body: some View {
+        let grow = Theme.grow
+        if grow == 1 {
+            options.labelsHidden()
+        } else {
+            Menu {
+                options.pickerStyle(.inline).labelsHidden()
+            } label: {
+                HStack(spacing: 6 * grow) {
+                    Text(chosen.isEmpty ? "Choose…" : chosen).font(Theme.symbol()).lineLimit(1)   // the system font, at the labels' growth
+                    Spacer(minLength: 0)
+                    Image(systemName: "chevron.up.chevron.down").font(Theme.symbol(weight: .semibold)).accessibilityHidden(true)
+                }
+                .foregroundStyle(enabled ? Theme.ink : Theme.named(ControlLook.disabledButton.label))
+                .padding(.horizontal, 8 * grow)
+                .frame(minHeight: 22 * grow)
+                .background(enabled ? Theme.surface : Theme.named(ControlLook.disabledButton.fill), in: RoundedRectangle(cornerRadius: Theme.controlRadius))
+                .overlay { RoundedRectangle(cornerRadius: Theme.controlRadius).strokeBorder(Theme.controlBorder, style: StrokeStyle(lineWidth: 1, dash: enabled ? [] : [4, 3])) }
+                .contentShape(Rectangle())
+            }
+            .menuStyle(.button).buttonStyle(.plain).menuIndicator(.hidden)
+            .accessibilityLabel("Version to upgrade to")
+            .accessibilityValue(chosen.isEmpty ? "None chosen" : chosen)
+        }
+    }
+}
+
 /// The word and shape carry the meaning too, so it never relies on color alone.
 struct StatusLight: View {
     let light: StationLight
@@ -264,13 +302,13 @@ struct StatusLight: View {
     var body: some View {
         HStack(spacing: 6) {
             if light == .running {
-                ProgressView().controlSize(.small).accessibilityHidden(true)
+                ProgressView().controlSize(Theme.grow >= 1.25 ? .regular : .small).accessibilityHidden(true)
             } else {
-                Image(systemName: icon).foregroundStyle(color).accessibilityHidden(true)
+                Image(systemName: icon).font(Theme.symbol()).foregroundStyle(color).accessibilityHidden(true)
             }
-            Text(word).font(.body.weight(.medium)).foregroundStyle(Theme.ink)
+            Text(word).type(.label(.medium)).foregroundStyle(Theme.ink)
         }
-        .frame(minWidth: 96, alignment: .trailing)
+        .frame(minWidth: 96 * Theme.grow, alignment: .trailing)
         .accessibilityElement(children: .combine)
     }
 
@@ -317,7 +355,7 @@ struct StationDetails: View {
             ForEach(result.groups) { group in
                 VStack(alignment: .leading, spacing: 3) {
                     HStack {
-                        Text(group.title).font(.body.weight(.semibold)).foregroundStyle(Theme.ink)
+                        Text(group.title).type(.label(.semibold)).foregroundStyle(Theme.ink)
                         Badge(text: title(group.outcome), tone: tone(group.outcome))
                     }
                     Hint(group.plugins.joined(separator: ", "))
@@ -365,14 +403,14 @@ struct RestartLog: View {
                 ScrollView(.vertical) {
                     ScrollView(.horizontal) {
                         Text(lines.joined(separator: "\n"))
-                            .font(.system(.body, design: .monospaced))
+                            .type(.mono)
                             .foregroundStyle(Theme.ink)
                             .textSelection(.enabled)
                             .frame(maxWidth: .infinity, alignment: .leading)
                             .padding(8)
                     }
                 }
-                .frame(height: min(CGFloat(lines.count) * lineHeight + 28, 240))
+                .frame(height: min(CGFloat(lines.count) * lineHeight * Theme.textFactor + 28, 240 * Theme.textFactor))
                 .background(Theme.raised, in: RoundedRectangle(cornerRadius: 6))
                 .accessibilityLabel("Restart log for \(group)")
                 Button("Copy Log") {
@@ -384,7 +422,7 @@ struct RestartLog: View {
                 .helped("The lab's console from stopping to the player rejoining. It has only the lab's bot players in it.")
             }
         }
-        .font(.body)
+        .type(.body)
         .foregroundStyle(Theme.ink)
         .accessibilityHint("The lab's console from stopping to the player rejoining")
     }
@@ -459,7 +497,7 @@ struct LabSetupSheet: View {
 
     var body: some View {
         VStack(alignment: .leading, spacing: 14) {
-            Label("Set up the Lab", systemImage: "flask").font(.title2.weight(.semibold)).foregroundStyle(Theme.ink).accessibilityAddTraits(.isHeader)
+            Label("Set up the Lab", systemImage: "flask").type(.title(17, .title2)).foregroundStyle(Theme.ink).accessibilityAddTraits(.isHeader)
             Text("The Lab is a practice server in \((LabFiles.root.path as NSString).abbreviatingWithTildeInPath). GilaMonster fills it with its own worlds and bot players, and uses it to rehearse upgrades. It never copies your real worlds or players.")
                 .foregroundStyle(Theme.ink).fixedSize(horizontal: false, vertical: true)
             Text("Running it means running a Minecraft server, so Mojang's EULA applies. Your acceptance covers the Lab and its rebuilds.")
