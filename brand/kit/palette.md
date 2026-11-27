@@ -40,6 +40,11 @@ For the icon and illustration only, never text: red-orange `#E4572E`, salmon `#F
 
 ## In the app
 
-0.4.0 uses these under role names: turquoise is `accent`, red-orange is `pop` (fill, with `onPop` text) and `popText`,
-and the status colors are `info`, `warning` and `danger`. `gilamonster-check` holds every pair in light, dark and both
-Increase Contrast appearances. The bold and quiet themes planned for 0.4.1 are drafted in the ops design review.
+The app uses these under role names: turquoise is `accent`, red-orange is `pop` (fill, with `onPop` text) and `popText`,
+and the status colors are `info`, `warning` and `danger`.
+
+Since 0.4.0 there are two themes, **Bold** (the default) and **Quiet**, picked in Settings next to Appearance, so there
+are four looks. All four come from `themes-tokens.json` through `scripts/palette-tokens.py`, and `gilamonster-check`
+holds every pair in each look, with and without Increase Contrast. Where this file and the tokens differ, the tokens
+win. The red-orange text color, for example, is now `#9C3216` in light and `#F09374` in dark (`brandText` in the
+tokens, `popText` in the app).
