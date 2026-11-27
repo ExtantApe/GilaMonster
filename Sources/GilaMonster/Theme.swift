@@ -284,13 +284,12 @@ struct Badge: View {
     }
 }
 
-#if DEBUG
 /// Where the column beside the spine and its banner row were drawn, for the debug snapshot's report (K815).
+/// Present in release builds too, because the views name it in closures; only debug snapshots ever write it.
 @MainActor enum SnapshotProbe {
     static var column = CGRect.null
     static var banners = CGRect.null
 }
-#endif
 
 extension View {
     /// Debug snapshots only: records where this view was drawn in the window. Does nothing in the app.
