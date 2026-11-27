@@ -81,7 +81,7 @@ final class AppModel {
     var labSetup: LabSetupRequest?
     /// A snapshot run draws every server in turn and must leave the saved choice alone (D226).
     var selectedID: UUID? { didSet { if !Self.isSnapshot { AppDefaults.store.set(selectedID?.uuidString, forKey: "selectedServer") } } }
-    nonisolated static var isSnapshot: Bool { ProcessInfo.processInfo.environment["GILAMONSTER_SNAPSHOT"] != nil }
+    nonisolated static var isSnapshot: Bool { AppMode.isSnapshot }
     var page: PageID = .overview { didSet { if let id = Sections.section(of: page.rawValue)?.id { lastPage[id] = page } } }
     /// Opened from the toolbar while nothing is open, to look at ignored issues. Not saved: the panel goes back to
     /// showing itself only when there's something open (UX audit finding 2).
@@ -160,40 +160,6 @@ final class AppModel {
         if let found = lab.server, !opened.contains(where: { $0.id == found.id }) { opened.append(found) }
         servers = opened
         selectedID = (Self.isSnapshot ? nil : AppDefaults.store.string(forKey: "selectedServer").flatMap(UUID.init)) ?? servers.first?.id
-        // Only servers with "Start when GilaMonster opens" on, which is off by default (owner, 2026-11-16).
-        for server in LaunchStart.servers(servers, advisorTrial: AdvisorTrial.isOn,
-                                          snapshot: ProcessInfo.processInfo.environment["GILAMONSTER_SNAPSHOT"] != nil) {
-            Task { await server.start() }
-        }
-        // Its own switch, off until someone turns it on. A snapshot only draws screens.
-        if ProcessInfo.processInfo.environment["GILAMONSTER_SNAPSHOT"] == nil {
-            servers.forEach { $0.tidySignInLog() }
-            for server in servers where server.linksPageSettings.on && !server.isLab {
-                do { try server.startLinksPage() } catch { server.linksPageError = error.localizedDescription }
-            }
-            // A server can be running when the app opens, and its players still need the pack's address to answer.
-            servers.forEach { $0.startPackHostIfWanted() }
-        }
-        // Backup clones left by a backup that was cut short (K799): removed now, before any backup can start. Skipped
-        // in a snapshot, and when a backup or another copy of GilaMonster is running, since the clone could be theirs.
-        if ProcessInfo.processInfo.environment["GILAMONSTER_SNAPSHOT"] == nil {
-            for swept in BackupClones.sweep(besideServers: servers.map(\.paths.root), serversFolder: AppPaths.servers, backupRunning: Backups.writing || Self.anotherCopyIsRunning) {
-                if let line = swept.result.line(swept.folder) { Self.cloneLog.notice("\(line, privacy: .public)") }
-            }
-        }
-        // A backup drill's copy left by a GilaMonster that went away during the drill (K813): its Java is stopped if
-        // it's still running, and the copy is removed. Only copies GilaMonster marked as its own. Off the main thread,
-        // since stopping a Java can take a few seconds.
-        if ProcessInfo.processInfo.environment["GILAMONSTER_SNAPSHOT"] == nil, !AdvisorTrial.isOn {
-            let roots = servers.map(\.paths.root)
-            let backupFolders = servers.flatMap { server in [Backups.destination(server.profile)] + server.backups.map { Backups.folder(of: $0, profile: server.profile) } }
-            let servers = AppPaths.servers, otherCopy = Self.anotherCopyIsRunning
-            Task.detached(priority: .utility) {
-                for swept in DrillCopies.sweep(besideServers: roots, serversFolder: servers, backupFolders: backupFolders, otherCopyRunning: otherCopy) {
-                    if let line = swept.result.line(swept.folder) { Self.drillLog.notice("\(line, privacy: .public)") }
-                }
-            }
-        }
         servers.forEach(Alerts.connect)
         // Session access: off until the owner turns it on in Settings, and never in a snapshot or the Advisor trial.
         SessionAccessService.shared.servers = { [weak self] in self?.servers ?? [] }
@@ -206,12 +172,6 @@ final class AppModel {
         KeychainWait.shared.onCleared = { Alerts.keychainWaitEnded() }
         // How it ended is said too, every time: a second no in a row is still news.
         KeychainWait.shared.onOutcome = { outcome in Announcer.say(KeychainWait.spoken(outcome), urgent: outcome != .allowed, always: true) }
-        if ProcessInfo.processInfo.environment["GILAMONSTER_SNAPSHOT"] == nil, !AdvisorTrial.isOn {
-            // After the window is up, so a Keychain prompt can't hold up the launch.
-            Task { await SessionAccessService.shared.apply(SessionAccess.loadSettings()) }
-        }
-        if !AdvisorTrial.isOn { Alerts.ask() }
-        if checkAppUpdates, !AdvisorTrial.isOn { Task { await lookForAppUpdate() } }
         // A run's lab is listed while it exists, and dropped when it's deleted.
         lab.onServerChanged = { [weak self] old, new in
             guard let self else { return }
@@ -221,8 +181,50 @@ final class AppModel {
             if wasSelected || self.selectedID == nil { self.selectedID = new?.id }
             self.saveRegistry()
         }
+        // Everything that starts by itself at launch is in one place, and a snapshot skips all of it (K829).
+        if !AppMode.isSnapshot { startAtLaunch() }
+    }
+
+    /// What GilaMonster starts by itself when it opens: servers set to start, tidying, sweeps, session access, the look
+    /// for a new GilaMonster and the Lab's leftovers. A snapshot run never calls this (K829).
+    private func startAtLaunch() {
+        // Only servers with "Start when GilaMonster opens" on, which is off by default (owner, 2026-11-16).
+        for server in LaunchStart.servers(servers, advisorTrial: AdvisorTrial.isOn, snapshot: AppMode.isSnapshot) {
+            Task { await server.start() }
+        }
+        // Its own switch, off until someone turns it on.
+        servers.forEach { $0.tidySignInLog() }
+        for server in servers where server.linksPageSettings.on && !server.isLab {
+            do { try server.startLinksPage() } catch { server.linksPageError = error.localizedDescription }
+        }
+        // A server can be running when the app opens, and its players still need the pack's address to answer.
+        servers.forEach { $0.startPackHostIfWanted() }
+        // Backup clones left by a backup that was cut short (K799): removed now, before any backup can start. Skipped
+        // in a snapshot, and when a backup or another copy of GilaMonster is running, since the clone could be theirs.
+        for swept in BackupClones.sweep(besideServers: servers.map(\.paths.root), serversFolder: AppPaths.servers, backupRunning: Backups.writing || Self.anotherCopyIsRunning) {
+            if let line = swept.result.line(swept.folder) { Self.cloneLog.notice("\(line, privacy: .public)") }
+        }
+        // A backup drill's copy left by a GilaMonster that went away during the drill (K813): its Java is stopped if
+        // it's still running, and the copy is removed. Only copies GilaMonster marked as its own. Off the main thread,
+        // since stopping a Java can take a few seconds.
+        if !AdvisorTrial.isOn {
+            let roots = servers.map(\.paths.root)
+            let backupFolders = servers.flatMap { server in [Backups.destination(server.profile)] + server.backups.map { Backups.folder(of: $0, profile: server.profile) } }
+            let servers = AppPaths.servers, otherCopy = Self.anotherCopyIsRunning
+            Task.detached(priority: .utility) {
+                for swept in DrillCopies.sweep(besideServers: roots, serversFolder: servers, backupFolders: backupFolders, otherCopyRunning: otherCopy) {
+                    if let line = swept.result.line(swept.folder) { Self.drillLog.notice("\(line, privacy: .public)") }
+                }
+            }
+        }
+        if !AdvisorTrial.isOn {
+            // After the window is up, so a Keychain prompt can't hold up the launch.
+            Task { await SessionAccessService.shared.apply(SessionAccess.loadSettings()) }
+        }
+        if !AdvisorTrial.isOn { Alerts.ask() }
+        if checkAppUpdates, !AdvisorTrial.isOn { Task { await lookForAppUpdate() } }
         // A lab left by a quit or crash in the middle of a run goes now, if it's GilaMonster's own and not running (D229).
-        if ProcessInfo.processInfo.environment["GILAMONSTER_SNAPSHOT"] == nil, !AdvisorTrial.isOn {
+        if !AdvisorTrial.isOn {
             Task { await lab.removeLeftover() }
         }
     }
@@ -282,6 +284,7 @@ final class AppModel {
 
     /// Unsigned apps can't update themselves safely, so this only tells you where the new build is.
     func lookForAppUpdate() async {
+        guard !AppMode.isSnapshot else { return }
         struct Release: Decodable { let tag_name: String; let html_url: String }
         guard let url = URL(string: "https://api.github.com/repos/\(GilaMonster.repository)/releases/latest"),
               let release = try? await HTTP.decode(Release.self, url),
@@ -379,7 +382,7 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
     /// Debug builds only: draws every page of every listed server to images, off screen, then quits.
     /// `GILAMONSTER_SNAPSHOT=<folder>`, for checking screens nobody has clicked yet. Starts nothing.
     @MainActor private func snapshotIfAsked() {
-        guard let folder = ProcessInfo.processInfo.environment["GILAMONSTER_SNAPSHOT"], let model = Self.model else { return }
+        guard let folder = AppMode.snapshotFolder, let model = Self.model else { return }
         // GILAMONSTER_SNAPSHOT_THEME=bold|quiet picks the theme for this run, without saving it.
         if let name = ProcessInfo.processInfo.environment["GILAMONSTER_SNAPSHOT_THEME"], let flavor = Palette.Flavor(rawValue: name) { Theme.flavor = flavor }
         NSApp.setActivationPolicy(.accessory)

@@ -616,6 +616,7 @@ extension ServerController {
     }
 
     public func startLinksPage() throws {
+        guard !AppMode.isSnapshot else { return }
         stopLinksPage()
         guard Modules.shared.isOn(.links) else { throw AppError("Plugin links is switched off in Settings.") }
         if let problem = linksPageProblem { throw AppError(problem) }

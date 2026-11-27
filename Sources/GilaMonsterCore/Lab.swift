@@ -219,6 +219,7 @@ public final class LabController {
     }
 
     private func perform(endsRun: Bool = false, _ work: () async throws -> Void) async {
+        guard !AppMode.isSnapshot else { return }
         guard !isBusy else { return }
         failure = nil
         log = []
@@ -276,6 +277,7 @@ public final class LabController {
     /// A lab left behind by a quit or crash in the middle of a run. Removed at launch, only when it's GilaMonster's own lab
     /// folder and it isn't running, in GilaMonster or outside it.
     public func removeLeftover() async {
+        guard !AppMode.isSnapshot else { return }
         guard !isBusy, let onDisk = ServerController.readProfile(root: LabFiles.root), LabFiles.isLab(root: LabFiles.root, profile: onDisk) else { return }
         let found = server ?? ServerController.open(root: LabFiles.root)
         guard let found else { return }

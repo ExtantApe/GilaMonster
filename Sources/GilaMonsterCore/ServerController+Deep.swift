@@ -78,6 +78,7 @@ extension ServerController {
 
     /// Tries a change on a throwaway copy of the server. The real server isn't touched.
     public func startTrial(_ change: TrialChange, keepOpen: Bool = false) async {
+        guard !AppMode.isSnapshot else { return }
         guard trialPhase == nil || trialPhase == .finished else { return }
         if state == .running, profile.software.flavor == .folia {
             notice = "Folia can't pause saving, so stop the server before making a test copy."
@@ -217,6 +218,7 @@ extension ServerController {
 
     /// Proves a backup restores: unpacks it to a throwaway folder, boots it, removes it. Touches nothing real.
     public func runBackupDrill(_ chosen: BackupRecord? = nil) async {
+        guard !AppMode.isSnapshot else { return }
         guard !drillRunning, trialPhase == nil, !DrillCopies.isClosing else { return }
         guard let record = chosen ?? backups.first(where: { $0.scope == .everything }) else {
             notice = "A drill needs a whole-folder backup, and there isn't one yet."

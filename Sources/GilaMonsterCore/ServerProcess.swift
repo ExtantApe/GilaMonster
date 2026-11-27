@@ -34,6 +34,7 @@ public final class ServerProcess: @unchecked Sendable {
     }
 
     public func start() throws {
+        guard !AppMode.isSnapshot else { throw AppError(AppMode.snapshotRefusal) }
         output.fileHandleForReading.readabilityHandler = { [weak self] handle in
             let data = handle.availableData
             guard let self else { return }
