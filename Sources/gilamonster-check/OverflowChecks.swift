@@ -105,6 +105,9 @@ import Foundation
     check(bad.pages == 17 && bad.overflowing.count == 1, "an overflowing page is reported")
     let short = Overflow.readReport("checked 9 of 17 pages\n")
     check(short.pages != short.expected, "a run that drew 9 of 17 pages is visibly short")
+    let placed = Overflow.readReport("checked 2 of 17 pages\nPUSHED overview: the page runs from -480 to 1480 in a window 1000 tall, under banners 1100 tall\nPLACED overview: top -480, bottom 1480 of 1000, banners 1100 tall\nPLACED console: top 0, bottom 1000 of 1000, banners 96 tall\n")
+    check(placed.pushed.count == 1 && placed.placed.count == 2 && placed.overflowing.isEmpty, "a page pushed out of view by a banner is read from the report, apart from the pages only measured")
+    check(clean.pushed.isEmpty && clean.placed.isEmpty, "and a report without those lines has none")
     check(Overflow.readReport("").expected == 0 && Overflow.readReport("garbage").expected == 0 && Overflow.readReport("checked 31 pages\n").expected == 0,
           "an empty report, garbage and the old form all count as not having run")
 

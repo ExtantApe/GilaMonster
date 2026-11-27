@@ -390,6 +390,9 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
         case "denied": KeychainWait.shared.preview(denied: [.sessionToken])
         default: break
         }
+        // GILAMONSTER_SNAPSHOT_BANNERS=external,trial-failed,update draws every page with those made-up banners on top, or
+        // `all` for one of each kind (K815). The names are ServerController.previewBannerNames, plus `update`.
+        let banners = Set((ProcessInfo.processInfo.environment["GILAMONSTER_SNAPSHOT_BANNERS"] ?? "").split(separator: ",").map(String.init))
         // GILAMONSTER_SNAPSHOT_PAGES=overview,console draws only those pages, for a quick look at one thing.
         let onlyPages = ProcessInfo.processInfo.environment["GILAMONSTER_SNAPSHOT_PAGES"].map { Set($0.split(separator: ",").map(String.init)) }
         Task { @MainActor in
@@ -401,8 +404,14 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
             let windowWidth: CGFloat = 1280
             var pagesChecked = 0
             var overflowing: [String] = []
+            var sizes: [String] = []
+            var pushed: [String] = []
             // GILAMONSTER_SNAPSHOT_FIRST draws only the first server's pages (the others still show in the sidebar).
             let drawn = ProcessInfo.processInfo.environment["GILAMONSTER_SNAPSHOT_FIRST"] != nil ? Array(model.servers.prefix(1)) : model.servers
+            if !banners.isEmpty {
+                drawn.forEach { $0.previewBanners(banners) }
+                if banners.contains("all") || banners.contains("update"), let page = URL(string: "https://example.com/releases") { model.appUpdate = ("9.9.9", page) }
+            }
             for server in drawn where ProcessInfo.processInfo.environment["GILAMONSTER_SNAPSHOT_DIALOGS_ONLY"] == nil {
                 // Players is drawn a second time with a made-up player picked, when the fixture has one (K786).
                 let shots: [(page: PageID, pick: String?)] = PageID.allCases.map { ($0, nil) } + [(.players, "MadeUpKid")]
@@ -411,6 +420,8 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
                     if pick != nil, !server.knownPlayers.contains(where: { $0.title == pick }) { continue }
                     model.selectedID = server.id
                     model.page = page
+                    SnapshotProbe.column = .null
+                    SnapshotProbe.banners = .null
                     // GILAMONSTER_SNAPSHOT_FORCE_WIDE=1 makes every page too wide on purpose, to prove the report catches it.
                     let wide = ProcessInfo.processInfo.environment["GILAMONSTER_SNAPSHOT_FORCE_WIDE"] != nil
                     // The real window's minimum size (see the WindowGroup below), so the picture is laid out as the app is.
@@ -425,6 +436,17 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
                     host.layoutSubtreeIfNeeded()
                     if pick == nil { pagesChecked += 1 }
                     let fitting = host.fittingSize.width
+                    // The column beside the spine holds the trail, the banners, the page and the activity bar. When a
+                    // banner comes out too tall, the column is taller than the window and its top is off the picture.
+                    let column = SnapshotProbe.column, bannerRow = SnapshotProbe.banners
+                    if column.isNull {
+                        pushed.append("PUSHED \(page.rawValue): the page's place in the window couldn't be measured")
+                    } else {
+                        sizes.append("PLACED \(page.rawValue): top \(Int(column.minY.rounded())), bottom \(Int(column.maxY.rounded())) of \(Int(host.bounds.height.rounded())), banners \(bannerRow.isNull ? 0 : Int(bannerRow.height.rounded())) tall")
+                        if column.minY < -0.5 || column.maxY > host.bounds.height + 0.5 {
+                            pushed.append("PUSHED \(page.rawValue): the page runs from \(Int(column.minY.rounded())) to \(Int(column.maxY.rounded())) in a window \(Int(host.bounds.height.rounded())) tall, under banners \(bannerRow.isNull ? 0 : Int(bannerRow.height.rounded())) tall")
+                        }
+                    }
                     if fitting > windowWidth + 0.5 { overflowing.append("OVERFLOW \(page.rawValue): fitting width \(Int(fitting.rounded())) is over the window's \(Int(windowWidth))") }
                     if let rep = host.bitmapImageRepForCachingDisplay(in: host.bounds) {
                         host.cacheDisplay(in: host.bounds, to: rep)
@@ -435,7 +457,7 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
                     windows.append(window)
                 }
             }
-            let report = (["checked \(pagesChecked) of \(drawn.count * PageID.allCases.count) pages"] + overflowing).joined(separator: "\n") + "\n"
+            let report = (["checked \(pagesChecked) of \(drawn.count * PageID.allCases.count) pages"] + overflowing + pushed + sizes).joined(separator: "\n") + "\n"
             try? report.write(to: URL(fileURLWithPath: folder).appendingPathComponent("overflow-report.txt"), atomically: true, encoding: .utf8)
             // The dialogs too, which otherwise only appear after a click.
             // The quit question needs no server (D215).

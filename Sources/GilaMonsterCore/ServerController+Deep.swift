@@ -733,6 +733,9 @@ extension ServerController {
 
     func tickDisk() {
         guard !isTrialCopy else { return }
+        #if DEBUG
+        if previewingBanners { return }
+        #endif
         var worst: (message: String, critical: Bool)?
         for (url, name) in [(paths.root, "this server"), (Backups.destination(profile), "its backups")] {
             guard let free = FileOps.freeSpace(at: url), let warning = DiskCheck.warning(free: free, name: name) else { continue }
