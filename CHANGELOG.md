@@ -1,8 +1,12 @@
 # Changelog
 
-## 0.6.3 (2026-11-27)
+## 0.6.4 (2026-11-27)
+
+0.6.3 was tagged but never released: a faulty check in the test suite failed its build. Everything listed for it ships here.
 
 - **Installing:** quitting GilaMonster stops every server it runs. With servers running, Quit asks first; Keep Running is the default and cancels the quit. So install at a quiet time: quit with Stop and Quit, replace GilaMonster in Applications, open it, and start your servers again. GilaMonster isn't signed, so on first open macOS asks again for Keychain access. GilaMonster shows a banner while it waits; look for the macOS password window and click Always Allow. If macOS warns about the app: System Settings > Privacy & Security, Open Anyway, then Open. Or run `xattr -dr com.apple.quarantine "/Applications/GilaMonster.app"`.
+
+- **The port checks' stand-in server takes connections side by side.** It served one at a time, which failed a check on slower build machines. The app is unchanged by this.
 
 - **A snapshot run starts nothing (K829).** With `GILAMONSTER_SNAPSHOT` set, the app draws its pages and quits. The weekly backup drill ran in one anyway, because the ticker found a whole-folder backup of a made-up server and began it. The snapshot mode is now read in one place, `AppMode`, and everything that runs on a timer, on a schedule or at launch asks it first: a server's ticker and every tick, Start, the launch of Java, a backup, a drill, a test copy, a Lab run and the clearing of a left-over lab, the links page, the pack host, the look for a new GilaMonster and the Advisor's watch. The one place a server's Java is run refuses as well, so a path added later can't slip past. What the app starts at launch is now one function, called behind the gate. Every server is covered, so the made-up backups for the pictures no longer switch the weekly drill off. A snapshot still lists a server's backups for the pictures.
 - `scripts/snapshot-fixtures.sh` takes `STARTABLE=<log file>`, which makes the first made-up server one that would start: set to start at launch, with a placeholder jar, a whole-folder backup that really unpacks and a stand-in for Java that only writes its arguments to the log. `gilamonster-check --snapshot-quiet` runs it and watches.
