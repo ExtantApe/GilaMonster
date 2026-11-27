@@ -257,6 +257,7 @@ import GilaMonsterCore
     check(desert.contains(".frame(width: size * Theme.grow, height: size * Theme.grow)") && desert.contains(".frame(width: 76 * Theme.grow)"), "status glyphs and the sidebar")
     check(overview.contains("WrapRow {\n                Button(\"Open Software\")") && type.contains("ViewThatFits(in: .horizontal) {\n            HStack(spacing: 8) { content }\n            VStack(alignment: .leading, spacing: 8) { content }"),
           "Open Software and Open Plugins sit side by side when they fit and stack only when they don't")
+    check(settings.contains("!overflowing.contains(where: { $0.hasPrefix(\"OVERFLOW \\(page.rawValue):\") })"), "the overflow report names a page once, though Players is drawn twice")
     var raw: [String] = []
     for name in (try? FileManager.default.contentsOfDirectory(atPath: app.path)) ?? [] where name.hasSuffix(".swift") && name != "InviteTicketView.swift" && name != "Type.swift" {
         for (n, line) in source(name).split(separator: "\n", omittingEmptySubsequences: false).enumerated()

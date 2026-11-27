@@ -439,7 +439,11 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
                     host.layoutSubtreeIfNeeded()
                     if pick == nil { pagesChecked += 1 }
                     let fitting = host.fittingSize.width
-                    if fitting > windowWidth + 0.5 { overflowing.append("OVERFLOW \(page.rawValue): fitting width \(Int(fitting.rounded())) is over the window's \(Int(windowWidth))") }
+                    // One line a page: Players is drawn twice (once with a player picked), and a page that is too wide
+                    // both times is still one page too wide.
+                    if fitting > windowWidth + 0.5, !overflowing.contains(where: { $0.hasPrefix("OVERFLOW \(page.rawValue):") }) {
+                        overflowing.append("OVERFLOW \(page.rawValue): fitting width \(Int(fitting.rounded())) is over the window's \(Int(windowWidth))")
+                    }
                     if let rep = Self.snapshotRep(host) {
                         host.cacheDisplay(in: host.bounds, to: rep)
                         let name = "\(server.profile.name.replacingOccurrences(of: " ", with: "-"))-\(page.rawValue)\(pick == nil ? "" : "-selected").png"
