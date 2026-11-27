@@ -150,7 +150,7 @@ import GilaMonsterCore
     let type = source("Type.swift"), settings = source("AppModel.swift")
     check(settings.contains("Toggle(\"Pixel font\", isOn: Binding(get: { TypeState.shared.on }") && settings.contains("PixelType.save(on)"), "Settings has the Pixel font switch, and it is saved")
     // The hint is held to what off does: the system font for the four things it names, and no promise about the rest.
-    equal(PixelType.settingHint, "Headings, labels, buttons and numbers use a pixel typeface. Turn this off to use the system font for them.", "the hint's words")
+    equal(PixelType.settingHint, "Headings, labels, buttons and numbers use a pixel typeface. Turn this off to use the system font for them. It starts off when text is larger than the default, Bold Text is on, or the Mac has no Retina screen.", "the hint's words, with its last sentence about the first-launch default")
     check(settings.contains("Hint(PixelType.settingHint)") && !settings.contains("system font everywhere"), "Settings shows that hint, and nowhere says the system font is used everywhere")
     for (name, role) in roles where ["heading", "label", "button", "number"].contains(name) {
         check(PixelType.resolve(role, normal).isPixel && PixelType.resolve(role, off).face == .system, "\(name): a pixel typeface when on and the system font when off, as the hint says")
@@ -233,29 +233,56 @@ import GilaMonsterCore
 
     section("Pixel type: headings read as written, and the server's name stays whole")
     let theme = source("Theme.swift"), prompts = source("SessionPrompts.swift")
-    check(theme.contains("Text(title).type(.headline).foregroundStyle(Theme.ink).accessibilityLabel(title)") && theme.contains("Text(text).type(.headline).foregroundStyle(Theme.ink).accessibilityLabel(text)")
-          && desert.contains("Text(title).type(.factHeading).foregroundStyle(Theme.muted).accessibilityLabel(title)"), "card, group and fact headings give VoiceOver the title as written, not its capitals")
+    check(type.contains("Text(text).type(fact ? TypeToken.factHeading : TypeToken.headline).accessibilityLabel(text)") && theme.contains("HeadingText(title)") && theme.contains("HeadingText(text).foregroundStyle(Theme.ink).accessibilityAddTraits(.isHeader)")
+          && desert.contains("HeadingText(title, fact: true)"), "card, group and fact headings give VoiceOver the title as written, not its capitals")
+    // Every heading in capitals goes through HeadingText: no other view asks for the headline or fact-heading style.
+    var strays: [String] = []
+    let appSources = repo.appendingPathComponent("Sources/GilaMonster")
+    for file in (try? FileManager.default.contentsOfDirectory(at: appSources, includingPropertiesForKeys: nil)) ?? [] where file.pathExtension == "swift" && file.lastPathComponent != "Type.swift" {
+        let text = (try? String(contentsOf: file, encoding: .utf8)) ?? ""
+        if text.contains(".type(.headline)") || text.contains(".type(.factHeading)") { strays.append(file.lastPathComponent) }
+    }
+    check(strays.isEmpty, "no heading is set in capitals outside HeadingText: \(strays.joined(separator: ", "))")
+    // The owner's own data is never put in capitals: case matters in a world, a pack, a config section or a service.
+    check(theme.contains("var titleIsData = false") && source("ResourcePacksPage.swift").contains("Card(title: pack.title, systemImage: \"eye\", titleIsData: true)"), "a pack's name as a card title is shown as written")
+    check(source("WorldsPage.swift").contains("Text(world.title).type(.dataHeading)") && source("ConfigsPage.swift").contains("Text(section.name).type(.dataHeading)") && source("ConnectionsCard.swift").contains(".type(.dataHeading)"), "world, config section and service names are shown as written")
+    check(type.contains("static var dataHeading: TypeToken { label(.bold) }") && !PixelType.resolve(.label(.bold), C(on: true)).caps, "the data heading style is never in capitals, pixel type on or off")
+    let quit = source("QuitDuringBackup.swift")
+    check(quit.contains("Text(state.reason.backupHeading).type(.title(15, .title3))") && !quit.contains("Text(state.reason.backupHeading).type(.headline)"), "the quit-during-backup sentence is a sentence, set as written and not in capitals")
+    check(theme.contains(".accessibilityValue(configuration.isExpanded ? \"Expanded\" : \"Collapsed\")") && source("LabViews.swift").contains("open ? \"Expanded\" : \"Collapsed\""), "disclosure rows say Expanded or Collapsed")
+    check(!theme.contains(".frame(minHeight: 20 * Theme.grow)") && theme.contains(".frame(minHeight: 24 * Theme.grow)") && source("LabViews.swift").contains(".frame(width: 24 * Theme.grow, height: 24 * Theme.grow).contentShape(Rectangle())"), "disclosure rows and the Lab's arrow are at least 24 pt to press")
+    check(source("LabViews.swift").contains("@FocusState private var focused: Bool") && source("LabViews.swift").contains(".focused($focused)\n            .overlay { if focused { RoundedRectangle(cornerRadius: Theme.controlRadius + 2).strokeBorder(Theme.accent, lineWidth: 2)"), "the Upgrade field shows a focus ring")
+    check(source("LabViews.swift").contains("Text(\"Restart log, \\(lines.count) \\(lines.count == 1 ? \"line\" : \"lines\")\").type(.label())"), "the Restart log's short label is in the label face")
+    var fixedWidths: [String] = []
+    for file in (try? FileManager.default.contentsOfDirectory(at: appSources, includingPropertiesForKeys: nil)) ?? [] where file.pathExtension == "swift" {
+        for (n, line) in ((try? String(contentsOf: file, encoding: .utf8)) ?? "").split(separator: "\n", omittingEmptySubsequences: false).enumerated() where line.contains(".frame(width: 4") || line.contains(".frame(width: 5") || line.contains(".frame(width: 3") {
+            if !line.contains("Theme.sheet(") && !line.contains("grow") && !line.contains("Theme.grow") && (line.contains("width: 480)") || line.contains("width: 520)") || line.contains("width: 440)") || line.contains("width: 420)") || line.contains("width: 460)") || line.contains("width: 500)") || line.contains("width: 380)") || line.contains("width: 360)") || line.contains("width: 400)")) { fixedWidths.append("\(file.lastPathComponent):\(n + 1)") }
+        }
+    }
+    check(fixedWidths.isEmpty, "no sheet has a fixed width that larger text can't grow: \(fixedWidths.joined(separator: ", "))")
     check(type.contains("font(token.font).tracking(CGFloat(token.resolved.tracking)).textCase(.uppercase)") && type.components(separatedBy: ".tracking(").count == 2, "extra spacing is applied in one place, for headings only")
-    let made = PixelType.unbroken("helper wants to stop Made-up Server", name: "Made-up Server")
-    equal(made, "helper wants to stop Made\u{2011}up\u{00A0}Server", "the name's spaces and hyphens become their no-break twins")
-    check(!made.suffix(14).contains(" ") && !made.suffix(14).contains("-"), "so no line can break inside it")
-    equal(PixelType.unbroken("helper wants to stop Made-up Server", name: ""), "helper wants to stop Made-up Server", "an empty name changes nothing")
     let cut = PixelType.split("helper wants to stop A Long Made-up Name", around: "A Long Made-up Name")
     check(cut?.before == "helper wants to stop" && cut?.after == "", "a long name is cut out whole, for a line to itself")
     check(PixelType.split("helper wants to stop it", around: "Made-up Server") == nil, "a sentence without the name isn't cut")
-    check(prompts.contains("Text(server).type(.prompt).lineLimit(1).truncationMode(.middle).help(server)") && prompts.contains(".accessibilityLabel(sentence)")
-          && prompts.contains("AskSentence(sentence: ask.sentence, server: ask.server)"), "the prompt shows the name on one line, whole in its tooltip, and VoiceOver gets the plain sentence")
-    check(prompts.contains(".frame(idealWidth: AskSentence.column(for: ask.server), alignment: .leading)") && prompts.contains("static var minWidth: CGFloat { 580 * Theme.grow }"), "and the window grows for a long name and for larger text")
+    check(prompts.contains("Text(server).type(.prompt).fixedSize(horizontal: false, vertical: true)") && !prompts.contains(".truncationMode(.middle)") && !prompts.contains(".lineLimit(1).truncationMode")
+          && prompts.contains(".accessibilityLabel(sentence)") && prompts.contains("AskSentence(sentence: ask.sentence, server: ask.server)"), "the prompt wraps the name, never cuts it, and VoiceOver gets the plain sentence")
+    check(prompts.contains("AskRow {") && prompts.contains("maxWidth: widest ?? AskPanelSize.shared.widest") && prompts.contains("SessionAskPlacement.contentWidth(ideal: ideal.width, visible: visible)"), "the window is never wider than the screen, and the buttons move under the words when it is narrow")
+    equal(SessionAskPlacement.contentWidth(ideal: 900, visible: 700), 700, "the window's content is capped to the usable screen")
+    equal(SessionAskPlacement.contentWidth(ideal: 580, visible: 1400), 580, "and keeps its own width when the screen has room")
+    check(SessionAskPlacement.sideBySide(width: 600, wordsAtLeast: 200, buttons: 150, gap: 12) && !SessionAskPlacement.sideBySide(width: 300, wordsAtLeast: 200, buttons: 150, gap: 12), "buttons sit beside the words only when both fit")
+    let split1 = PixelType.split("helper wants to stop A Very Long Made-up Realm Name Here", around: "A Very Long Made-up Realm Name Here")
+    check(split1?.after == "" && split1?.before == "helper wants to stop", "the name is cut out whole, for lines of its own")
+    check(!PixelType.settingHint.isEmpty && PixelType.settingHint.hasSuffix("or the Mac has no Retina screen."), "the hint keeps its last sentence, about when it starts off")
 
     section("Pixel type: controls grow with the text")
     let lab = source("LabViews.swift"), overview = source("OverviewPage.swift")
     check(theme.contains("static var controlHeight: CGFloat { 32 * grow }") && theme.contains(".padding(.horizontal, 12 * Theme.grow)"), "buttons: height and padding")
     check(theme.contains(".frame(width: 40 * grow, height: 22 * grow)") && theme.contains(".frame(width: 16 * grow, height: 16 * grow).padding(3 * grow)") && theme.contains(".frame(width: 9 * grow, height: 10 * grow)"), "the switch: track, knob and lock")
     check(lab.contains("UpgradePicker(chosen: $chosen, versions: versions).frame(maxWidth: 200 * Theme.grow)") && lab.contains("Text(chosen.isEmpty ? \"Choose…\" : chosen).font(Theme.symbol())") && lab.contains(".accessibilityLabel(\"Version to upgrade to\")"), "the Upgrade picker: its field, words and arrows, still named for VoiceOver")
-    check(type.contains(".disclosureGroupStyle(ThemedDisclosureStyle())") && theme.contains("Image(systemName: \"chevron.right\").font(Theme.symbol(weight: .semibold)).imageScale(.small)") && theme.contains(".accessibilityValue(configuration.isExpanded ? \"Open\" : \"Closed\")") && theme.contains(".rotationEffect(.degrees(open ? 90 : 0))"), "disclosure arrows, in every window, and VoiceOver hears open or closed")
+    check(type.contains(".disclosureGroupStyle(ThemedDisclosureStyle())") && theme.contains("Image(systemName: \"chevron.right\").font(Theme.symbol(weight: .semibold)).imageScale(.small)") && theme.contains(".accessibilityValue(configuration.isExpanded ? \"Expanded\" : \"Collapsed\")") && theme.contains(".rotationEffect(.degrees(open ? 90 : 0))"), "disclosure arrows, in every window, and VoiceOver hears expanded or collapsed")
     check(lab.contains("Image(systemName: icon).font(Theme.symbol())") && lab.contains("Image(systemName: \"chevron.right\").font(Theme.symbol())") && theme.contains("Image(systemName: symbol).font(Theme.symbol(weight: .semibold))"), "status symbols and chevrons")
     check(desert.contains(".frame(width: size * Theme.grow, height: size * Theme.grow)") && desert.contains(".frame(width: 76 * Theme.grow)"), "status glyphs and the sidebar")
-    check(overview.contains("WrapRow {\n                Button(\"Open Software\")") && type.contains("ViewThatFits(in: .horizontal) {\n            HStack(spacing: 8) { content }\n            VStack(alignment: .leading, spacing: 8) { content }"),
+    check(overview.contains("WrapRow {\n                Button(\"Open Software\")") && type.contains("Overflow.flowRows(") && type.contains("struct WrapRow: Layout"),
           "Open Software and Open Plugins sit side by side when they fit and stack only when they don't")
     check(settings.contains("!overflowing.contains(where: { $0.hasPrefix(\"OVERFLOW \\(page.rawValue):\") })"), "the overflow report names a page once, though Players is drawn twice")
     var raw: [String] = []

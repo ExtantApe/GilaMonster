@@ -108,9 +108,10 @@ copied from it on 2026-11-26.
 The plugin source badges are the one set of colors outside the tokens file. They are written by hand in
 `Sources/GilaMonsterCore/Palette.swift` and held by the same checks. The "web" badge's icon gray, `#4B474F` in light
 and `#B9B5BE` in dark, is the same pair as the **Stopped** token, so it matches a token by value without being read
-from it. It is darker and cooler than today's Muted (`#544B43`), which it equalled before the 2026-11-25 colors.
-Nothing written down says whether that was meant, so treat it as a leftover to confirm with Brand. The "web" badge's
-tint (`#FAF3EA` / `#252327`) is the Raised color from before 2026-11-25 and matches no token now.
+from it. This web swatch is meant (Brand, 2026-11-27): it is the plugin-source badge's own gray, darker and cooler
+than today's Muted (`#544B43`), and it is held at 3:1 against its tint as an icon, the same floor as the accent.
+Keep it listed here under the source badges. The "web" badge's tint (`#FAF3EA` / `#252327`) is the Raised color from
+before 2026-11-25 and matches no token now.
 
 Every pair the app draws meets WCAG AA (4.5:1 for text, 3:1 for controls and icons) in light, dark and both
 increased-contrast appearances, and still does with protanopia, deuteranopia, tritanopia or achromatopsia simulated.
