@@ -1321,8 +1321,8 @@ do {
     d = RenameText.replaceAnchors("anchors:\n  home: creative:1.0,2.0,3.0:0.0:0.0\n  note: creative:notes\n", names: ["creative": "build"])
     check(d.0.contains("home: build:1.0"), "anchor"); check(d.0.contains("note: creative:notes"), "not an anchor")
     equal(RenameText.replaceToken("cd /srv/my-server && screen -S my-server; my-server2", old: "my-server", new: "x").1, 2, "whole tokens only")
-    equal(ServerRename.folderFormats(for: "Sonoran Realms"), ["sonoran-realms", "sonoranrealms", "SonoranRealms", "sonoran_realms"], "name formats")
-    equal(ServerRename.folderFormats(for: "sonoranRealms").first, "sonoran-realms", "from camel case"); check(ServerRename.folderFormats(for: "!!").isEmpty, "nothing usable")
+    equal(ServerRename.folderFormats(for: "Riverbend Mountain"), ["riverbend-mountain", "riverbendmountain", "RiverbendMountain", "riverbend_mountain"], "name formats")
+    equal(ServerRename.folderFormats(for: "riverbendMountain").first, "riverbend-mountain", "from camel case"); check(ServerRename.folderFormats(for: "!!").isEmpty, "nothing usable")
     check(WorldRename.problem(with: "Build", world: nil, existing: []) != nil, "uppercase refused"); check(WorldRename.problem(with: "a b", world: nil, existing: []) != nil, "spaces refused"); check(WorldRename.problem(with: "build", world: nil, existing: []) == nil, "fine")
     check(WorldRename.problem(with: "world", world: nil, existing: [WorldEntry(name: "minecraft:world")]) != nil, "taken")
 }
@@ -1436,17 +1436,17 @@ do {
     let sc = try await ServerController.adopt(root: server, name: "My Realm")
     defer { sc.stopTicker() }
     sc.profile.lastPluginCheck = Date(); sc.profile.software.lastCheck = Date(); sc.profile.backup.destination = folder("server-rename-backups").path
-    let sPlan = sc.serverRenamePlan(name: "Sonoran Realms", folder: "sonoran-realms")
+    let sPlan = sc.serverRenamePlan(name: "Riverbend Mountain", folder: "riverbend-mountain")
     let lp = sPlan.items.first { $0.description == "LuckPerms server name" }
     check(lp?.optional == true && lp?.selected == false && lp?.warning != nil, "permissions-sensitive name is opt-in")
-    try await sc.applyRename(sPlan, afterwards: { _ = try sc.rename(to: "Sonoran Realms", moveFolderTo: "sonoran-realms") })
-    let moved = server.deletingLastPathComponent().appendingPathComponent("sonoran-realms")
-    check(FileOps.exists(moved.appendingPathComponent("world/level.dat")), "folder renamed"); equal(sc.profile.name, "Sonoran Realms", "name")
+    try await sc.applyRename(sPlan, afterwards: { _ = try sc.rename(to: "Riverbend Mountain", moveFolderTo: "riverbend-mountain") })
+    let moved = server.deletingLastPathComponent().appendingPathComponent("riverbend-mountain")
+    check(FileOps.exists(moved.appendingPathComponent("world/level.dat")), "folder renamed"); equal(sc.profile.name, "Riverbend Mountain", "name")
     let script = try String(contentsOf: moved.appendingPathComponent("start.sh"), encoding: .utf8)
-    check(script.contains("screen -S sonoran-realms") && script.contains("/sonoran-realms\"") , "script updated: \(script)")
-    check((try String(contentsOf: moved.appendingPathComponent("server.properties"), encoding: .utf8)).contains("Welcome to Sonoran Realms!"), "motd follows")
+    check(script.contains("screen -S riverbend-mountain") && script.contains("/riverbend-mountain\"") , "script updated: \(script)")
+    check((try String(contentsOf: moved.appendingPathComponent("server.properties"), encoding: .utf8)).contains("Welcome to Riverbend Mountain!"), "motd follows")
     check((try String(contentsOf: moved.appendingPathComponent("plugins/LuckPerms/config.yml"), encoding: .utf8)).contains("server: my-realm"), "opt-in left alone unless chosen")
-    check((try String(contentsOf: moved.appendingPathComponent("plugins/Thing/config.yml"), encoding: .utf8)).contains("/sonoran-realms/plugins/x"), "absolute path updated")
+    check((try String(contentsOf: moved.appendingPathComponent("plugins/Thing/config.yml"), encoding: .utf8)).contains("/riverbend-mountain/plugins/x"), "absolute path updated")
 }
 
 section("Cleanup")

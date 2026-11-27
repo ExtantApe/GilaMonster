@@ -372,7 +372,7 @@ public enum WorldRename {
 // MARK: - Server renames
 
 public enum ServerRename {
-    /// `Sonoran Realms` → `sonoran-realms`, `sonoranrealms`, `SonoranRealms`, `sonoran_realms`.
+    /// `Riverbend Mountain` → `riverbend-mountain`, `riverbendmountain`, `RiverbendMountain`, `riverbend_mountain`.
     public static func folderFormats(for name: String) -> [String] {
         let words = name.replacingOccurrences(of: "([a-z0-9])([A-Z])", with: "$1 $2", options: .regularExpression)
             .components(separatedBy: CharacterSet.alphanumerics.inverted).filter { !$0.isEmpty }

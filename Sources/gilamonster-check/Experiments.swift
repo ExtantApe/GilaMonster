@@ -934,6 +934,8 @@ import Foundation
             lab.saw("\(pack.title): \(Format.bytes(pack.latest?.size ?? 0)), format \(pack.latest?.format.map(String.init) ?? "?"), \(pack.latest?.fileCount ?? 0) files, \(pack.latest?.imageCount ?? 0) images")
         } catch { lab.saw("\(file.lastPathComponent) refused: \(error.localizedDescription)") }
     }
+    // The pack under test is the first zip that was added. Its id comes from the zip's own name.
+    let own = (title: packs.first?.title ?? "Given pack", ids: Set(packs.prefix(1).map(\.id)))
     let tardis = try await ResourcePacks.download(.modrinth(project: "tardis-resource-pack"), mc: "1.21.11")
     packs.append(tardis)
     let lithos = try await ResourcePacks.download(.modrinth(project: "lithos"), mc: "1.21.11")
@@ -978,7 +980,7 @@ import Foundation
         func measure(_ title: String, _ recipe: PackRecipe) async throws {
             let fit = ResourcePacks.coverage(of: try await ResourcePacks.resolve(recipe).files.map(\.path), against: vanilla)
             lab.saw("\(title): \(fit.percent)% overall. \(fit.rows.map { "\($0.category) \($0.percent)%" }.joined(separator: ", ")). Ignored: \(fit.unused)")
-            if title == "Zig Zag alone" {
+            if title == "\(own.title) alone" {
                 lab.saw("  Ignored, such as: \(fit.unusedExamples.map { ($0 as NSString).lastPathComponent })")
                 for row in fit.rows where row.percent < 100 { lab.saw("  \(row.category) falling back, such as: \(row.examplesMissing.prefix(5))") }
             }
@@ -988,9 +990,9 @@ import Foundation
             for i in r.entries.indices { r.entries[i].enabled = ids.contains(r.entries[i].pack) }
             return r
         }
-        try await measure("Zig Zag alone", only(["sonoranpack"]))
+        try await measure("\(own.title) alone", only(own.ids))
         try await measure("Lithos alone", only([lithos.id]))
-        try await measure("Zig Zag over Lithos", only(["sonoranpack", lithos.id]))
+        try await measure("\(own.title) over Lithos", only(own.ids.union([lithos.id])))
     }
     let moved = ResourcePacks.changes(from: lock, to: models)
     lab.saw("Compared with plain ranking: \(moved.summary)")
