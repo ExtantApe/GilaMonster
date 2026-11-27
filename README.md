@@ -191,6 +191,11 @@ in plain words: Ready, Needs a look, Not ready, Not checked, or Off.
 - **Anything else:** a port forward or tunnel for players, a web service (the map, a sign-in page, a reverse proxy, a
   pack address, an outside API), or a domain name. These get the same address and secret checks.
 
+Whether something answers at a local address is decided by opening a plain connection that sends nothing. A refused
+connection on a running server is not ready. A timeout, any other error, or a closed port while the server is still
+starting is shown as Not checked with the reason, and stays out of Needs you. A server that listens also gets the
+game's status ping, unless Paper's `proxy-protocol` is on or `enable-status` is off, since it wouldn't answer one.
+
 **Check** stays on this Mac. **Check From Outside** also connects to each public address over the internet, the way a
 player would: a status ping for players, an HTTP request for web addresses, and a lookup for names. It only runs when
 you click it. When a piece is missing, the check says which one and shows the service as not ready.
