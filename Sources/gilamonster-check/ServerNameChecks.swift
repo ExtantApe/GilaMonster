@@ -160,7 +160,7 @@ import Foundation
     check(rootView.contains("\"Reset to Server Message\"") && rootView.contains("server.resetDisplayName()") && rootView.contains("name = server.displayName"),
           "the rename sheet: prefilled, with Reset to Server Message")
     let spine = source("DesertViews.swift")
-    check(spine.contains("Text(ServerName.sidebarLines(server.displayName).joined(separator: \"\\n\") + \" ▾\")") && spine.contains(".lineLimit(2).truncationMode(.tail)") && !spine.contains(".truncationMode(.middle).frame(maxWidth: 70)"),
+    check(spine.contains("SymbolText(ServerName.sidebarLines(server.displayName).joined(separator: \"\\n\") + \" ▾\", .label())") && spine.contains(".lineLimit(2).truncationMode(.tail)") && !spine.contains(".truncationMode(.middle).frame(maxWidth: 70)"),
           "the name under the icon: two lines, cut at the end only")
     check(spine.components(separatedBy: "ServerName.switcherButtonSpoken(display: server.displayName, folder: server.folderName, state: server.state.title)").count == 3, "the switcher's tooltip and VoiceOver label: the whole name")
     check(spine.contains("Text(SwitcherRow.title(other))\n                        Text(other.folderName)") && spine.contains(".accessibilityLabel(SwitcherRow.spoken(other))"), "every switcher row: the name, the folder beneath it, and both read aloud")

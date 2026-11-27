@@ -418,8 +418,9 @@ struct SwitcherRowsPreview: View {
                 HStack(alignment: .firstTextBaseline, spacing: 8) {
                     Image(nsImage: ServerSwitcher.menuIcon(server.state))
                     VStack(alignment: .leading, spacing: 1) {
-                        Text(SwitcherRow.title(server)).foregroundStyle(Theme.ink)
-                        Text(server.folderName).foregroundStyle(Theme.muted)
+                        // The system font, as the real menu's rows are: system menus stay the system's (K820).
+                        Text(SwitcherRow.title(server)).type(.body).foregroundStyle(Theme.ink)
+                        Text(server.folderName).type(.body).foregroundStyle(Theme.muted)
                     }
                 }
                 .accessibilityElement(children: .ignore).accessibilityLabel(SwitcherRow.spoken(server))

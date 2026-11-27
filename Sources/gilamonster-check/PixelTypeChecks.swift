@@ -222,7 +222,14 @@ import GilaMonsterCore
     equal(String(scan.read(#"Page(title: "Résumé ☃") {"#).missing), "☃", "and a character Pixelify Sans lacks in a screen title")
     check(scan.read(#"SymbolText("\(name) ▾", .label())"#).missing.isEmpty, "the same sign through SymbolText passes")
     check(scan.read(#".helped("Restart the server (⇧⌘R)")"#).missing.isEmpty && !scan.read(#"Hint("Players → Add")"#).isLabel, "tooltips and wrapping text are the system font, so they aren't labels")
-    check(desert.contains("SymbolText(\"\\(server.profile.name) ▾\", .label())"), "the server switcher's triangle goes through SymbolText")
+    check(desert.contains("SymbolText(ServerName.sidebarLines(server.displayName).joined(separator: \"\\n\") + \" ▾\", .label())"), "the server switcher's triangle goes through SymbolText")
+    // The names K824 added follow the same rules: a label under the icon, the headline as the screen's title, the
+    // one-line folder name as a label, and the switcher's rows in the system font, as the system's menu is.
+    check(desert.contains(".lineLimit(2).truncationMode(.tail).frame(maxWidth: 70 * Theme.grow)"), "the name under the icon keeps its two lines, in a column that grows with the text")
+    check(ServerName.sidebarLine * 7 <= 70, "a line of that name fits its column in Departure Mono (7 pt a letter at 11 pt)")
+    check(source("OverviewPage.swift").contains("Text(server.headline)\n                    .type(.display(28))"), "the headline with the server's name is the screen's title")
+    check(source("OverviewPage.swift").contains("Text(folder).type(.label()).foregroundStyle(Theme.muted).lineLimit(1)"), "the Folder line is a one-line label")
+    check(desert.contains("Text(SwitcherRow.title(server)).type(.body)") && desert.contains("Text(server.folderName).type(.body)"), "the switcher's rows are the system font, as its menu is")
 
     section("Pixel type: headings read as written, and the server's name stays whole")
     let theme = source("Theme.swift"), prompts = source("SessionPrompts.swift")

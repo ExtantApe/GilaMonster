@@ -93,7 +93,7 @@ struct OverviewPage: View {
             }
             // The folder's name, small, when the headline shows the server message or the owner's name (K824).
             if let folder = server.folderLine {
-                Text(folder).foregroundStyle(Theme.muted).lineLimit(1).truncationMode(.middle).textSelection(.enabled)
+                Text(folder).type(.label()).foregroundStyle(Theme.muted).lineLimit(1).truncationMode(.middle).textSelection(.enabled)
             }
             Text(NeedsYou.factLine(software: server.profile.software.label, running: server.state == .running, since: server.startedAt,
                                    lastBackup: server.backups.first?.date, isLab: server.isLab,
