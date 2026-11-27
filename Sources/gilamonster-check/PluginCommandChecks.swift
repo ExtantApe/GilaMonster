@@ -498,8 +498,9 @@ private func buildFakeFormatOne(jdk: JavaRuntime, into jar: URL) async throws {
           answer(id, "\"ok\":false,\"error\":{\"code\":\"unknown-command\",\"message\":\"\"}");
         }
       }
+    \#(StandInPorts.java)
       public static void main(String[] args) throws Exception {
-        ServerSocket socket = new ServerSocket(25596, 50, InetAddress.getLoopbackAddress());
+        Closeable socket = claimPort(25596);
         log("Starting minecraft server version 26.3");
         log("Done (0.100s)! For help, type \"help\"");
         var reader = new BufferedReader(new InputStreamReader(System.in));
@@ -545,9 +546,9 @@ private func buildFakeFormatOne(jdk: JavaRuntime, into jar: URL) async throws {
     let file = work.appendingPathComponent("FakeFormatOne.java")
     write(source, file)
     let bin = URL(fileURLWithPath: jdk.path).deletingLastPathComponent()
-    let compile = try await Tool.run(bin.appendingPathComponent("javac").path, ["-d", work.path, file.path])
+    let compile = try await Tool.run(bin.appendingPathComponent("javac").path, jdkToolHeap + ["-d", work.path, file.path])
     guard compile.ok else { throw AppError("javac: \(compile.err)") }
-    let pack = try await Tool.run(bin.appendingPathComponent("jar").path, ["cfe", jar.path, "FakeFormatOne", "-C", work.path, "FakeFormatOne.class"])
+    let pack = try await Tool.run(bin.appendingPathComponent("jar").path, jdkToolHeap + ["cfe", jar.path, "FakeFormatOne", "-C", work.path, "FakeFormatOne.class"])
     guard pack.ok else { throw AppError("jar: \(pack.err)") }
 }
 

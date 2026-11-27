@@ -13,6 +13,10 @@
 #   GILAMONSTER_SNAPSHOT_BODY=<points> (the system's body size, 13 by default), GILAMONSTER_SNAPSHOT_BOLD=1 (Bold Text),
 #   GILAMONSTER_SNAPSHOT_SCALE=1|2 (screen pixels per point, 2 if unset), GILAMONSTER_SNAPSHOT_CONTRAST=1 (Increase Contrast).
 #   BACKUPS=none  leaves out the first server's made-up backups, to draw one that GilaMonster has never backed up.
+#   STARTABLE=<log file>  makes the first server one that would start, to prove a snapshot starts nothing (K829): it is
+#                                             set to start when GilaMonster opens, and has a placeholder jar, a whole-folder
+#                                             backup that really unpacks, and a stand-in for Java that only writes its
+#                                             arguments to that log. gilamonster-check --snapshot-quiet reads the log.
 #   HEIGHT=1800  draws taller pictures, to see the bottom of a long page.
 #   BANNERS=external,trial-failed  puts those made-up banners above every page (K815): disk, trial-running, trial-open,
 #                         trial-passed, trial-failed, notice, long-title, external, update, or all for one of each kind.
@@ -138,6 +142,12 @@ swift build --scratch-path "$scratch" --product gilamonster-check >/dev/null
 # BACKUPS=none leaves them out, to draw a server GilaMonster has never backed up.
 case "${BACKUPS:-}" in ""|none) ;; *) echo "BACKUPS is none or unset" >&2; exit 2;; esac
 [[ "${BACKUPS:-}" == none ]] || "$scratch/debug/gilamonster-check" --backup-fixture "$home" "$servers" "${list[0]}" >/dev/null
+if [[ -n "${STARTABLE:-}" ]]; then
+    mkdir -p "$root/standin"
+    printf '#!/bin/sh\n# A stand-in for Java in the off-screen pictures: it writes what it was asked to run, and runs nothing.\necho "$*" >> "%s"\n[ "$1" = "-version" ] && echo '"'"'openjdk version "25.0.1" 2026-01-01'"'"' >&2\nexit 0\n' "$STARTABLE" > "$root/standin/java"
+    chmod +x "$root/standin/java"
+    "$scratch/debug/gilamonster-check" --startable-fixture "$home" "$servers" "${list[0]}" "$root/standin/java" >/dev/null
+fi
 for theme in ${THEMES:-bold quiet}; do
     for look in ${LOOKS:-light dark}; do
         dir="$out/$kind/$theme-$look"; mkdir -p "$dir"

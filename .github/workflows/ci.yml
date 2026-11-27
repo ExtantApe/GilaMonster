@@ -20,6 +20,8 @@ jobs:
         run: swift build
       - name: Tests, including the server lifecycle against a stand-in jar
         run: swift run gilamonster-check
+      - name: The checks that need a real TCP port on 127.0.0.1 (left out of the default run, K817)
+        run: swift run gilamonster-check --with-ports
       - name: The build refuses to delete a bundle something is running from
         run: scripts/test-build-guard.sh
       - name: Release builds stop servers at a Mac shutdown too

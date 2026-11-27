@@ -192,12 +192,16 @@ import Security
     check(asked.isEmpty, "reads don't ask")
     r = await call("gate-check", ["url": address, "player": "MadeUpJoiner"])
     check(asked.isEmpty && r["player"] == nil, "naming a player while serving is stopped doesn't ask, and says nothing about them")
-    try? server.startPackHost()
-    await checkUntil(5, "listening") { server.packHostIsListening }
-    r = await call("gate-check", ["url": address, "player": "MadeUpJoiner"])
-    check(asked.count == 1 && asked.last?.action == .gateCheck, "while the gate decides, naming a player asks first, since it says whether they're joining")
-    check(r["ok"] as? Bool == true && r["player"] as? String == "MadeUpJoiner" && r["wouldGet"] as? Bool == false, "and answers once allowed (not whitelisted, so no): \(r)")
-    server.stopPackHost()
+    if portsAllowed {
+        try? server.startPackHost()
+        await checkUntil(5, "listening") { server.packHostIsListening }
+        r = await call("gate-check", ["url": address, "player": "MadeUpJoiner"])
+        check(asked.count == 1 && asked.last?.action == .gateCheck, "while the gate decides, naming a player asks first, since it says whether they're joining")
+        check(r["ok"] as? Bool == true && r["player"] as? String == "MadeUpJoiner" && r["wouldGet"] as? Bool == false, "and answers once allowed (not whitelisted, so no): \(r)")
+        server.stopPackHost()
+    } else {
+        needsPorts("Session actions: a gate check that names a player while packs are being served")
+    }
 
     section("Session actions: backups and standing permission")
     let job = UUID()

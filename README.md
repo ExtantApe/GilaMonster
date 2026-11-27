@@ -494,6 +494,21 @@ swift run gilamonster-check
 Runs the tests, including a server's full lifecycle against a small stand-in jar. Add `--live` to also call the real
 Paper, Modrinth, Hangar, Spiget, GitHub and Jenkins services (downloads a few hundred MB).
 
+That plain run opens no TCP port. Each Java process it starts asks for 512 MB or less and runs inside the run's own
+temporary folder, and none is left running at the end. Stand-in servers claim made-up ports with a file lock where a real
+server would bind one. The run finishes with a self-audit that fails if any of that stopped being true, so it's safe to
+run next to a real test server.
+
+```bash
+swift run gilamonster-check --with-ports
+```
+
+Runs only the checks that listen on a real TCP port on 127.0.0.1: serving packs, the players' page, the map gateway,
+the status ping, downloads from a stand-in web server, and the port check against a real socket. The plain run names
+each group it left for this one. It uses ports 25594 to 25597, 25977, 28766 to 28768, 28772, 28790, 28791 and 28797,
+so run it when no other test server is up. Where several sessions share the Mac, take the test-server lock first, as
+for every run below that boots Paper.
+
 To boot real Paper with real Multiverse in a temporary folder, add `--real-paper --i-accept-the-minecraft-eula`.
 That second flag is your own acceptance of the [Minecraft EULA](https://aka.ms/MinecraftEULA).
 

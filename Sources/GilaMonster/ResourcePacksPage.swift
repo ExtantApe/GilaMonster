@@ -421,7 +421,7 @@ struct ResourcePacksPage: View {
         server.startPackHostIfWanted()
         await reload()
         #if DEBUG
-        if ProcessInfo.processInfo.environment["GILAMONSTER_SNAPSHOT"] != nil { browsing = packs.first }
+        if AppMode.isSnapshot { browsing = packs.first }
         #endif
     }
 

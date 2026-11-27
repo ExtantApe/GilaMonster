@@ -385,6 +385,7 @@ final class AdvisorCenter {
     /// While the app is open. Only checks when a new warning or error has appeared, at most once every six hours,
     /// so it costs nothing while the server is quiet.
     func watch(_ model: AppModel) {
+        guard !AppMode.isSnapshot else { return }
         guard !watching, !AdvisorTrial.isOn else { return }
         watching = true
         Task { [weak self] in

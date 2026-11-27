@@ -93,8 +93,6 @@ func writeMadeUpBackup(in folder: URL, madeAt date: Date, serverName: String, tr
     check(overview.contains("Hint(BackupSeen.cardNote)"), "and says other tools' backups aren't counted")
     check(backups.contains("Hint(BackupSeen.listNote)"), "the Backups page says the same under its list")
     check(backups.contains("BackupSeen.storageLine(newest: newest[folders[index]]") && backups.contains("DriveCheck.isConnected"), "each storage row shows its own newest backup, only for a connected drive")
-    let harness = (try? String(contentsOf: URL(fileURLWithPath: #filePath).deletingLastPathComponent().appendingPathComponent("main.swift"), encoding: .utf8)) ?? ""
-    check(harness.contains("model.profile.backup.autoDrill = false\n    let there = Backups.targetFolder"), "the made-up backups for pictures turn the weekly drill off first, so a snapshot unpacks and starts nothing")
     equal(BackupSeen.latestLabel, "GilaMonster's latest", "the card's label")
     for text in [BackupSeen.cardNote, BackupSeen.listNote] { check(text.contains("other tools"), "the note names other tools (\(text))") }
 }

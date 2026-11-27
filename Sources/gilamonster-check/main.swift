@@ -2,7 +2,12 @@ import CoreGraphics
 import ImageIO
 // Self-tests, runnable with just the Command Line Tools.
 //   swift run gilamonster-check          Offline suite, plus the full server lifecycle against a small
-//                                      stand-in jar (compiled here if a JDK is available). No Minecraft.
+//                                      stand-in jar (compiled here if a JDK is available). No Minecraft, no TCP
+//                                      port and no heap over 512 MB, so it needs no test-server lock. It audits
+//                                      itself for that at the end (LockExemptionChecks.swift).
+//   ... --with-ports                   Only the checks that listen on a real TCP port on 127.0.0.1: serving packs,
+//                                      the players' page, the map gateway, the status ping and the port check.
+//                                      Take the test-server lock first, as for every flag below that boots Paper.
 //   ... --live                         Also calls the real Paper, Modrinth, Hangar, Spiget, GitHub APIs.
 //   ... --real-packmule <Packmule.jar> --i-accept-the-minecraft-eula  Telling a real Packmule a new link.
 //   ... --real-session --i-accept-the-minecraft-eula  Session access against a real server, with a bot.
@@ -85,7 +90,7 @@ if let flag = CommandLine.arguments.firstIndex(of: "--lab-fixture"), flag + 3 < 
 // ... --backup-fixture <home> <servers> <server folder>  Made-up backups for the off-screen pictures (K823): one in the
 //     server's own backup folder from 23 hours ago, and an added storage folder under <home> with one from 4 days ago.
 //     Placeholder archives with GilaMonster's record beside them, all inside <home> and <servers>. The weekly drill
-//     is turned off for that server, so the snapshot has nothing to unpack or start. Starts nothing.
+//     stays on for that server: a snapshot run starts nothing for any server (K829). Starts nothing.
 if let flag = CommandLine.arguments.firstIndex(of: "--backup-fixture"), flag + 3 < CommandLine.arguments.count {
     setenv("GILAMONSTER_HOME", CommandLine.arguments[flag + 1], 1)
     setenv("GILAMONSTER_SERVERS", CommandLine.arguments[flag + 2], 1)
@@ -94,13 +99,34 @@ if let flag = CommandLine.arguments.firstIndex(of: "--backup-fixture"), flag + 3
     try FileOps.ensureDir(storage)
     model.profile.backup.smart.targets = [storage.path]
     model.profile.backup.enabled = true
-    // The app's ticker runs the weekly drill on any whole-folder backup it finds, in a snapshot too. These are
-    // placeholders, and a snapshot starts nothing, so the drill is off for this made-up server.
-    model.profile.backup.autoDrill = false
     let there = Backups.targetFolder(storage.path, for: model.profile)
     try Backups.claim(there, for: model.profile.id)
     writeMadeUpBackup(in: Backups.destination(model.profile), madeAt: Date().addingTimeInterval(-23 * 3600), serverName: model.profile.name)
     writeMadeUpBackup(in: there, madeAt: Date().addingTimeInterval(-4 * 86_400), serverName: model.profile.name, trigger: "scheduled")
+    model.stopTicker()
+    exit(0)
+}
+
+// ... --startable-fixture <home> <servers> <server folder> <stand-in java>  Makes that made-up server one that would
+//     start (K829, scripts/snapshot-fixtures.sh STARTABLE=): Start when GilaMonster opens is on, its Java is the
+//     stand-in script, it has a placeholder jar, and it gets a real whole-folder backup of its own made-up files, so a
+//     drill would unpack it and get as far as running Java. Everything stays inside <home> and <servers>. Starts nothing.
+if let flag = CommandLine.arguments.firstIndex(of: "--startable-fixture"), flag + 4 < CommandLine.arguments.count {
+    setenv("GILAMONSTER_HOME", CommandLine.arguments[flag + 1], 1)
+    setenv("GILAMONSTER_SERVERS", CommandLine.arguments[flag + 2], 1)
+    let root = URL(fileURLWithPath: CommandLine.arguments[flag + 3], isDirectory: true)
+    // A port of its own, so nothing here ever looks at the usual one.
+    var properties = PropertiesDocument((try? String(contentsOf: ServerPaths(root: root).properties, encoding: .utf8)) ?? "")
+    properties.set("server-port", "25611")
+    properties.set("server-ip", "127.0.0.1")
+    try FileOps.writeAtomic(properties.text, to: ServerPaths(root: root).properties)
+    write("a made-up jar", root.appendingPathComponent("server.jar"))
+    guard let model = ServerController.open(root: root) else { print("no server there"); exit(1) }
+    model.profile.software.jarName = "server.jar"
+    model.profile.launch.javaPath = CommandLine.arguments[flag + 4]
+    model.profile.launch.startWhenAppOpens = true
+    model.profile.backup.autoDrill = true
+    _ = try await model.backupNow(trigger: "manual", scope: .everything)
     model.stopTicker()
     exit(0)
 }
@@ -154,7 +180,9 @@ try FileManager.default.createDirectory(at: scratch, withIntermediateDirectories
 // program gets a throwaway keychain file instead (see KeyVaultChecks.swift).
 PrivacyKey.defaultVault = { CheckVault.shared }
 // Real-server runs leave hundreds of MB here, so every exit deletes it, and says so if it can't.
-atexit { cleanUpScratch(); settleScratchSuites() }
+atexit { ProcessWatch.shared.killLeftovers(); cleanUpScratch(); settleScratchSuites() }
+// From here on the run is watched: every JVM it starts and every TCP port anything it started listens on.
+beginLockExemption()
 
 // ... --shutdown-sandbox <folder> --i-accept-the-minecraft-eula  A throwaway server for the K650 shutdown test.
 if let flag = CommandLine.arguments.firstIndex(of: "--shutdown-sandbox"), flag + 1 < CommandLine.arguments.count {
@@ -205,6 +233,17 @@ nonisolated(unsafe) var failures: [String] = []
 //     keeps the pictures there; otherwise they go in a temporary folder that's deleted at the end.
 if CommandLine.arguments.contains("--snapshot") {
     await snapshotOverflowChecks()
+    await snapshotStartsNothingChecks()
+    print(failures.isEmpty ? "\(passed) passed" : "\(failures.count) FAILED:\n" + failures.joined(separator: "\n"))
+    exit(failures.isEmpty ? 0 : 1)
+}
+
+// ... --snapshot-quiet  Only the check that a snapshot run starts nothing (K829): draws one theme with a made-up server
+//     that would start, and watches for Java and drill copies. Needs a debug build of GilaMonster; about a minute.
+if CommandLine.arguments.contains("--snapshot-quiet") {
+    await snapshotGateChecks()
+    await snapshotStartsNothingChecks()
+    cleanUpScratch()
     print(failures.isEmpty ? "\(passed) passed" : "\(failures.count) FAILED:\n" + failures.joined(separator: "\n"))
     exit(failures.isEmpty ? 0 : 1)
 }
@@ -265,6 +304,7 @@ if CommandLine.arguments.contains("--connections") {
     await sessionActionChecks()
     await todayGrantChecks()
     await launchStartChecks()
+    await snapshotGateChecks()
     await labRunChecks()
     await labDependencyChecks()
     await labRestartLogChecks()
@@ -281,6 +321,8 @@ if CommandLine.arguments.contains("--connections") {
     await packPublishChecks()
     await packCardChecks()
     appDefaultsChecks()
+    exemptionRuleChecks()
+    await lockExemptionAudit()
     scratchDefaultsChecks()
     // --live: also asks this Mac's own playit agent, read-only, and prints only health and summaries.
     if CommandLine.arguments.contains("--live") {
@@ -291,10 +333,29 @@ if CommandLine.arguments.contains("--connections") {
             print("  \(service.id): \(status.health.title). \(status.summary)")
         }
     }
+    printPortSkips()
     print(failures.isEmpty ? "\(passed) passed" : "\(failures.count) FAILED:\n" + failures.joined(separator: "\n"))
     exit(failures.isEmpty ? 0 : 1)
 }
 
+// ... --with-ports  Only the checks that need a real TCP port. The default suite leaves each of them out by name.
+if CommandLine.arguments.contains("--with-ports") {
+    portProbeChecks()
+    await resourcePackChecks()
+    await linksWebChecks()
+    await mapGatewayChecks()
+    await standInOnRealPortChecks()
+    await localAnswerChecks()
+    exemptionRuleChecks()
+    loopbackOnlyAudit()
+    try? await Task.sleep(for: .seconds(1))
+    scratchDefaultsChecks()
+    ProcessWatch.shared.killLeftovers()
+    cleanUpScratch()
+    print("\n\(passed) passed, \(failures.count) failed")
+    for failure in failures { print("  - \(failure)") }
+    exit(failures.isEmpty ? 0 : 1)
+}
 
 @MainActor func check(_ condition: @autoclosure () throws -> Bool, _ label: String, line: Int = #line) {
     if (try? condition()) == true { passed += 1 } else { failures.append("line \(line): \(label)"); print("  FAIL \(label) (line \(line))") }
@@ -2160,19 +2221,7 @@ do {
         copy.raiseAlert("x", "y")
         check(!noisy, "test copies and the Lab don't send alerts")
     } catch { failures.append("mirror threw: \(error)") }
-    do { // A port held only on 127.0.0.1, as the Lab does.
-        let fd = socket(AF_INET, SOCK_STREAM, 0)
-        var address = sockaddr_in()
-        address.sin_len = UInt8(MemoryLayout<sockaddr_in>.size)
-        address.sin_family = sa_family_t(AF_INET)
-        address.sin_port = in_port_t(25977).bigEndian
-        address.sin_addr.s_addr = in_addr_t(INADDR_LOOPBACK).bigEndian
-        _ = withUnsafePointer(to: &address) { $0.withMemoryRebound(to: sockaddr.self, capacity: 1) { bind(fd, $0, socklen_t(MemoryLayout<sockaddr_in>.size)) } }
-        listen(fd, 1)
-        check(SystemInfo.isPortBusy(25977), "a port held only on this Mac's loopback address counts as busy")
-        close(fd)
-        check(!SystemInfo.isPortBusy(25977), "and is free once released")
-    }
+    portProbeChecks()   // A port held only on 127.0.0.1, as the Lab does: a real socket, so only with --with-ports.
     do { // Themed groups.
         func plugin(_ name: String, depends: [String] = []) -> InstalledPlugin {
             var d = PluginDescriptor(name: name); d.depend = depends
@@ -3083,6 +3132,7 @@ final class FakeBlueMap: @unchecked Sendable {
     var answers: [String: (head: String, body: Data)] = [:]
     let lock = NSLock()
     init(port: Int) throws {
+        guard portsAllowed else { throw AppError("a listener was asked for in a run that mustn't open ports") }
         let parameters = NWParameters.tcp
         parameters.requiredLocalEndpoint = .hostPort(host: .ipv4(.loopback), port: NWEndpoint.Port(rawValue: UInt16(port))!)
         parameters.allowLocalEndpointReuse = true
@@ -3160,6 +3210,7 @@ final class FakeBlueMap: @unchecked Sendable {
     check(upstream.contains("accept-encoding: gzip") && !upstream.contains("secret") && !upstream.contains("authorization") && !upstream.contains("origin"), "the sign-in cookie never reaches BlueMap")
 
     // The whole way through, with a stand-in BlueMap.
+    guard portsAllowed else { needsPorts("Map behind sign-in: the whole way through, with a stand-in BlueMap"); return }
     do {
         let port = 28790, mapPort = 28791
         let root = folder("map-gateway")
@@ -3405,6 +3456,7 @@ final class FakeBlueMap: @unchecked Sendable {
         }
 
         // Over a real socket, on this Mac only.
+        guard portsAllowed else { needsPorts("The players' page over a real socket, and the controller starting and stopping it"); return }
         write(#"[{"uuid":"\#(allowed)","name":"MadeUp"}]"#, root.appendingPathComponent("whitelist.json"))
         let listener = LinksListener(web: web)
         try listener.start(port: 25597)
@@ -4171,7 +4223,7 @@ func localAddresses() -> [String] {
         c.profile.lastPluginCheck = Date()
         c.profile.software.lastCheck = Date()
         c.profile.backup.scope = .standard
-        await scenario(c, startupTimeout: 30, port: 25597)
+        await scenario(c, startupTimeout: 30, port: 25597, heapMB: exemptHeapMB)
         // The stop file (K798), on a second stand-in of its own, once the first is down and its port is free.
         if c.state.isLive { c.stop(by: .app("for a check")); _ = await until(60) { !c.state.isLive } }
         let stops = folder("standin-stops")
@@ -4183,6 +4235,8 @@ func localAddresses() -> [String] {
         s.profile.software = c.profile.software
         s.profile.launch.javaPath = jdk.path
         s.profile.launch.preset = .none
+        s.profile.launch.maxMemoryMB = exemptHeapMB
+        s.profile.launch.minMemoryMB = 256
         s.profile.lastPluginCheck = Date()
         await stopLogLifecycle(s, startupTimeout: 30)
         // Backup drills that outlive the app (K813), once both ports are free again.
@@ -4204,10 +4258,11 @@ func buildStandIn(jdk: JavaRuntime, into jar: URL) async throws {
     public class StandIn {
       static String pending = "";
       static void log(String level, String text) { System.out.println("[12:00:00 " + level + "]: " + text); System.out.flush(); }
+    \#(StandInPorts.java)
       public static void main(String[] args) throws Exception {
         Properties p = new Properties();
         try (var in = Files.newInputStream(Path.of("server.properties"))) { p.load(in); }
-        ServerSocket socket = new ServerSocket(Integer.parseInt(p.getProperty("server-port", "25565")));
+        Closeable socket = claimPort(Integer.parseInt(p.getProperty("server-port", "25565")));
         Files.createDirectories(Path.of("world/region"));
         Files.writeString(Path.of("world/level.dat"), "level");
         Files.writeString(Path.of("world/region/r.0.0.mca"), "region " + p.getProperty("motd"));
@@ -4267,19 +4322,20 @@ func buildStandIn(jdk: JavaRuntime, into jar: URL) async throws {
     let file = work.appendingPathComponent("StandIn.java")
     write(source, file)
     let bin = URL(fileURLWithPath: jdk.path).deletingLastPathComponent()
-    let compile = try await Tool.run(bin.appendingPathComponent("javac").path, ["-d", work.path, file.path])
+    let compile = try await Tool.run(bin.appendingPathComponent("javac").path, jdkToolHeap + ["-d", work.path, file.path])
     guard compile.ok else { throw AppError("javac: \(compile.err)") }
-    let pack = try await Tool.run(bin.appendingPathComponent("jar").path, ["cfe", jar.path, "StandIn", "-C", work.path, "StandIn.class"])
+    let pack = try await Tool.run(bin.appendingPathComponent("jar").path, jdkToolHeap + ["cfe", jar.path, "StandIn", "-C", work.path, "StandIn.class"])
     guard pack.ok else { throw AppError("jar: \(pack.err)") }
 }
 
 /// The whole life of a server, against whichever jar it's given.
-@MainActor func scenario(_ c: ServerController, startupTimeout: Int, port: Int) async {
+/// Real Paper gets 2048 MB. The stand-in gets 512 MB, the most a run without the test-server lock may ask for.
+@MainActor func scenario(_ c: ServerController, startupTimeout: Int, port: Int, heapMB: Int = 2048) async {
     do {
         c.profile.backup.enabled = false
         c.profile.launch.restartOnCrash = false
-        c.profile.launch.maxMemoryMB = 2048
-        c.profile.launch.minMemoryMB = 1024
+        c.profile.launch.maxMemoryMB = heapMB
+        c.profile.launch.minMemoryMB = heapMB / 2
         c.profile.lastPluginCheck = Date()
         c.profile.software.lastCheck = Date()
         await c.refreshPlugins()
@@ -5009,6 +5065,7 @@ func makePack(_ name: String, _ files: [String: String], inside: String? = nil) 
     await sessionActionChecks()
     await todayGrantChecks()
     await launchStartChecks()
+    await snapshotGateChecks()
     await labRunChecks()
     await labDependencyChecks()
     await labRestartLogChecks()
@@ -5193,6 +5250,7 @@ func madeUpImage(_ w: Int, _ h: Int, to url: URL, type: CFString = "public.png" 
         check((try? String(contentsOf: rules, encoding: .utf8))?.contains("Kept") == true, "and an existing one is never overwritten")
 
         // The whole check, with Paper fetched from a stand-in web server on this Mac.
+        guard portsAllowed else { needsPorts("Plugins on upgrade: the whole check with Paper fetched from a stand-in web server, and download hash checks"); return }
         let webPort = 28797
         let web = try FakeBlueMap(port: webPort)
         defer { web.listener.cancel() }
@@ -5386,6 +5444,7 @@ func madeUpImage(_ w: Int, _ h: Int, to url: URL, type: CFString = "public.png" 
         try c.setPackHost(address: "http://127.0.0.1:\(port)", port: port)
         // These checks are about serving itself; the joining check has its own section (PackGateChecks.swift).
         do { var s = c.packHostSettings; s.joiningOnly = false; c.packHostSettings = s }
+        guard portsAllowed else { needsPorts("Exact packs: serving them, and serving again after a rename"); return }
         try c.startPackHost()
         await checkUntil(5, "listening") { c.packHostIsListening }
         let template = c.packAddressTemplate(recipe: "madeup-hud")!
@@ -5587,6 +5646,7 @@ func residentBytes() -> UInt64 {
         var badPort = false
         do { try c.setPackHost(address: "http://127.0.0.1", port: 80) } catch { badPort = true }
         check(badPort, "a low port is refused")
+        guard portsAllowed else { needsPorts("Serving packs: the listener, its requests, limits, routes and restarts"); return }
         try c.startPackHost()
         await checkUntil(5, "listening") { c.packHostIsListening }
         check(c.packHostSettings.enabled, "and it's remembered")
@@ -6322,8 +6382,12 @@ func residentBytes() -> UInt64 {
 }
 
 try? await Task.sleep(for: .seconds(1))
+await standInOnRealPortChecks()
+exemptionRuleChecks()
+await lockExemptionAudit()
 scratchDefaultsChecks()
 cleanUpScratch()
+printPortSkips()
 print("\n\(passed) passed, \(failures.count) failed")
 for failure in failures { print("  - \(failure)") }
 exit(failures.isEmpty ? 0 : 1)
