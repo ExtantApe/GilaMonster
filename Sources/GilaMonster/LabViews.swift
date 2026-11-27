@@ -270,9 +270,9 @@ struct UpgradePicker: View {
 
     var body: some View {
         let grow = Theme.grow
-        if grow == 1 {
-            options.labelsHidden()
-        } else {
+        // Always GilaMonster's own field: the system picker is under 24 pt tall at the default size and its focus ring
+        // can't be relied on (K820 re-review).
+        do {
             Menu {
                 options.pickerStyle(.inline).labelsHidden()
             } label: {
@@ -283,7 +283,7 @@ struct UpgradePicker: View {
                 }
                 .foregroundStyle(enabled ? Theme.ink : Theme.named(ControlLook.disabledButton.label))
                 .padding(.horizontal, 8 * grow)
-                .frame(minHeight: 22 * grow)
+                .frame(minHeight: 24 * grow)
                 .background(enabled ? Theme.surface : Theme.named(ControlLook.disabledButton.fill), in: RoundedRectangle(cornerRadius: Theme.controlRadius))
                 .overlay { RoundedRectangle(cornerRadius: Theme.controlRadius).strokeBorder(Theme.controlBorder, style: StrokeStyle(lineWidth: 1, dash: enabled ? [] : [4, 3])) }
                 .contentShape(Rectangle())

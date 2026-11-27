@@ -925,7 +925,11 @@ struct SettingsView: View {
             LabeledContent("Version", value: GilaMonster.version)
             LabeledContent("Servers folder") {
                 HStack {
-                    Text((serversFolder as NSString).abbreviatingWithTildeInPath).foregroundStyle(Theme.ink).lineLimit(1).truncationMode(.middle)
+                    // The whole path, wrapped after each slash, never cut: the owner needs to read where it is (K820).
+                    let shown = (serversFolder as NSString).abbreviatingWithTildeInPath
+                    Text(shown.replacingOccurrences(of: "/", with: "/\u{200B}")).foregroundStyle(Theme.ink)
+                        .multilineTextAlignment(.trailing).fixedSize(horizontal: false, vertical: true)
+                        .textSelection(.enabled).accessibilityLabel("Servers folder, \(shown)").help(shown)
                     Button("Change…") { chooseServersFolder() }
                 }
             }
