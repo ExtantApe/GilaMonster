@@ -76,6 +76,8 @@ public final class ServerController: Identifiable {
     public internal(set) var playerStats: [PlayerStats] = []
     public internal(set) var playerActivity: [PlayerActivity] = []
     public internal(set) var drillRunning = false
+    /// The throwaway server a backup drill has booted, while it's up (K813).
+    var drillChild: ServerController?
     var lastTPSRequest = Date.distantPast
     var lastSizeCheck = Date.distantPast
     var lagging = false
@@ -513,6 +515,8 @@ public final class ServerController: Identifiable {
 
     private func launch() {
         guard state.canStart, process == nil else { return }
+        // GilaMonster is quitting: a throwaway copy that hasn't started yet doesn't start (K813).
+        guard !(isTrialCopy && DrillCopies.isClosing) else { return }
         guard let java = resolvedJava() else { return }
         let arguments = LaunchCommand.arguments(profile.launch, software: profile.software, javaMajor: java.major)
         try? FileOps.ensureDir(paths.meta)

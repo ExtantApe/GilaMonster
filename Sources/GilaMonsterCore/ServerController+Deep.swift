@@ -217,16 +217,15 @@ extension ServerController {
 
     /// Proves a backup restores: unpacks it to a throwaway folder, boots it, removes it. Touches nothing real.
     public func runBackupDrill(_ chosen: BackupRecord? = nil) async {
-        guard !drillRunning, trialPhase == nil else { return }
+        guard !drillRunning, trialPhase == nil, !DrillCopies.isClosing else { return }
         guard let record = chosen ?? backups.first(where: { $0.scope == .everything }) else {
             notice = "A drill needs a whole-folder backup, and there isn't one yet."
             return
         }
         // Unpacks on the backup's own disk if it has room, else the usual place, else not at all (2026-11-14).
-        let name = "drill-\(paths.root.lastPathComponent)-\(Int(Date().timeIntervalSince1970))"
-        let beside = Backups.folder(of: record, profile: profile).appendingPathComponent(".test-copies", isDirectory: true)
-        let usual = paths.root.deletingLastPathComponent()
-            .appendingPathComponent(AppPaths.ownFolderName, isDirectory: true).appendingPathComponent("test-copies", isDirectory: true)
+        let name = DrillCopies.newName(forServer: paths.root)
+        let beside = DrillCopies.folder(besideBackups: Backups.folder(of: record, profile: profile))
+        let usual = DrillCopies.folder(besideServer: paths.root)
         // Never onto the disk the server is using while it runs (2026-11-14): a full disk under a live world can corrupt it.
         let isRunning: Bool = { if case .external = state { return true }; return state.isLive }()
         let (candidates, excluded) = DiskGuard.drillCandidates([beside, usual], serverRoot: paths.root, serverRunning: isRunning)
@@ -249,14 +248,23 @@ extension ServerController {
         defer { drillRunning = false }
         var passed = false, detail = ""
         let folder = base.appendingPathComponent(name, isDirectory: true)
+        // The copy is marked as GilaMonster's own and listed while the drill runs, so quitting can stop it and a launch
+        // can clear one left behind (K813). Only the marked copy is removed, and its folder only once it's empty.
         defer {
-            try? FileManager.default.removeItem(at: folder)
-            if base == beside { try? FileManager.default.removeItem(at: beside) }
+            drillChild = nil
+            DrillCopies.finish(folder)
+            if base == beside { DrillCopies.removeIfEmpty(beside) }
         }
         do {
-            try FileOps.ensureDir(folder)
+            guard DrillCopies.begin(folder) else {
+                if DrillCopies.isClosing { return }
+                throw AppError("The drill's folder couldn't be made and marked as GilaMonster's own, so nothing was unpacked.")
+            }
             let archive = Backups.folder(of: record, profile: profile).appendingPathComponent(record.fileName)
-            let result = try await Tool.run("/usr/bin/tar", ["-xzf", archive.path, "-C", folder.path], stopIf: DiskGuard.watch(folder))
+            let result = try await Tool.run("/usr/bin/tar", ["-xzf", archive.path, "-C", folder.path], stopIf: DiskGuard.watch(folder),
+                                            onStart: { DrillCopies.unpacking(folder, with: $0) })
+            DrillCopies.unpacking(folder, with: nil)
+            if DrillCopies.isClosing { return }
             if let stopped = result.stoppedBecause { throw AppError("The drill stopped unpacking and removed what it had unpacked. \(stopped)") }
             guard result.ok else { throw AppError("The archive couldn't be unpacked. \(result.err.prefix(200))") }
             var report = TrialReport()
@@ -264,6 +272,7 @@ extension ServerController {
             defer { child.stopTicker() }
             if let software = record.softwareState { child.profile.software = software }
             if let launch = record.launch { child.profile.launch.javaPath = launch.javaPath }
+            drillChild = child
             await child.start()
             if !child.blockers.isEmpty { throw AppError("It couldn't start: \(child.blockers.map(\.title).joined(separator: ", ")).") }
             let started = Date()
@@ -281,6 +290,8 @@ extension ServerController {
         } catch {
             detail = error.localizedDescription
         }
+        // GilaMonster is quitting and stopped the drill itself: that says nothing about the backup, so nothing is recorded.
+        if DrillCopies.isClosing { return }
         // Stopped by the disk guard: that says nothing about the backup, so it's a skip, not a failure.
         if detail.hasPrefix("The drill stopped unpacking") {
             appendWrapper(detail, level: .warn)
@@ -303,6 +314,12 @@ extension ServerController {
                 steps: ["Run the drill again on an older backup.", "Take a new backup now.", "Check the Issues panel for anything else that's wrong."],
                 action: IssueAction(page: "backups", label: "Open Backups"), sample: detail, firstSeen: now, lastSeen: now))
         }
+    }
+
+    /// GilaMonster is quitting: the drill's throwaway server is stopped at once. It has nothing worth saving.
+    public func stopDrill(by source: StopSource) {
+        DrillCopies.close()
+        drillChild?.forceStop(by: source)
     }
 
     private func removeLocks(in root: URL) {
