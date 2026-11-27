@@ -23,7 +23,7 @@ public enum AdvisorTrial {
 }
 
 public enum AppPaths {
-    /// `GILAMONSTER_HOME` redirects app data, for tests and demos.
+    /// `GILAMONSTER_HOME` redirects app data, for tests and demos. Saved settings move with it (see `AppDefaults`).
     public static var home: URL {
         if let override = ProcessInfo.processInfo.environment["GILAMONSTER_HOME"] {
             return URL(fileURLWithPath: override, isDirectory: true)
@@ -34,7 +34,7 @@ public enum AppPaths {
     /// Where servers live. `~/Minecraft` unless changed in Settings. `GILAMONSTER_SERVERS` redirects it for tests.
     public static var servers: URL {
         if ProcessInfo.processInfo.environment["GILAMONSTER_SERVERS"] != nil { return defaultServers }
-        if let chosen = UserDefaults.standard.string(forKey: "serversFolder") {
+        if let chosen = AppDefaults.store.string(forKey: "serversFolder") {
             return URL(fileURLWithPath: chosen, isDirectory: true)
         }
         return defaultServers
@@ -47,13 +47,18 @@ public enum AppPaths {
     }
     /// True until a servers folder has been chosen, which is asked on first launch.
     public static var needsServersFolderChoice: Bool {
-        !UserDefaults.standard.bool(forKey: "serversFolderChosen")
+        !AppDefaults.store.bool(forKey: "serversFolderChosen")
+    }
+    /// Whether first launch asks for the folder. Not when `GILAMONSTER_SERVERS` names it: the answer would be ignored,
+    /// and a test copy with settings of its own (K814) would otherwise ask every time it gets a new home.
+    public static var asksForServersFolder: Bool {
+        needsServersFolderChoice && ProcessInfo.processInfo.environment["GILAMONSTER_SERVERS"] == nil
     }
     /// Records the choice, creating the folder if it isn't there yet.
     public static func chooseServers(_ folder: URL) throws {
         try FileOps.ensureDir(folder)
-        UserDefaults.standard.set(folder.path, forKey: "serversFolder")
-        UserDefaults.standard.set(true, forKey: "serversFolderChosen")
+        AppDefaults.store.set(folder.path, forKey: "serversFolder")
+        AppDefaults.store.set(true, forKey: "serversFolderChosen")
     }
     /// GilaMonster's own folder beside the servers. Holds backups, and is never listed as a server.
     public static let ownFolderName = "GilaMonster"

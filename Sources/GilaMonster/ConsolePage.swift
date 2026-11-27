@@ -11,7 +11,7 @@ struct ConsolePage: View {
     @State private var history: [String] = []
     @State private var historyIndex: Int?
     @FocusState private var commandFocused: Bool
-    @AppStorage(TextZoom.key) private var textSize = TextZoom.standard
+    @AppStorage(TextZoom.key, store: AppDefaults.store) private var textSize = TextZoom.standard
 
     var body: some View {
         VStack(spacing: 0) {

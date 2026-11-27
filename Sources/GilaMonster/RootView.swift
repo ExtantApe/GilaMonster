@@ -4,7 +4,7 @@ import SwiftUI
 
 struct RootView: View {
     @Bindable var model: AppModel
-    @AppStorage(ThemeChoice.key) private var themeFlavor = Palette.Flavor.bold.rawValue
+    @AppStorage(ThemeChoice.key, store: AppDefaults.store) private var themeFlavor = Palette.Flavor.bold.rawValue
 
     var body: some View {
         // Without the sheets: adding or setting up a server writes to its folder.

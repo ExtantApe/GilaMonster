@@ -77,7 +77,7 @@ struct ConfigEditor: View {
     @Bindable var model: AppModel
     let server: ServerController
     let file: ConfigFile
-    @AppStorage(TextZoom.key) private var textSize = TextZoom.standard
+    @AppStorage(TextZoom.key, store: AppDefaults.store) private var textSize = TextZoom.standard
 
     private enum Mode: String, CaseIterable, Identifiable {
         case common = "Settings", full = "Full File"
