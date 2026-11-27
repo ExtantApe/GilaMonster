@@ -136,15 +136,23 @@ import Foundation
         equal(Backups.listAll(quiet.profile).count, 1, "so no new backup was written")
 
         // The last line of defence: the one place a server's Java is run. /usr/bin/true stands in for Java.
+        // It ignores the -Xmx, which is there because the suite's audit wants every launch to name a small heap (K817).
         var threw = false
-        do { try ServerProcess(java: "/usr/bin/true", arguments: [], directory: root).start() } catch { threw = error.localizedDescription == AppMode.snapshotRefusal }
+        do { try ServerProcess(java: "/usr/bin/true", arguments: ["-Xmx64m"], directory: root).start() } catch { threw = error.localizedDescription == AppMode.snapshotRefusal }
         check(threw, "running a server process is refused in a snapshot, whatever asked for it")
         unsetenv(AppMode.snapshotVariable)
-        let allowed = ServerProcess(java: "/usr/bin/true", arguments: [], directory: root)
+        let allowed = ServerProcess(java: "/usr/bin/true", arguments: ["-Xmx64m"], directory: root)
         check((try? allowed.start()) != nil, "and runs as before in an ordinary run")
         for _ in 0..<100 where allowed.isRunning { try? await Task.sleep(for: .milliseconds(20)) }
         check(!allowed.isRunning, "the stand-in has exited")
         quiet.stopTicker()
+
+        // What the whole-run check below counts as Java being run.
+        check(isJavaRun("/made/up/jdk/bin/java -Xmx512M -jar server.jar nogui") && isJavaRun("java -jar server.jar"), "Java by its path or its name is counted")
+        check(isJavaRun("/bin/sh /made/up/standin/java -Xmx512M -jar server.jar nogui"), "so is the stand-in, which shows as the shell running it")
+        check(!isJavaRun("/made/up/debug/gilamonster-check --startable-fixture /made/up/home /made/up/servers /made/up/servers/made-up-server /made/up/standin/java"),
+              "a program only told where the stand-in is, as the fixture's helper is, isn't counted")
+        check(!isJavaRun("/bin/sh /made/up/snapshot-fixtures.sh /made/up/out normal"), "nor is another shell script")
     } catch {
         check(false, "snapshot gate: \(error)")
     }
@@ -197,9 +205,7 @@ import Foundation
             guard mine else { continue }
             let program = command.split(separator: " ").first.map(String.init) ?? ""
             if program.hasSuffix("/debug/GilaMonster") { appFirstSeen = appFirstSeen ?? Date(); appLastSeen = Date() }
-            // Java by name, or the stand-in by its path (a shell script shows as /bin/sh <path>).
-            let isJava = program == "java" || program.hasSuffix("/java") || command.contains("/standin/java")
-            guard isJava else { continue }
+            guard isJavaRun(command) else { continue }
             // Looking up which Javas are installed asks each for its version, which the Launch page shows. That isn't a server.
             if command.hasSuffix(" -version") { probes.insert(command) } else { javas.insert(command) }
         }
@@ -230,6 +236,15 @@ import Foundation
     // swift's own lock and scratch files may sit in the same folder; the script's is gm-fixture.<random>.
     let left = ((try? FileManager.default.contentsOfDirectory(atPath: temp.path)) ?? []).filter { $0.hasPrefix("gm-fixture.") }
     equal(left, [], "the script removed its own temp folder")
+}
+
+/// Whether a line from `ps` is Java, or the stand-in for it, being run. The stand-in is a shell script, so it shows as
+/// the shell followed by its path. A path further along is only something the program was told about.
+func isJavaRun(_ command: String) -> Bool {
+    let words = command.split(separator: " ", maxSplits: 2).map(String.init)
+    guard let program = words.first else { return false }
+    if program == "java" || program.hasSuffix("/java") { return true }
+    return ["sh", "bash", "zsh"].contains((program as NSString).lastPathComponent) && words.count > 1 && words[1].hasSuffix("/standin/java")
 }
 
 private func shell(_ tool: String, _ arguments: [String]) -> String {
