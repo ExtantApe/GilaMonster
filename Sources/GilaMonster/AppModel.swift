@@ -144,6 +144,7 @@ final class AppModel {
     /// own and the process runs in the server's folder, so stopping them with a SIGTERM (which saves) is safe.
     var leftOver: [ServerController] { servers.filter { if case .external = $0.state { true } else { false } } }
 
+    static let drillLog = Logger(subsystem: Bundle.main.bundleIdentifier ?? "GilaMonster", category: "backup-drills")
     static let cloneLog = Logger(subsystem: Bundle.main.bundleIdentifier ?? "GilaMonster", category: "backup-clones")
     /// True when another GilaMonster with this bundle identifier is running. It may be part-way through a backup.
     static var anotherCopyIsRunning: Bool {
@@ -178,6 +179,19 @@ final class AppModel {
         if ProcessInfo.processInfo.environment["GILAMONSTER_SNAPSHOT"] == nil {
             for swept in BackupClones.sweep(besideServers: servers.map(\.paths.root), serversFolder: AppPaths.servers, backupRunning: Backups.writing || Self.anotherCopyIsRunning) {
                 if let line = swept.result.line(swept.folder) { Self.cloneLog.notice("\(line, privacy: .public)") }
+            }
+        }
+        // A backup drill's copy left by a GilaMonster that went away during the drill (K813): its Java is stopped if
+        // it's still running, and the copy is removed. Only copies GilaMonster marked as its own. Off the main thread,
+        // since stopping a Java can take a few seconds.
+        if ProcessInfo.processInfo.environment["GILAMONSTER_SNAPSHOT"] == nil, !AdvisorTrial.isOn {
+            let roots = servers.map(\.paths.root)
+            let backupFolders = servers.flatMap { server in [Backups.destination(server.profile)] + server.backups.map { Backups.folder(of: $0, profile: server.profile) } }
+            let servers = AppPaths.servers, otherCopy = Self.anotherCopyIsRunning
+            Task.detached(priority: .utility) {
+                for swept in DrillCopies.sweep(besideServers: roots, serversFolder: servers, backupFolders: backupFolders, otherCopyRunning: otherCopy) {
+                    if let line = swept.result.line(swept.folder) { Self.drillLog.notice("\(line, privacy: .public)") }
+                }
             }
         }
         servers.forEach(Alerts.connect)
@@ -252,6 +266,8 @@ final class AppModel {
     /// `source` is why everything is stopping (a quit, the Mac shutting down, a signal), for each server's stop file.
     func stopAll(by source: StopSource) async {
         for server in servers {
+            // A backup drill's throwaway server isn't on the list, and used to be left running (K813).
+            server.stopDrill(by: source)
             server.stopTrialCopy()
             if server.isLab, lab.isBusy { server.forceStop(by: source) }
             if server.state.isLive { server.stop(by: source) }
@@ -261,6 +277,7 @@ final class AppModel {
             for server in leftOver { group.addTask { await server.stopExternalServer(by: source) } }
         }
         for _ in 0..<(180 * 4) where anyLive { try? await Task.sleep(for: .milliseconds(250)) }
+        DrillCopies.endAll()
     }
 
     /// Unsigned apps can't update themselves safely, so this only tells you where the new build is.
@@ -330,7 +347,11 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
     func applicationShouldTerminateAfterLastWindowClosed(_ sender: NSApplication) -> Bool { false }
 
     /// The last stop on every way out: nothing half-written is left behind (D213).
-    func applicationWillTerminate(_ notification: Notification) { Backups.cancelInFlight(wait: 2) }
+    /// A backup drill's Java is stopped and its copy removed here too, for a quit with no server running (K813).
+    func applicationWillTerminate(_ notification: Notification) {
+        Backups.cancelInFlight(wait: 2)
+        DrillCopies.endAll()
+    }
 
     /// Every build, release included: the quit handler reads why macOS is quitting the app (K650).
     func applicationWillFinishLaunching(_ notification: Notification) {
@@ -345,13 +366,7 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
     @MainActor func applicationDidFinishLaunching(_ notification: Notification) {
         // Killed with SIGTERM, SIGHUP or SIGINT (killall, a script, a terminal), the app used to vanish and leave its
         // servers running with nobody to stop them (K692). Now it stops them with a save first, as at a shutdown.
-        for sig in [SIGTERM, SIGHUP, SIGINT] {
-            signal(sig, SIG_IGN)
-            let source = DispatchSource.makeSignalSource(signal: sig, queue: .main)
-            source.setEventHandler { MainActor.assumeIsolated { AppDelegate.quitOnSignal(sig) } }
-            source.resume()
-            Self.signalSources.append(source)
-        }
+        Self.signalSources = QuitSignals.watch { sig in MainActor.assumeIsolated { AppDelegate.quitOnSignal(sig) } }
         NSWorkspace.shared.notificationCenter.addObserver(forName: NSWorkspace.willPowerOffNotification, object: nil, queue: .main) { _ in
             AppDelegate.poweringOff = true
         }
@@ -549,15 +564,17 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
     @MainActor static func quitOnSignal(_ sig: Int32) {
         guard !signalled else { return }
         signalled = true
-        let name = sig == SIGTERM ? "SIGTERM" : sig == SIGHUP ? "SIGHUP" : "SIGINT"
+        let name = QuitSignals.name(sig)
         quitLog.notice("Asked to quit by \(name, privacy: .public): stopping servers with a save")
-        guard let model else { exit(0) }
+        guard let model else { DrillCopies.endAll(); exit(0) }
         for server in model.servers where server.state.isLive {
             server.appendWrapper("GilaMonster was asked to quit (\(name)), so it's stopping this server with a save.", level: .info)
         }
         Backups.cancelInFlight()
         Task { @MainActor in
             await model.stopAll(by: .signal(name))
+            // Nothing runs between this and the exit, so no drill can start in the gap (K813).
+            DrillCopies.endAll()
             exit(0)
         }
     }

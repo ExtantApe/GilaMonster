@@ -28,6 +28,12 @@ import Network
 import GilaMonsterAdvisor
 @testable import GilaMonsterCore
 
+// ... --drill-signal-child <folder> <java> <java major> <stand-in jar> <stop|terminate>
+//     Started by the drill checks themselves (DrillCopyChecks.swift): plays GilaMonster running a drill, to be signalled.
+if let flag = CommandLine.arguments.firstIndex(of: "--drill-signal-child") {
+    await runDrillSignalChild(Array(CommandLine.arguments[(flag + 1)...]))
+}
+
 // ... --demo-packs <folder> <zip>...  Fills a throwaway folder with these packs and a server, for clicking through the app.
 if let flag = CommandLine.arguments.firstIndex(of: "--demo-packs") {
     let demo = URL(fileURLWithPath: CommandLine.arguments[flag + 1])
@@ -203,6 +209,22 @@ if CommandLine.arguments.contains("--snapshot") {
     exit(failures.isEmpty ? 0 : 1)
 }
 
+// ... --drills  Only the backup drill copy checks (K813), with the stand-in jar. Opens ports 25596 and 25597 on this Mac.
+if CommandLine.arguments.contains("--drills") {
+    drillCopyChecks()
+    let runtimes = await JavaManager.discover()
+    if let jdk = runtimes.first(where: { FileManager.default.isExecutableFile(atPath: URL(fileURLWithPath: $0.path).deletingLastPathComponent().appendingPathComponent("javac").path) }) {
+        let jar = folder("standin-drills").appendingPathComponent("standin.jar")
+        do {
+            try await buildStandIn(jdk: jdk, into: jar)
+            await drillCopyLifecycle(jar: jar, jdk: jdk)
+        } catch { failures.append("drills: \(error)") }
+    } else { print("  skipped the stand-in checks: no JDK found") }
+    cleanUpScratch()
+    print(failures.isEmpty ? "\(passed) passed" : "\(failures.count) FAILED:\n" + failures.joined(separator: "\n"))
+    exit(failures.isEmpty ? 0 : 1)
+}
+
 // ... --connections  Only the connection and color checks, which need no server or network.
 if CommandLine.arguments.contains("--connections") {
     await connectionChecks()
@@ -216,6 +238,7 @@ if CommandLine.arguments.contains("--connections") {
     controlLookChecks()
     stopLogChecks()
     backupCloneChecks()
+    drillCopyChecks()
     quitReasonChecks()
     await sessionAccessChecks()
     await keychainWaitChecks()
@@ -4141,6 +4164,9 @@ func localAddresses() -> [String] {
         s.profile.launch.preset = .none
         s.profile.lastPluginCheck = Date()
         await stopLogLifecycle(s, startupTimeout: 30)
+        // Backup drills that outlive the app (K813), once both ports are free again.
+        if s.state.isLive { s.stop(by: .app("for a check")); _ = await until(60) { !s.state.isLive } }
+        await drillCopyLifecycle(jar: root.appendingPathComponent("standin.jar"), jdk: jdk)
     } catch { failures.append("lifecycle: \(error)") }
 }
 
@@ -4211,6 +4237,8 @@ func buildStandIn(jdk: JavaRuntime, into jar: URL) async throws {
             default -> log("INFO", "Unknown command");
           }
         }
+        // Like a real server, which keeps running when its console closes (K813). Only when asked, so nothing else changes.
+        if (new File("outlive-console").exists()) { Thread.sleep(Long.MAX_VALUE); }
       }
     }
     """#
@@ -4950,6 +4978,7 @@ func makePack(_ name: String, _ files: [String: String], inside: String? = nil) 
     controlLookChecks()
     stopLogChecks()
     backupCloneChecks()
+    drillCopyChecks()
     quitReasonChecks()
     await sessionAccessChecks()
     await keychainWaitChecks()

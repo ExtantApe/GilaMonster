@@ -115,6 +115,13 @@ public enum SystemInfo {
         return path.isEmpty ? nil : URL(fileURLWithPath: path, isDirectory: true)
     }
 
+    /// The program a process is running, from the kernel: nothing is started to ask.
+    public static func executablePath(pid: Int32) -> String? {
+        var buffer = [CChar](repeating: 0, count: 4 * Int(MAXPATHLEN))
+        guard proc_pidpath(pid, &buffer, UInt32(buffer.count)) > 0 else { return nil }
+        return String(cString: buffer)
+    }
+
     public static func isPortBusy(_ port: Int) -> Bool {
         // Observed: on a Mac, binding to every address succeeds even while something holds the port on 127.0.0.1 alone,
         // as the Lab does. So both are tried.
