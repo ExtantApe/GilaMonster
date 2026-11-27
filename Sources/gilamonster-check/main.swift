@@ -294,6 +294,7 @@ if CommandLine.arguments.contains("--with-ports") {
     await linksWebChecks()
     await mapGatewayChecks()
     await standInOnRealPortChecks()
+    await localAnswerChecks()
     exemptionRuleChecks()
     loopbackOnlyAudit()
     try? await Task.sleep(for: .seconds(1))
