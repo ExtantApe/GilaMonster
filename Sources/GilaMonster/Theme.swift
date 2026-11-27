@@ -182,13 +182,17 @@ struct Card<Content: View>: View {
     var systemImage: String?
     /// One line under the title saying what the card is, so it isn't repeated above a long list.
     var subtitle: String?
+    /// The title is the owner's own data (a pack's name): shown as written, never in capitals (K820).
+    var titleIsData = false
     @ViewBuilder var content: Content
 
     var body: some View {
         VStack(alignment: .leading, spacing: 10) {
             if let title {
                 Label {
-                    Text(title).type(.headline).foregroundStyle(Theme.ink).accessibilityLabel(title).padding(.bottom, TypeState.shared.conditions.pixelLabels ? 2 : 0)
+                    Group {
+                        if titleIsData { Text(title).type(.dataHeading).accessibilityLabel(title).fixedSize(horizontal: false, vertical: true) } else { HeadingText(title) }
+                    }.foregroundStyle(Theme.ink).padding(.bottom, TypeState.shared.conditions.pixelLabels ? 2 : 0)
                 } icon: {
                     if let systemImage { Image(systemName: systemImage).foregroundStyle(Theme.accent) }
                 }
@@ -363,7 +367,7 @@ struct EmptyMessage: View {
     var body: some View {
         VStack(spacing: 6) {
             Image(systemName: icon).font(Theme.symbol(.largeTitle)).foregroundStyle(Theme.accent).accessibilityHidden(true)
-            Text(title).type(.headline).foregroundStyle(Theme.ink)
+            HeadingText(title).foregroundStyle(Theme.ink)
             if let detail { Text(detail).foregroundStyle(Theme.muted).multilineTextAlignment(.center) }
         }
         .padding(24)
@@ -581,7 +585,7 @@ struct ThemedDisclosureStyle: DisclosureGroupStyle {
         VStack(alignment: .leading, spacing: 6) {
             Button { configuration.isExpanded.toggle() } label: { configuration.label }
                 .buttonStyle(Heading(open: configuration.isExpanded))
-                .accessibilityValue(configuration.isExpanded ? "Open" : "Closed")
+                .accessibilityValue(configuration.isExpanded ? "Expanded" : "Collapsed")
             if configuration.isExpanded { configuration.content }
         }
     }
@@ -603,7 +607,8 @@ struct ThemedDisclosureStyle: DisclosureGroupStyle {
                 configuration.label
                 Spacer(minLength: 0)
             }
-            .frame(minHeight: 20 * Theme.grow)
+            // At least 24 pt tall to press (WCAG 2.5.8), more with larger text.
+            .frame(minHeight: 24 * Theme.grow)
             .contentShape(Rectangle())
             .opacity(configuration.isPressed ? 0.7 : 1)
             .overlay { if focused { RoundedRectangle(cornerRadius: 6).strokeBorder(Theme.accent, lineWidth: 2).padding(-3) } }
@@ -689,7 +694,7 @@ struct GroupHeading: View {
     var help: String?
     init(_ text: String, help: String? = nil) { self.text = text; self.help = help }
     var body: some View {
-        Text(text).type(.headline).foregroundStyle(Theme.ink).accessibilityLabel(text).accessibilityAddTraits(.isHeader)
+        HeadingText(text).foregroundStyle(Theme.ink).accessibilityAddTraits(.isHeader)
             .help(help ?? "")
     }
 }

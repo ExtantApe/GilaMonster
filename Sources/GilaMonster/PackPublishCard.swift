@@ -27,7 +27,7 @@ struct PackPublishCard: View {
                 }
             }
             LabeledContent("Its web address") {
-                TextField("https://join.example.test/packs/", text: $settings.baseURL).textFieldStyle(.roundedBorder)
+                TextField("https://join.example.test/packs/", text: $settings.baseURL).textFieldStyle(.growing)
                     .onSubmit(save).accessibilityLabel("Web address of that folder")
             }
             if let why = PackPublish.problem(settings) { Hint(why) }
@@ -48,7 +48,7 @@ struct PackPublishCard: View {
                     names[key] = value.trimmingCharacters(in: .whitespaces)
                     settings.packmuleNames = names
                 }))
-                .textFieldStyle(.roundedBorder).onSubmit(save).accessibilityLabel("Packmule pack name for \(name)")
+                .textFieldStyle(.growing).onSubmit(save).accessibilityLabel("Packmule pack name for \(name)")
             }
             if let current = builds.first {
                 HStack {

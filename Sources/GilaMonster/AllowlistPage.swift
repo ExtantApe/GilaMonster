@@ -387,7 +387,7 @@ private struct GroupEditor: View {
             }
         }
         .padding(20)
-        .frame(width: 460)
+        .frame(width: Theme.sheet(460))
         .task {
             current = await server.currentGroups(uuid: entry.uuid)
             if let current { chosen = current.intersection(offered) } else { problem = "LuckPerms didn't answer." }

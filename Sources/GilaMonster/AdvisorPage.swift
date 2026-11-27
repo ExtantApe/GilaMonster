@@ -738,7 +738,7 @@ private struct AdvisorPreview: View {
             }
         }
         .padding(20)
-        .frame(minWidth: 620, minHeight: 480)
+        .frame(minWidth: Theme.sheet(620), minHeight: 480 * Theme.textFactor)
         .background(Theme.background)
         .task { await AdvisorCenter.shared.loadPreview(server) }
     }

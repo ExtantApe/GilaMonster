@@ -121,7 +121,7 @@ struct ProfileChoiceCard: View {
         let cut = Overflow.slice(profiles, limit: Overflow.Limit.profiles, expanded: expanded)
         let hiddenTicked = profiles.dropFirst(cut.shown.count).filter { chosen.contains($0.id) }.count
         VStack(alignment: .leading, spacing: 6) {
-            Text(profiles.isEmpty ? "Profiles" : "Profiles (\(profiles.count))").type(.headline).foregroundStyle(Theme.ink)
+            HeadingText(profiles.isEmpty ? "Profiles" : "Profiles (\(profiles.count))").foregroundStyle(Theme.ink)
                 .accessibilityAddTraits(.isHeader)
             if profiles.isEmpty { Hint(empty) }
             ForEach(cut.shown) { profile in
@@ -156,8 +156,8 @@ struct QuestionsCard: View {
         if !questions.isEmpty {
             let cut = Overflow.slice(questions, limit: Overflow.Limit.profiles, expanded: expanded)
             VStack(alignment: .leading, spacing: 6) {
-                Label("Sheriff asks first (\(questions.count))", systemImage: Tone.warning.icon)
-                    .type(.headline).foregroundStyle(Theme.ink).accessibilityAddTraits(.isHeader)
+                Label { HeadingText("Sheriff asks first (\(questions.count))") } icon: { Image(systemName: Tone.warning.icon) }
+                    .foregroundStyle(Theme.ink).accessibilityAddTraits(.isHeader)
                 Hint(intro)
                 ForEach(cut.shown, id: \.id) { q in
                     Toggle(q.question, isOn: Binding(get: { answered.contains(q.id) }, set: { on in
@@ -195,6 +195,6 @@ struct SheriffProfileSheet: View {
             }
         }
         .padding(20)
-        .frame(width: 500)
+        .frame(width: Theme.sheet(500))
     }
 }

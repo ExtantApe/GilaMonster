@@ -387,7 +387,7 @@ struct FactCard<Content: View>: View {
 
     var body: some View {
         VStack(alignment: .leading, spacing: 8) {
-            Text(title).type(.factHeading).foregroundStyle(Theme.muted).accessibilityLabel(title).accessibilityAddTraits(.isHeader).padding(.bottom, TypeState.shared.conditions.pixelLabels ? 4 : 0)
+            HeadingText(title, fact: true).foregroundStyle(Theme.muted).accessibilityAddTraits(.isHeader).padding(.bottom, TypeState.shared.conditions.pixelLabels ? 4 : 0)
             content
         }
         .padding(14)

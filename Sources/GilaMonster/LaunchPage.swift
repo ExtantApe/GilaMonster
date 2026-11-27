@@ -68,7 +68,7 @@ struct LaunchPage: View {
             .accessibilityLabel("\(label) memory")
             .accessibilityValue(Format.memory(mb: value.wrappedValue))
             TextField(label, value: value, format: .number.grouping(.never))
-                .labelsHidden().frame(width: 70).textFieldStyle(.roundedBorder)
+                .labelsHidden().frame(width: 70).textFieldStyle(.growing)
                 .accessibilityLabel("\(label) memory in megabytes")
             Text("MB").foregroundStyle(Theme.muted)
         }
@@ -139,11 +139,11 @@ struct LaunchPage: View {
             }
             LabeledContent("Extra JVM arguments") {
                 TextField("Extra JVM arguments", text: $server.profile.launch.extraJVMArgs, prompt: Text("-Dfoo=bar"))
-                    .labelsHidden().textFieldStyle(.roundedBorder).type(.mono)
+                    .labelsHidden().textFieldStyle(.growing).type(.mono)
             }
             LabeledContent("Server arguments") {
                 TextField("Server arguments", text: $server.profile.launch.serverArgs, prompt: Text("--port 25566 --world-dir worlds"))
-                    .labelsHidden().textFieldStyle(.roundedBorder).type(.mono)
+                    .labelsHidden().textFieldStyle(.growing).type(.mono)
             }
             Toggle("Hide Minecraft's own server window (nogui)", isOn: $server.profile.launch.noGUI)
             Hint("Leave this on: GilaMonster is your console, and the extra window uses memory.")

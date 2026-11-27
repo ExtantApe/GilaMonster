@@ -49,7 +49,7 @@ struct SessionAccessSection: View {
                     }
                 }
                 HStack {
-                    TextField("Add a command, such as save-all or rewild scan {world}", text: $adding).textFieldStyle(.roundedBorder)
+                    TextField("Add a command, such as save-all or rewild scan {world}", text: $adding).textFieldStyle(.growing)
                         .onSubmit(add).accessibilityLabel("Command to add")
                     Button("Add", action: add).disabled(adding.trimmingCharacters(in: .whitespaces).isEmpty)
                 }

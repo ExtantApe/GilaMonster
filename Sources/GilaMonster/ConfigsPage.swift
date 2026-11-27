@@ -67,7 +67,7 @@ struct ConfigsPage: View {
         .safeAreaInset(edge: .top, spacing: 0) {
             if server.configs.count > 10 {
                 TextField("Filter files", text: $filter, prompt: Text("Filter files or plugins"))
-                    .textFieldStyle(.roundedBorder).padding(8)
+                    .textFieldStyle(.growing).padding(8)
             }
         }
     }
@@ -224,7 +224,7 @@ struct DynamicConfigForm: View {
         VStack(alignment: .leading, spacing: 8) {
             if all.count > 12 {
                 TextField("Filter settings", text: $filter, prompt: Text("Filter \(all.count) settings"))
-                    .textFieldStyle(.roundedBorder)
+                    .textFieldStyle(.growing)
             }
             if all.isEmpty {
                 EmptyMessage(icon: "doc.text", title: "No settings to show here", detail: "This file may be empty or only have a layout the form can't read. Use the Full File view.")
@@ -276,7 +276,7 @@ struct DynamicConfigForm: View {
             } label: {
                 HStack {
                     Image(systemName: open ? "chevron.down" : "chevron.right").font(Theme.symbol()).foregroundStyle(Theme.muted).accessibilityHidden(true)
-                    Text(section.name).type(.headline).foregroundStyle(Theme.ink).multilineTextAlignment(.leading)
+                    Text(section.name).type(.dataHeading).foregroundStyle(Theme.ink).multilineTextAlignment(.leading)
                     Text("\(section.fields.count)").type(.body).foregroundStyle(Theme.muted)
                     Spacer()
                 }
@@ -346,10 +346,10 @@ struct ConfigFieldRow: View {
                 .helped("Edit this in the Full File view")
         case .int, .number:
             TextField(field.title, text: Binding(get: { field.value }, set: { onChange($0) }))
-                .labelsHidden().textFieldStyle(.roundedBorder).frame(width: 110).multilineTextAlignment(.trailing)
+                .labelsHidden().textFieldStyle(.growing).frame(width: 110).multilineTextAlignment(.trailing)
         case .text:
             TextField(field.title, text: Binding(get: { field.value }, set: { onChange($0) }))
-                .labelsHidden().textFieldStyle(.roundedBorder).frame(maxWidth: 280)
+                .labelsHidden().textFieldStyle(.growing).frame(maxWidth: 280)
         }
     }
 }
@@ -373,7 +373,7 @@ struct PlayerListForm: View {
             if let refusal { Hint(refusal) }
             HStack {
                 TextField(commands.isAddress ? "Address" : "Player name", text: $entry)
-                    .textFieldStyle(.roundedBorder).frame(maxWidth: 260).onSubmit(add)
+                    .textFieldStyle(.growing).frame(maxWidth: 260).onSubmit(add)
                 Button(commands.addLabel, action: add).buttonStyle(.themedPrimary).disabled(!running || !valid || refusal != nil)
             }
             if !entry.isEmpty, !valid { Hint(commands.isAddress ? "That doesn't look like an address." : "Player names are up to 16 letters, numbers or underscores.") }

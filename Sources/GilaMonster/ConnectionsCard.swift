@@ -185,15 +185,15 @@ struct ConnectionsEditor: View {
                 Callout(tone: .warning, title: "The old file couldn't be read", detail: "Saving moves it aside as connections.json.unreadable, so nothing is lost.")
             }
             LabeledContent("Players join with") {
-                TextField("play.example.test", text: $settings.playerAddress).textFieldStyle(.roundedBorder).focusOnOpen()
+                TextField("play.example.test", text: $settings.playerAddress).textFieldStyle(.growing).focusOnOpen()
                     .accessibilityLabel("Address players join with")
             }
             LabeledContent("Web map") {
-                TextField("https://map.example.test", text: $settings.mapURL).textFieldStyle(.roundedBorder)
+                TextField("https://map.example.test", text: $settings.mapURL).textFieldStyle(.growing)
                     .accessibilityLabel("Web map address")
             }
             LabeledContent("Sign-in page") {
-                TextField("https://example.test/signin", text: $settings.signInURL).textFieldStyle(.roundedBorder)
+                TextField("https://example.test/signin", text: $settings.signInURL).textFieldStyle(.growing)
                     .accessibilityLabel("Sign-in page address, shown beside each invite code")
             }
             ScrollView {
@@ -220,7 +220,7 @@ struct ConnectionsEditor: View {
             }
         }
         .padding(20)
-        .frame(minWidth: 620, minHeight: 480)
+        .frame(minWidth: Theme.sheet(620), minHeight: 480 * Theme.textFactor)
         .confirmationDialog("Remove \(removing?.name ?? "this connection")?", isPresented: Binding(get: { removing != nil }, set: { if !$0 { removing = nil } })) {
             Button("Remove", role: .destructive) {
                 if let r = removing { settings.services.removeAll { $0.id == r.id } }
@@ -288,7 +288,7 @@ private struct ServiceEditor: View {
     var body: some View {
         VStack(alignment: .leading, spacing: 8) {
             HStack {
-                Toggle(isOn: $service.enabled) { Text(service.name.isEmpty ? service.id : service.name).type(.headline) }
+                Toggle(isOn: $service.enabled) { Text(service.name.isEmpty ? service.id : service.name).type(.dataHeading) }
                     .toggleStyle(.switch)
                 Spacer()
                 Button("Remove…", role: .destructive, action: remove).buttonStyle(.themed).accessibilityLabel("Remove \(service.name)")
@@ -296,11 +296,11 @@ private struct ServiceEditor: View {
             Grid(alignment: .leading, horizontalSpacing: 10, verticalSpacing: 6) {
                 GridRow {
                     Text("Name").foregroundStyle(Theme.muted)
-                    TextField("Name", text: $service.name).textFieldStyle(.roundedBorder)
+                    TextField("Name", text: $service.name).textFieldStyle(.growing)
                 }
                 GridRow {
                     Text("Short name").foregroundStyle(Theme.muted)
-                    if isNew { TextField("play", text: $service.id).textFieldStyle(.roundedBorder).accessibilityLabel("Short name") }
+                    if isNew { TextField("play", text: $service.id).textFieldStyle(.growing).accessibilityLabel("Short name") }
                     else { Text(service.id).textSelection(.enabled) }
                 }
                 GridRow {
@@ -314,14 +314,14 @@ private struct ServiceEditor: View {
                 if (service.traffic != .access && service.traffic != .dns) || service.provider == .playit {
                     GridRow {
                         Text("Forwards to").foregroundStyle(Theme.muted)
-                        TextField("127.0.0.1:25565", text: $service.localAddress).textFieldStyle(.roundedBorder).accessibilityLabel("Address on this Mac it forwards to")
+                        TextField("127.0.0.1:25565", text: $service.localAddress).textFieldStyle(.growing).accessibilityLabel("Address on this Mac it forwards to")
                     }
                 }
                 if service.traffic != .access {
                     GridRow {
                         Text("Public address").foregroundStyle(Theme.muted)
                         TextField(service.traffic == .web ? "https://pack.example.test" : service.traffic == .dns ? "example.test" : "play.example.test", text: $service.publicAddress)
-                            .textFieldStyle(.roundedBorder).accessibilityLabel("Public address")
+                            .textFieldStyle(.growing).accessibilityLabel("Public address")
                     }
                 }
                 GridRow {
@@ -338,7 +338,7 @@ private struct ServiceEditor: View {
             switch service.secret {
             case .keychain(let account)?:
                 HStack {
-                    SecureField("Paste the secret", text: $secretText).textFieldStyle(.roundedBorder).accessibilityLabel("Secret for \(service.name)")
+                    SecureField("Paste the secret", text: $secretText).textFieldStyle(.growing).accessibilityLabel("Secret for \(service.name)")
                     Button("Save to Keychain") {
                         do { try ConnectionSecrets.save(secretText, account: account); secretError = nil } catch { secretError = error.localizedDescription }
                         secretText = ""
@@ -349,7 +349,7 @@ private struct ServiceEditor: View {
                 Hint(presenceText(presence) + (secretError.map { " \($0)" } ?? ""))
             case .file(let path)?:
                 TextField("~/Library/Application Support/<service>/secret", text: Binding(get: { path }, set: { service.secret = .file(path: $0) }))
-                    .textFieldStyle(.roundedBorder).accessibilityLabel("Path of the secret file")
+                    .textFieldStyle(.growing).accessibilityLabel("Path of the secret file")
                 Hint("GilaMonster only checks the file is there and private. It never reads or copies it.")
             case .agent?:
                 Hint("The provider's own agent keeps it. GilaMonster asks the agent whether it has one.")

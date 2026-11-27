@@ -655,7 +655,7 @@ struct UpdateReviewSheet: View {
             }
         }
         .padding(20)
-        .frame(width: 560)
+        .frame(width: Theme.sheet(560))
     }
 
     @ViewBuilder private func section(_ title: String, _ items: [PackChanges.Change]) -> some View {
@@ -711,7 +711,7 @@ struct ShareSheet: View {
             }
         }
         .padding(20)
-        .frame(width: 560)
+        .frame(width: Theme.sheet(560))
     }
 
     private func label(_ sharing: PackLicense.Sharing) -> String {
@@ -773,7 +773,7 @@ struct PackBrowser: View {
     }
 
     var body: some View {
-        Card(title: pack.title, systemImage: "eye") {
+        Card(title: pack.title, systemImage: "eye", titleIsData: true) {
             HStack {
                 TextField("Search", text: $search, prompt: Text("diamond")).frame(maxWidth: 220).accessibilityLabel("Search images")
                 Picker("Category", selection: $category) { ForEach(categories, id: \.self) { Text($0).tag($0) } }.frame(maxWidth: 240)

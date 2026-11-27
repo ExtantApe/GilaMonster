@@ -63,7 +63,7 @@ struct InvitesCard: View {
 
     @ViewBuilder private var form: some View {
         HStack {
-            TextField("Minecraft username", text: $name).textFieldStyle(.roundedBorder).frame(maxWidth: 260)
+            TextField("Minecraft username", text: $name).textFieldStyle(.growing).frame(maxWidth: 260)
                 .onChange(of: name) { questions = []; answered = []; problem = nil }
             Stepper("Lasts \(days) day\(days == 1 ? "" : "s")", value: $days, in: 1...30)
                 .accessibilityValue("\(days) days")

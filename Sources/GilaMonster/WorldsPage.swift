@@ -64,7 +64,7 @@ struct WorldsPage: View {
             DisclosureGroup(isExpanded: Binding(get: { showNotLoaded || !filter.isEmpty }, set: { showNotLoaded = $0 })) {
                 VStack(spacing: 10) { ForEach(notLoaded) { row($0) } }.padding(.top, 6)
             } label: {
-                Text("Not loaded (\(notLoaded.count))").type(.headline).foregroundStyle(Theme.ink)
+                HeadingText("Not loaded (\(notLoaded.count))").foregroundStyle(Theme.ink)
             }
             .accessibilityHint("Folders Multiverse doesn't load at startup, or that are missing")
         }
@@ -136,7 +136,7 @@ private struct OperationCard: View {
                 if operation.finished {
                     Badge(text: operation.succeeded ? "Done" : "Check the output", tone: operation.succeeded ? .good : .warning)
                 }
-                Text(operation.title).type(.headline).foregroundStyle(Theme.ink)
+                HeadingText(operation.title).foregroundStyle(Theme.ink)
                 Spacer()
                 if operation.finished {
                     Button("Dismiss") { server.dismissWorldOperation() }.buttonStyle(.themed)
@@ -173,7 +173,7 @@ private struct WorldRow: View {
         Card {
             HStack(alignment: .firstTextBaseline, spacing: 8) {
                 Image(systemName: icon).foregroundStyle(Theme.accent).accessibilityHidden(true)
-                Text(world.title).type(.headline).foregroundStyle(Theme.ink).rowName(world.title)
+                Text(world.title).type(.dataHeading).foregroundStyle(Theme.ink).rowName(world.title)
                 if world.title != world.name, world.multiverse?.alias.isEmpty == false { Text(world.name).type(.body).foregroundStyle(Theme.muted).rowName(world.name) }
                 Spacer()
                 badges
@@ -266,7 +266,7 @@ private struct SheetFrame<Content: View, Actions: View>: View {
             }
         }
         .padding(20)
-        .frame(width: 480)
+        .frame(width: Theme.sheet(480))
     }
 }
 
@@ -391,7 +391,7 @@ private struct CloneWorldSheet: View {
 
     var body: some View {
         SheetFrame(title: "Copy \(world.title)") {
-            TextField("New world's name", text: $target).textFieldStyle(.roundedBorder).focusOnOpen()
+            TextField("New world's name", text: $target).textFieldStyle(.growing).focusOnOpen()
             if !target.isEmpty, !Multiverse.isValidName(target) { Callout(tone: .warning, title: "Names can use letters, numbers, - and _.") }
             Hint("This world is \(Format.bytes(world.size)). The copy needs about that much free disk space.")
         } actions: {
@@ -415,7 +415,7 @@ private struct DeleteWorldSheet: View {
     var body: some View {
         SheetFrame(title: "Delete \(world.title)?") {
             Callout(tone: .danger, title: "This permanently deletes the world's folder", detail: "\(Format.bytes(world.size)) of data. Anyone in it is moved out first. GilaMonster takes a backup of your worlds before deleting, and stops if that backup fails.")
-            TextField("Type \(world.title) to confirm", text: $typed).textFieldStyle(.roundedBorder)
+            TextField("Type \(world.title) to confirm", text: $typed).textFieldStyle(.growing)
         } actions: {
             Button("Back Up and Delete") {
                 dismiss()

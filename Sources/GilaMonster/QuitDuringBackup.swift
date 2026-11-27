@@ -34,7 +34,8 @@ struct QuitDuringBackupView: View {
 
     var body: some View {
         VStack(alignment: .leading, spacing: 14) {
-            Text(state.reason.backupHeading).type(.headline).foregroundStyle(Theme.ink)
+            // A whole sentence, so it is set as written and wraps (K820 review): never in capitals.
+            Text(state.reason.backupHeading).type(.title(15, .title3)).foregroundStyle(Theme.ink).fixedSize(horizontal: false, vertical: true)
                 .accessibilityAddTraits(.isHeader)
             ForEach(Array(state.progress.enumerated()), id: \.offset) { _, p in
                 VStack(alignment: .leading, spacing: 6) {
@@ -50,18 +51,20 @@ struct QuitDuringBackupView: View {
                 Text("Quitting now would stop it part way. Wait to finish it, then quit. Or cancel it: only this backup's unfinished file is deleted, and your earlier backups stay. Either way, running servers are stopped with a save.")
                     .foregroundStyle(Theme.muted).fixedSize(horizontal: false, vertical: true)
             }
-            HStack {
+            // Each button is as wide as its label, and the row wraps when the three don't fit (K820 review: two of
+            // them were cut short at the default text size).
+            WrapRow(trailing: true) {
                 Button("Keep Using GilaMonster") { choose(.keepUsing) }
-                    .keyboardShortcut(.cancelAction)
-                Spacer()
-                Button("Cancel Backup and Quit", role: .destructive) { choose(.cancelAndQuit) }
+                    .keyboardShortcut(.cancelAction).fixedSize()
+                Button("Cancel Backup and Quit", role: .destructive) { choose(.cancelAndQuit) }.fixedSize()
                 if !state.waiting {
-                    Button("Wait, Then Quit") { choose(.wait) }.keyboardShortcut(.defaultAction)
+                    Button("Wait, Then Quit") { choose(.wait) }.keyboardShortcut(.defaultAction).fixedSize()
                 }
             }
+            .frame(maxWidth: .infinity, alignment: .trailing)
         }
         .padding(20)
-        .frame(width: 480)
+        .frame(width: Theme.sheet(480))
         .background(Theme.background)
     }
 }

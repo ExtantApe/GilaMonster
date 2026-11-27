@@ -57,7 +57,7 @@ struct WorldRenameSheet: View {
     var body: some View {
         VStack(alignment: .leading, spacing: 12) {
             SheetTitle("Rename \(world.title)")
-            TextField("New name", text: $name).textFieldStyle(.roundedBorder).focusOnOpen()
+            TextField("New name", text: $name).textFieldStyle(.growing).focusOnOpen()
                 .onChange(of: name) { plan = problem == nil ? server.worldRenamePlan(world, to: name) : nil }
             if !name.isEmpty, let problem { Callout(tone: .warning, title: problem) }
             if plan != nil {
@@ -85,7 +85,7 @@ struct WorldRenameSheet: View {
             }
         }
         .padding(20)
-        .frame(width: 560)
+        .frame(width: Theme.sheet(560))
     }
 }
 
@@ -104,7 +104,7 @@ struct ServerRenameSheet: View {
     var body: some View {
         VStack(alignment: .leading, spacing: 12) {
             SheetTitle("Rename Everywhere")
-            TextField("New server name", text: $name, prompt: Text("My Server")).textFieldStyle(.roundedBorder).focusOnOpen()
+            TextField("New server name", text: $name, prompt: Text("My Server")).textFieldStyle(.growing).focusOnOpen()
                 .onChange(of: name) { _, _ in
                     if !formats.contains(folder) { folder = formats.first ?? "" }
                     rebuild()
@@ -128,7 +128,7 @@ struct ServerRenameSheet: View {
             }
         }
         .padding(20)
-        .frame(width: 560)
+        .frame(width: Theme.sheet(560))
     }
 
     private func rebuild() {
@@ -559,7 +559,7 @@ struct PlayerRestoreSheet: View {
             }
         }
         .padding(20)
-        .frame(width: 480)
+        .frame(width: Theme.sheet(480))
         .onAppear { chosen = Set(snapshot.containers) }
     }
 
@@ -641,7 +641,7 @@ struct MergeSheet: View {
             }
         }
         .padding(20)
-        .frame(width: 540)
+        .frame(width: Theme.sheet(540))
         .onAppear {
             if !suggestion.to.uuid.isEmpty { plan = MergePlan(from: suggestion.from, to: suggestion.to) }
         }
@@ -758,7 +758,7 @@ struct BackupDiffSheet: View {
             HStack { Spacer(); Button("Close") { dismiss() }.buttonStyle(.themed).keyboardShortcut(.cancelAction) }
         }
         .padding(20)
-        .frame(width: 620)
+        .frame(width: Theme.sheet(620))
     }
 
     private func run() {
@@ -817,7 +817,7 @@ struct BackupDiffSheet: View {
 
     private func section<Content: View>(_ title: String, @ViewBuilder content: () -> Content) -> some View {
         VStack(alignment: .leading, spacing: 4) {
-            Text(title).type(.headline).foregroundStyle(Theme.ink).accessibilityAddTraits(.isHeader)
+            HeadingText(title).foregroundStyle(Theme.ink).accessibilityAddTraits(.isHeader)
             content()
         }
     }

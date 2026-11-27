@@ -211,10 +211,10 @@ struct LabStationRow: View {
                 StatusLight(light: light)
                 Button { open.toggle() } label: {
                     Image(systemName: "chevron.right").font(Theme.symbol()).rotationEffect(.degrees(open ? 90 : 0)).foregroundStyle(Theme.muted)
-                        .frame(width: 20 * Theme.grow, height: 20 * Theme.grow).contentShape(Rectangle())
+                        .frame(width: 24 * Theme.grow, height: 24 * Theme.grow).contentShape(Rectangle())
                 }
                 .buttonStyle(.plain).opacity(hasDetails ? 1 : 0).disabled(!hasDetails)
-                .accessibilityLabel("Details for \(station.title)").accessibilityValue(open ? "Shown" : "Hidden")
+                .accessibilityLabel("Details for \(station.title)").accessibilityValue(open ? "Expanded" : "Collapsed")
                 .accessibilityHidden(!hasDetails)
             }
             if case .failed(acknowledged: false) = light, !station.isOptional {
@@ -259,6 +259,7 @@ struct UpgradePicker: View {
     @Binding var chosen: String
     let versions: [String]
     @Environment(\.isEnabled) private var enabled
+    @FocusState private var focused: Bool
 
     private var options: some View {
         Picker("Version to upgrade to", selection: $chosen) {
@@ -288,6 +289,8 @@ struct UpgradePicker: View {
                 .contentShape(Rectangle())
             }
             .menuStyle(.button).buttonStyle(.plain).menuIndicator(.hidden)
+            .focused($focused)
+            .overlay { if focused { RoundedRectangle(cornerRadius: Theme.controlRadius + 2).strokeBorder(Theme.accent, lineWidth: 2).padding(-3) } }
             .accessibilityLabel("Version to upgrade to")
             .accessibilityValue(chosen.isEmpty ? "None chosen" : chosen)
         }
@@ -397,7 +400,7 @@ struct RestartLog: View {
     @ScaledMetric(relativeTo: .body) private var lineHeight: CGFloat = 16
 
     var body: some View {
-        DisclosureGroup("Restart log, \(lines.count) \(lines.count == 1 ? "line" : "lines")", isExpanded: $open) {
+        DisclosureGroup(isExpanded: $open) {
             VStack(alignment: .leading, spacing: 6) {
                 // Sideways inside up-and-down, so a short log sits at the left edge and a long line scrolls.
                 ScrollView(.vertical) {
@@ -421,6 +424,9 @@ struct RestartLog: View {
                 .accessibilityLabel("Copy the restart log for \(group)")
                 .helped("The lab's console from stopping to the player rejoining. It has only the lab's bot players in it.")
             }
+        } label: {
+            // A short label, so it is in the label face (Brand, K820 review).
+            Text("Restart log, \(lines.count) \(lines.count == 1 ? "line" : "lines")").type(.label())
         }
         .type(.body)
         .foregroundStyle(Theme.ink)
@@ -516,6 +522,6 @@ struct LabSetupSheet: View {
             }
         }
         .padding(24)
-        .frame(width: 480)
+        .frame(width: Theme.sheet(480))
     }
 }

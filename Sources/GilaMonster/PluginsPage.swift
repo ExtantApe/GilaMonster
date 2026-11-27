@@ -287,7 +287,7 @@ struct SourceForm: View {
     var body: some View {
         Form {
             TextField("Paste a link", text: $paste, prompt: Text("https://… a Modrinth, Hangar, SpigotMC, GitHub or Jenkins page"))
-                .textFieldStyle(.roundedBorder)
+                .textFieldStyle(.growing)
                 .onChange(of: paste) { _, text in
                     if let parsed = SourceParser.parse(text), text.contains(".") {
                         source = parsed
@@ -389,7 +389,7 @@ struct SourceEditor: View {
             }
         }
         .padding(20)
-        .frame(width: 560)
+        .frame(width: Theme.sheet(560))
         .onAppear { source = server.record(for: plugin).source }
     }
 
@@ -436,7 +436,7 @@ struct FindSourcesSheet: View {
             }
         }
         .padding(20)
-        .frame(width: 620)
+        .frame(width: Theme.sheet(620))
         .task { proposals = await server.proposeSources() }
     }
 
@@ -500,7 +500,7 @@ struct AddPluginSheet: View {
             }
         }
         .padding(20)
-        .frame(width: 560)
+        .frame(width: Theme.sheet(560))
     }
 
     private func add() {

@@ -57,8 +57,11 @@ struct ServersFolderSheet: View {
             Text(message).foregroundStyle(Theme.ink).fixedSize(horizontal: false, vertical: true)
             if let error { Callout(tone: .danger, title: error) }
             VStack(alignment: .leading, spacing: 8) {
-                Button(homeExists ? "Use \(homeLabel)" : "Create \(homeLabel)") { use(home) }
+                // A long path is cut in its middle so the button fits its sheet. The whole path is in the sentence
+                // above, in the tooltip and in what VoiceOver reads.
+                Button("\(homeExists ? "Use" : "Create") \(Overflow.middle(homeLabel, limit: 44))") { use(home) }
                     .buttonStyle(.themedPrimary).keyboardShortcut(.defaultAction)
+                    .help("\(homeExists ? "Use" : "Create") \(homeLabel)").accessibilityLabel("\(homeExists ? "Use" : "Create") \(homeLabel)")
                 Button("Choose a Different Location…") { pick(prompt: "Use This Folder", message: "Choose or create a folder for your servers.") }
                     .buttonStyle(.themed)
                 if !homeExists {
@@ -73,7 +76,7 @@ struct ServersFolderSheet: View {
             }
         }
         .padding(24)
-        .frame(width: 480)
+        .frame(width: Theme.sheet(480))
     }
 
     private var message: String {
@@ -349,7 +352,7 @@ struct BlockersSheet: View {
             ForEach(server.blockers) { blocker in
                 Card {
                     VStack(alignment: .leading, spacing: 8) {
-                        Text(blocker.title).type(.headline).foregroundStyle(Theme.ink)
+                        HeadingText(blocker.title).foregroundStyle(Theme.ink)
                         Text(blocker.detail).foregroundStyle(Theme.muted).fixedSize(horizontal: false, vertical: true)
                         fix(for: blocker)
                     }
@@ -374,7 +377,7 @@ struct BlockersSheet: View {
             }
         }
         .padding(20)
-        .frame(width: 520)
+        .frame(width: Theme.sheet(520))
     }
 
     private var needsEULA: Bool { server.blockers.contains { $0.kind == .eula } }
@@ -464,7 +467,7 @@ struct RenameSheet: View {
             }
         }
         .padding(20)
-        .frame(width: 460)
+        .frame(width: Theme.sheet(460))
         .sheet(isPresented: $deep) { ServerRenameSheet(model: model, server: server, onDone: { dismiss() }) }
         .onAppear {
             following = server.profile.customName == nil
@@ -552,7 +555,7 @@ struct AddServerSheet: View {
 
             LabeledContent("Name in GilaMonster") {
                 TextField("Name in GilaMonster", text: $name, prompt: Text(folder?.lastPathComponent ?? "My Server")).focusOnOpen()
-                    .labelsHidden().textFieldStyle(.roundedBorder)
+                    .labelsHidden().textFieldStyle(.growing)
             }
 
             if mode == .existing {
@@ -574,7 +577,7 @@ struct AddServerSheet: View {
             }
         }
         .padding(20)
-        .frame(width: 560)
+        .frame(width: Theme.sheet(560))
         .task(id: "\(flavor.rawValue)\(mode)") { await loadVersions() }
         .onAppear { found = ServerFolders.find(in: AppPaths.servers) }
         .onChange(of: mode) { folder = nil }

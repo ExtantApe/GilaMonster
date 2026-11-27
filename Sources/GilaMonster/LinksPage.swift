@@ -250,7 +250,7 @@ private struct LinkEditor: View {
         VStack(alignment: .leading, spacing: 12) {
             SheetTitle("Link for \(row.name)")
             TextField("Web address", text: $text, prompt: Text("https://example.com/docs")).focusOnOpen()
-                .textFieldStyle(.roundedBorder)
+                .textFieldStyle(.growing)
             if invalid { Callout(tone: .danger, title: "That isn't a web address", detail: "It needs to start with https:// or http://.") }
             if server.pluginLinkStore.chosen[row.key] != nil {
                 Hint("Removing your choice goes back to the plugin's known source, if it has one.")
@@ -278,7 +278,7 @@ private struct LinkEditor: View {
             }
         }
         .padding(20)
-        .frame(width: 480)
+        .frame(width: Theme.sheet(480))
         .onAppear { text = row.link?.url ?? "" }
     }
 }

@@ -111,7 +111,7 @@ struct ChangesPage: View {
                 Hint(server.profile.restart.weekdays.isEmpty ? "No days ticked means every day." : "Only on the days ticked.")
                 Toggle("Skip if there's nothing to apply", isOn: $server.profile.restart.onlyIfPending)
                 TextField("In-game warning", text: $server.profile.restart.message, prompt: Text("Server restarting in {time}."))
-                    .textFieldStyle(.roundedBorder)
+                    .textFieldStyle(.growing)
                 Hint("{time} becomes how long is left. Players are warned at \(warningList).")
                 if let next = server.nextScheduledRestart {
                     Fact(label: "Next restart", value: next.formatted(date: .abbreviated, time: .shortened))
