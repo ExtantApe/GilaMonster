@@ -338,6 +338,7 @@ final class FakeConnectionProbe: ConnectionProbe, @unchecked Sendable {
     }
 
     await localAnswerChecks()
+    await connectionDecisionChecks()
 
     section("Connections: a real Keychain, with a made-up secret")
     // A throwaway keychain file, never the login Keychain (see the top of main.swift).
@@ -471,6 +472,7 @@ final class StandInServer: @unchecked Sendable {
 }
 
 @MainActor func localAnswerChecks() async {
+    guard portsAllowed else { needsPorts("Connections: a listening, dropping, late and never-accepting server on real sockets (K822)"); return }
     section("Connections: a listening server is seen as answering (K822)")
     let real = SystemConnectionProbe()
     let statusAnswer: Data = { let json = Array(#"{"version":{"name":"26.3","protocol":775},"description":"made up"}"#.utf8); let body = [0x00] + [UInt8(json.count)] + json; return Data([UInt8(body.count)] + body) }()
@@ -555,8 +557,18 @@ final class StandInServer: @unchecked Sendable {
     status = await ConnectionCheck.run(webClosed, context: context(25565), probe: real)
     equal(status.health, .warning, "a web service with nothing listening is still a warning")
 
+
+}
+
+/// The K822 decisions that need no socket: an undecided probe, what Needs you lists, and Paper's proxy-protocol setting.
+/// They stay in the default run; the parts on real sockets above run with --with-ports (K817).
+@MainActor func connectionDecisionChecks() async {
+    func game(_ port: Int, host: String = "127.0.0.1") -> ConnectionService {
+        ConnectionService(id: "play", name: "Game tunnel", provider: .other, traffic: .game, localAddress: "\(host):\(port)")
+    }
+    func context(_ port: Int) -> ConnectionContext { ConnectionContext(serverRunning: true, serverIP: "127.0.0.1", serverPort: port) }
     let odd = FakeConnectionProbe(); odd.undecided = ["127.0.0.1:25565": "network is down"]
-    status = await ConnectionCheck.run(game(25565), context: context(25565), probe: odd)
+    let status = await ConnectionCheck.run(game(25565), context: context(25565), probe: odd)
     check(status.health == .unknown && status.summary == "Couldn't check 127.0.0.1:25565: network is down.", "any other error is unknown, with the reason: \(status.summary)")
 
     // Needs you takes only what was checked and found wanting.
