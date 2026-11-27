@@ -34,7 +34,7 @@ extension ServerController {
             if attempt == 1 { appendWrapper("The server didn't confirm saving was back on after \(what). Asking again.", level: .warn) }
         }
         let now = Date()
-        let detail = "After \(what), \(profile.name) didn't confirm that automatic saving is back on, so the world may not be saving."
+        let detail = "After \(what), \(displayName) didn't confirm that automatic saving is back on, so the world may not be saving."
         reportIssue(IssueRecord(
             id: Self.savingOffIssue, ruleID: "wrapper-saving-off", title: "Saving may still be off", severity: .error, category: "Backups",
             explanation: detail,

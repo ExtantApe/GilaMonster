@@ -244,20 +244,23 @@ struct ServerSwitcher: View {
             // its name in words, so it doesn't rest on colour alone. The current one keeps the menu's checkmark.
             ForEach(model.listed) { other in
                 Toggle(isOn: Binding(get: { other.id == server.id }, set: { if $0 { model.selectedID = other.id } })) {
+                    // The second line is the menu item's small grey subtitle: the folder, so two servers with the
+                    // same server message can be told apart without guessing (owner, 2026-11-26).
                     Label {
-                        Text("\(other.profile.name)\(other.isLab ? " (for this run)" : "") · \(other.state.title)")
+                        Text(SwitcherRow.title(other))
+                        Text(other.folderName)
                     } icon: {
                         Image(nsImage: Self.menuIcon(other.state))
                     }
                 }
-                .accessibilityLabel("\(other.profile.name)\(other.isLab ? ", the Lab's server for this run" : ""), \(other.state.title)")
+                .accessibilityLabel(SwitcherRow.spoken(other))
             }
             Divider()
             Button("Add Server…") { model.showAddServer = true }
             if Modules.shared.isOn(.lab), model.lab.model(from: model.servers) != nil {
                 Button("Open the Lab") { model.openLabBoard() }
             }
-            if !server.isLab { Button("Rename \(server.profile.name)…") { renaming = true } }
+            if !server.isLab { Button("Rename \(server.displayName)…") { renaming = true } }
         } label: {
             VStack(spacing: 3) {
                 ZStack(alignment: .bottomTrailing) {
@@ -265,7 +268,7 @@ struct ServerSwitcher: View {
                         if let icon {
                             Image(nsImage: icon).interpolation(.none).resizable()
                         } else {
-                            Text(PixelFace.initials(server.profile.name)).font(.body.weight(.bold)).foregroundStyle(Theme.ink)
+                            Text(PixelFace.initials(server.displayName)).font(.body.weight(.bold)).foregroundStyle(Theme.ink)
                                 .frame(maxWidth: .infinity, maxHeight: .infinity).background(Theme.surface)
                         }
                     }
@@ -276,7 +279,11 @@ struct ServerSwitcher: View {
                         .padding(2).background(Theme.surface, in: RoundedRectangle(cornerRadius: 3))
                         .offset(x: 5, y: 5)
                 }
-                Text("\(server.profile.name) ▾").accessibilityHidden(true).font(.body).foregroundStyle(Theme.spineMuted).lineLimit(1).truncationMode(.middle).frame(maxWidth: 70)
+                // Two lines, broken between words, so the name can be read (owner, 2026-11-26). The whole name is in
+                // the tooltip and the VoiceOver label below.
+                Text(ServerName.sidebarLines(server.displayName).joined(separator: "\n") + " ▾").accessibilityHidden(true)
+                    .font(.body).foregroundStyle(Theme.spineMuted).multilineTextAlignment(.center)
+                    .lineLimit(2).truncationMode(.tail).frame(maxWidth: 70)
             }
             .frame(width: 70)
             .contentShape(Rectangle())
@@ -285,8 +292,8 @@ struct ServerSwitcher: View {
         .buttonStyle(.plain)
         .menuIndicator(.hidden)
         .fixedSize()
-        .accessibilityLabel("Server: \(server.profile.name), \(server.state.title). Switch server.")
-        .help("\(server.profile.name), \(server.state.title). Switch server.")
+        .accessibilityLabel(ServerName.switcherButtonSpoken(display: server.displayName, folder: server.folderName, state: server.state.title))
+        .help(ServerName.switcherButtonSpoken(display: server.displayName, folder: server.folderName, state: server.state.title))
         .task(id: server.id) { icon = NSImage(contentsOf: ServerIcons.active(server.paths)) }
     }
 }
@@ -385,3 +392,36 @@ struct FactCard<Content: View>: View {
         .overlay { RoundedRectangle(cornerRadius: Theme.cardRadius).strokeBorder(Theme.border, lineWidth: 1) }
     }
 }
+
+/// What one row of the server switcher says. The menu and the snapshot's stand-in both use it.
+enum SwitcherRow {
+    @MainActor static func title(_ server: ServerController) -> String {
+        "\(server.displayName)\(server.isLab ? " (for this run)" : "") · \(server.state.title)"
+    }
+    @MainActor static func spoken(_ server: ServerController) -> String {
+        ServerName.switcherSpoken(display: server.displayName, folder: server.folderName, state: server.state.title, lab: server.isLab)
+    }
+}
+
+#if DEBUG
+/// The switcher's rows drawn as plain views, for the off-screen pictures only: a real menu can't be drawn there.
+/// Same words as the menu; the menu's own fonts and spacing are macOS's and aren't shown by this.
+struct SwitcherRowsPreview: View {
+    let model: AppModel
+    var body: some View {
+        VStack(alignment: .leading, spacing: 8) {
+            ForEach(model.listed) { server in
+                HStack(alignment: .firstTextBaseline, spacing: 8) {
+                    Image(nsImage: ServerSwitcher.menuIcon(server.state))
+                    VStack(alignment: .leading, spacing: 1) {
+                        Text(SwitcherRow.title(server)).foregroundStyle(Theme.ink)
+                        Text(server.folderName).foregroundStyle(Theme.muted)
+                    }
+                }
+                .accessibilityElement(children: .ignore).accessibilityLabel(SwitcherRow.spoken(server))
+            }
+        }
+        .padding(14).frame(minWidth: 300, alignment: .leading)
+    }
+}
+#endif

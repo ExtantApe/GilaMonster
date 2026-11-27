@@ -4,6 +4,10 @@
 #   scripts/snapshot-fixtures.sh OUT heavy    eight servers with long names; the first has 60 plugins, 30 worlds,
 #                                             80 allowlist entries and long errors in its log
 #   KEYCHAIN=wait|denied  puts a made-up Keychain banner on top of every page (K809): waiting for the owner, or after a no.
+#   MOTD='\u00A72Made-up Realms'  gives the first server that server message, as it would be written in server.properties,
+#                                             and no name of the owner's, so the message names it (K824). RENAME='Pebble Garden'
+#                                             adds the owner's own name on top. TWIN=1 adds a second server with the same
+#                                             server message. The switcher's rows are drawn as dialog-switcher-rows.png.
 #   PAGES=overview,console  draws only those pages. SCRATCH=<folder>  builds there instead of .build.
 # Everything is made-up and lives under a temp folder that's removed at the end, pass or fail (D226). Nothing
 # starts: the snapshot only draws. Pictures land in OUT/<fixture>/<theme>-<light|dark>/.
@@ -88,6 +92,27 @@ if [[ "$kind" == normal ]]; then
 else
     list+=("$(server "A Made-up Server With A Name Long Enough To Need Truncating" 60 30 80 12 30)")
     for n in 2 3 4 5 6 7 8; do list+=("$(server "Made-up Server Number $n With A Long Name" 3 1 2 0)"); done
+fi
+if [[ -n "${MOTD:-}" ]]; then   # the first server is named by its server message, or by the owner's rename
+    MOTD="$MOTD" RENAME="${RENAME:-}" python3 -I - "${list[0]}" <<'PY'
+import json, os, sys
+root = sys.argv[1]
+props = os.path.join(root, "server.properties")
+lines = [l for l in open(props).read().split("\n") if not l.startswith("motd=")]
+open(props, "w").write("motd=" + os.environ["MOTD"] + "\n" + "\n".join(lines))
+meta = os.path.join(root, ".gilamonster", "server.json")
+profile = json.load(open(meta))
+profile["name"] = os.path.basename(root)
+profile["customNameSettled"] = True
+if os.environ["RENAME"]: profile["customName"] = os.environ["RENAME"]
+json.dump(profile, open(meta, "w"))
+PY
+fi
+if [[ -n "${TWIN:-}" ]]; then   # a second server with the first one's server message, to tell apart by folder
+    twin="$(server "Made-up Twin" 1 1 1 0)"
+    grep '^motd=' "${list[0]}/server.properties" > "$twin/motd.tmp"; grep -v '^motd=' "$twin/server.properties" >> "$twin/motd.tmp"; mv "$twin/motd.tmp" "$twin/server.properties"
+    printf '{"id": "%s", "name": "made-up-twin", "customNameSettled": true}' "$(uuidgen)" > "$twin/.gilamonster/server.json"
+    list+=("$twin")
 fi
 { echo "["; for ((i = 0; i < ${#list[@]}; i++)); do printf '  "%s"' "${list[$i]}"; (( i < ${#list[@]} - 1 )) && echo "," || echo; done; echo "]"; } > "$home/servers.json"
 

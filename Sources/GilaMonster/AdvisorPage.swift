@@ -94,7 +94,7 @@ final class AdvisorCenter {
         let root = server.paths.root
         phases[root.path] = .idle
         guard FileManager.default.fileExists(atPath: root.path) else {
-            fail(server, "\(server.profile.name) isn't in \(Self.shown(root)) any more, so it wasn't shared.")
+            fail(server, "\(server.displayName) isn't in \(Self.shown(root)) any more, so it wasn't shared.")
             return
         }
         guard !AdvisorPaths.homeIsInside(server: root) else {
@@ -106,7 +106,7 @@ final class AdvisorCenter {
             fail(server, "GilaMonster couldn't save that choice, so this server isn't shared.")
             return
         }
-        say(server, .good, "Sharing is on for \(server.profile.name)", "That's the folder \(Self.shown(root)). Nothing has been sent. A check only runs when you press Check Now.")
+        say(server, .good, "Sharing is on for \(server.displayName)", "That's the folder \(Self.shown(root)). Nothing has been sent. A check only runs when you press Check Now.")
     }
 
     func stopSharing(_ server: ServerController) {
@@ -116,7 +116,7 @@ final class AdvisorCenter {
             fail(server, "GilaMonster couldn't save that choice, so this server is still shared.")
             return
         }
-        say(server, .info, "Stopped sharing \(server.profile.name)", "Nothing more will be sent unless you share it again.")
+        say(server, .info, "Stopped sharing \(server.displayName)", "Nothing more will be sent unless you share it again.")
     }
 
     func lookForClaude(_ server: ServerController) {
@@ -312,7 +312,7 @@ final class AdvisorCenter {
         let path = server.paths.root.path
         guard phase(server) != .checking else { return }
         notices[path] = nil
-        if let refusal = consents.refusal(id: server.id, folder: server.paths.root, name: server.profile.name, automatic: automatic) {
+        if let refusal = consents.refusal(id: server.id, folder: server.paths.root, name: server.displayName, automatic: automatic) {
             fail(server, refusal)
             return
         }
@@ -398,7 +398,7 @@ final class AdvisorCenter {
                           self.signature(server) != self.defaults.string(forKey: "advisorSeen:\(path)") ?? "" else { continue }
                     await self.check(server, automatic: true)
                     if self.items[path]?.contains(where: { $0.severity == .important }) == true {
-                        server.raiseAlert("The Advisor has something for \(server.profile.name)", "Open GilaMonster to read it.")
+                        server.raiseAlert("The Advisor has something for \(server.displayName)", "Open GilaMonster to read it.")
                     }
                 }
             }
@@ -461,7 +461,7 @@ struct AdvisorTrialView: View {
 
     private func label(_ server: ServerController) -> String {
         let folder = server.paths.root.lastPathComponent
-        return folder == server.profile.name ? folder : "\(server.profile.name) (\(folder))"
+        return folder == server.displayName ? folder : "\(server.displayName) (\(folder))"
     }
 
     var body: some View {
@@ -499,7 +499,7 @@ struct AdvisorPage: View {
     @State private var allowing = false
 
     var body: some View {
-        Page(title: "Advisor", subtitle: "Looks over \(server.profile.name) with AI and suggests what to do. It can't change anything.") {
+        Page(title: "Advisor", subtitle: "Looks over \(server.displayName) with AI and suggests what to do. It can't change anything.") {
             whichServer
             if center.isShared(server) { working } else { introduction }
         }
@@ -508,7 +508,7 @@ struct AdvisorPage: View {
         .onAppear { center.findClaude(); center.refresh(server); center.watch(model) }
         .onChange(of: server.id) { center.refresh(server) }
         .sheet(isPresented: $showingPreview) { AdvisorPreview(server: server) }
-        .confirmationDialog("Send \(server.profile.name) to the Advisor?", isPresented: $confirmingFirstCheck, titleVisibility: .visible) {
+        .confirmationDialog("Send \(server.displayName) to the Advisor?", isPresented: $confirmingFirstCheck, titleVisibility: .visible) {
             Button("Send to Anthropic") { Task { await center.check(server) } }
         } message: {
             Text("This is the first check of the folder \(AdvisorCenter.shown(server.paths.root)), which last ran \(AdvisorCenter.lastRan(server)). Its filtered information goes to Anthropic through your Claude account. See What's Shared shows exactly what.")
@@ -559,7 +559,7 @@ struct AdvisorPage: View {
     /// Two servers can have nearly the same name, so this always shows the folder as well.
     private var whichServer: some View {
         Card(title: "Which server", systemImage: "folder") {
-            Fact(label: "Server", value: server.profile.name)
+            Fact(label: "Server", value: server.displayName)
             Fact(label: "Folder", value: AdvisorCenter.shown(server.paths.root))
             Fact(label: "Last ran", value: AdvisorCenter.lastRan(server))
             Fact(label: "Shared with the Advisor", value: center.isShared(server) ? "Yes" : "No")
@@ -601,7 +601,7 @@ struct AdvisorPage: View {
                 VStack(alignment: .leading, spacing: 10) {
                     Text("What's shared goes to Anthropic through your own Claude account. Each check takes about half a minute. If you pay per use, each cost about 8 cents in testing.")
                         .foregroundStyle(Theme.ink).fixedSize(horizontal: false, vertical: true)
-                    Button("Share \(server.profile.name) with the Advisor") { center.startSharing(server) }.buttonStyle(.themedPrimary)
+                    Button("Share \(server.displayName) with the Advisor") { center.startSharing(server) }.buttonStyle(.themedPrimary)
                     Hint("Nothing is sent until you press Check Now. You can stop sharing at any time.")
                 }
             }
@@ -724,7 +724,7 @@ private struct AdvisorPreview: View {
     var body: some View {
         VStack(alignment: .leading, spacing: 12) {
             Text("What the Advisor would see").font(.title3.weight(.semibold)).foregroundStyle(Theme.ink).accessibilityAddTraits(.isHeader)
-            Hint("Nothing has been sent. This is everything \(server.profile.name) would share if a check ran now. Names like Player-1a2b3c4d are code names that only this Mac can translate.")
+            Hint("Nothing has been sent. This is everything \(server.displayName) would share if a check ran now. Names like Player-1a2b3c4d are code names that only this Mac can translate.")
             ScrollView {
                 Text(verbatim: AdvisorCenter.shared.previews[server.paths.root.path] ?? "Reading…")
                     .font(.system(.body, design: .monospaced)).foregroundStyle(Theme.ink)

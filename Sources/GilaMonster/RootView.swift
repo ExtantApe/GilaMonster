@@ -200,8 +200,9 @@ struct ServerWindow: View {
                     .inspectorColumnWidth(min: 300, ideal: 340, max: 460)
             }
         }
-        .navigationTitle(server.profile.name)
-        .navigationSubtitle(server.profile.software.label)
+        .navigationTitle(server.displayName)
+        // The folder stays findable in the title bar when the title shows another name (K824).
+        .navigationSubtitle(ServerName.subtitle(software: server.profile.software.label, display: server.displayName, folder: server.folderName))
         .toolbar { ServerToolbar(model: model, server: server) }
         .toolbarBackground(Theme.background, for: .windowToolbar)
         .sheet(isPresented: blockersShown) { BlockersSheet(model: model, server: server) }
@@ -411,47 +412,77 @@ struct RenameSheet: View {
     let server: ServerController
     @Environment(\.dismiss) private var dismiss
     @State private var name = ""
+    /// No name of the owner's: the server message names the server, or the folder when the message can't.
+    @State private var following = false
     @State private var folder = ""
     @State private var message = ""
     @State private var originalMessage = ""
     @State private var error: String?
     @State private var deep = false
+    @AccessibilityFocusState private var nameFocused: Bool
+
+    /// What the name will be with no name of the owner's, counting a server message typed here but not saved yet.
+    private var fromMessage: String? { message == originalMessage ? server.messageName : ServerName.fromMessage(message) }
+    private var automatic: String { ServerName.resolve(custom: nil, message: fromMessage, folder: server.folderName) }
+    private var status: String { RenameWording.status(following: following, automatic: automatic, messageUsable: fromMessage != nil) }
 
     var body: some View {
         VStack(alignment: .leading, spacing: 12) {
             SheetTitle("Rename Server")
             Form {
                 TextField("Name in GilaMonster", text: $name).focusOnOpen()
+                    .accessibilityFocused($nameFocused)
+                    .accessibilityHint(status)
+                    .onChange(of: name) { _, new in if new != automatic { following = false } }
+                LabeledContent("") {
+                    Button("Reset to Server Message") {
+                        following = true
+                        name = automatic
+                        nameFocused = true
+                        AccessibilityNotification.Announcement(status).post()
+                    }
+                    .buttonStyle(.themed).disabled(following)
+                    .accessibilityHint("Drops your name for this server. Nothing on the server changes.")
+                }
                 TextField("Server message", text: $message)
+                    .onChange(of: message) { _, _ in if following { name = automatic } }
                 TextField("Folder name", text: $folder).disabled(!server.state.canStart)
             }
             .formStyle(.columns)
+            Hint(status)
             if !server.state.canStart { Hint("Stop the server to rename its folder.") }
-            Hint("The name is your label in GilaMonster. The server message (motd) is what players see in their server list\(server.state.canStart ? "." : ", and a change to it applies at the next restart.")")
+            Hint("The name is kept in GilaMonster. The server message (motd) is what players see in their server list\(server.state.canStart ? "." : ", and a change to it applies at the next restart.")")
             if let error { Callout(tone: .danger, title: error) }
             HStack {
                 Button("Cancel") { dismiss() }.buttonStyle(.themed).keyboardShortcut(.cancelAction)
                 Spacer()
                 Button("Rename Everywhere…") { deep = true }.buttonStyle(.themed)
                     .helped("Also updates the folder, start scripts and other places the name is used, with a preview first")
-                Button("Rename") { rename() }.buttonStyle(.themedPrimary).keyboardShortcut(.defaultAction)
+                Button(following ? "Save" : "Rename") { rename() }.buttonStyle(.themedPrimary).keyboardShortcut(.defaultAction)
             }
         }
         .padding(20)
-        .frame(width: 440)
+        .frame(width: 460)
         .sheet(isPresented: $deep) { ServerRenameSheet(model: model, server: server, onDone: { dismiss() }) }
         .onAppear {
-            name = server.profile.name
-            folder = server.paths.root.lastPathComponent
-            let file = server.configs.first { $0.path == "server.properties" } ?? ConfigCatalog.serverProperties
-            originalMessage = PropertiesDocument(server.configText(file)).value("motd") ?? ""
+            following = server.profile.customName == nil
+            name = server.displayName
+            folder = server.folderName
+            originalMessage = server.editableServerMessage ?? ""
             message = originalMessage
         }
     }
 
     private func rename() {
         do {
-            let moved = try server.rename(to: name, moveFolderTo: server.state.canStart ? folder : nil)
+            let newFolder = server.state.canStart ? folder : nil
+            let moved: URL?
+            if following {
+                moved = try server.moveFolder(to: newFolder)
+                server.resetDisplayName()
+            } else {
+                moved = try server.rename(to: name, moveFolderTo: newFolder)
+            }
             if moved != nil { model.pathsChanged() }
             if message != originalMessage { try server.setServerMessage(message) }
             dismiss()

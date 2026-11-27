@@ -247,6 +247,11 @@ public struct RestartSchedule: Codable, Equatable, Sendable {
 public struct ServerProfile: Codable, Identifiable, Equatable, Sendable {
     public var id = UUID()
     public var name = "Minecraft Server"
+    /// The owner's own name for this server, shown in place of the server message (K824). Nil follows the server
+    /// message, and the folder's name when that isn't usable. `name` stays what backups and sessions go by.
+    public var customName: String?
+    /// False until a server from before K824 has had its earlier rename carried over into `customName`.
+    public var customNameSettled = false
     public var software = SoftwareState()
     public var launch = LaunchConfig()
     public var backup = BackupConfig()

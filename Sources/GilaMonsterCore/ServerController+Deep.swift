@@ -168,7 +168,7 @@ extension ServerController {
         doc.set("enable-query", "false")
         // Observed on: the real server would be using this port already.
         doc.set("management-server-enabled", "false")
-        doc.set("motd", "Test copy of \(profile.name)")
+        doc.set("motd", "Test copy of \(displayName)")
         try FileOps.writeAtomic(doc.text, to: copyPaths.properties)
         for plugin in await PluginScanner.scan(copyPaths) where plugin.enabled && Trial.disabledInCopies.contains(plugin.key) {
             let jar = copyPaths.plugins.appendingPathComponent(plugin.fileName)
@@ -188,7 +188,9 @@ extension ServerController {
 
         var p = profile
         p.id = UUID()
-        p.name = "Test copy of \(profile.name)"
+        p.name = "Test copy of \(displayName)"
+        p.customName = p.name
+        p.customNameSettled = true
         p.backup.enabled = false
         p.backup.autoDrill = false
         p.backup.destination = copyPaths.meta.appendingPathComponent("backups").path
@@ -293,7 +295,7 @@ extension ServerController {
         profile.lastDrill = DrillResult(date: Date(), backupDate: record.date, fileName: record.fileName, passed: passed, detail: detail)
         recordEvent(.drill, passed ? "Backup proven restorable" : "Backup drill failed", detail: detail)
         if !passed {
-            raiseAlert("A backup of \(profile.name) didn't restore in a test", detail)
+            raiseAlert("A backup of \(displayName) didn't restore in a test", detail)
             let now = Date()
             reportIssue(IssueRecord(
                 id: "wrapper:drill-failed", ruleID: "wrapper-drill", title: "A backup didn't restore in a test", severity: .critical, category: "Backups",
@@ -721,7 +723,7 @@ extension ServerController {
         }
         let wasWarning = diskWarning
         diskWarning = worst?.message
-        if let worst, worst.critical, wasWarning != worst.message { raiseAlert("\(profile.name) is nearly out of disk space", worst.message) }
+        if let worst, worst.critical, wasWarning != worst.message { raiseAlert("\(displayName) is nearly out of disk space", worst.message) }
         if let worst, worst.critical, state.isLive {
             let now = Date()
             reportIssue(IssueRecord(

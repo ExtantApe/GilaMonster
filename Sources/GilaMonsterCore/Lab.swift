@@ -812,7 +812,7 @@ public final class LabController {
 
     /// The server's own version, its exact jars, a few at a time, with fresh settings.
     private func stationPlugins(_ model: ServerController) async throws {
-        say("Reading \(model.profile.name)'s plugin list…")
+        say("Reading \(model.displayName)'s plugin list…")
         let spec = try await Self.spec(copying: model)
         let enabled = model.plugins.filter(\.enabled)
         let groups = PluginThemes.batches(enabled.filter { !Self.reachesOutside($0) })
@@ -868,7 +868,7 @@ public final class LabController {
     /// The same groups, now with the real settings, on a lab built for this run with the server's version and jars,
     /// leaving out any plugin that didn't load at the plugins station. Back to fresh between groups.
     private func stationSettings(_ model: ServerController) async throws {
-        say("Reading \(model.profile.name)'s plugin list…")
+        say("Reading \(model.displayName)'s plugin list…")
         let spec = try await Self.spec(copying: model)
         // Skipped at the plugins station counts too: a plugin that needs one that didn't load can't load here either.
         let didntLoad = Set((state.board[.plugins]?.groups ?? []).flatMap { batch in
@@ -878,7 +878,7 @@ public final class LabController {
         }).union(spec.skipped.map(\.plugin.name))
         let jars = model.plugins.filter { $0.enabled && !Self.reachesOutside($0) && !didntLoad.contains($0.name) }
             .map { model.paths.plugins.appendingPathComponent($0.fileName) }
-        say("Building the lab with \(model.profile.name)'s plugins…")
+        say("Building the lab with \(model.displayName)'s plugins…")
         let lab = try await rebuild(LabSpec(build: spec.build, sources: [], jars: jars)).controller
         await lab.refreshPlugins()
         // Observed: settings change world and player data as well as files in plugins/, so each group gets a clean copy.
@@ -899,7 +899,7 @@ public final class LabController {
         var seen = state.knownProblems ?? []
         for (index, group) in groups.enumerated() {
             var batch = MirrorBatch(title: group.title, plugins: group.plugins.map(\.name))
-            say("Group \(index + 1) of \(groups.count): \(group.title), with \(model.profile.name)'s settings…")
+            say("Group \(index + 1) of \(groups.count): \(group.title), with \(model.displayName)'s settings…")
             batch.notes += try Self.copySettings(from: model.paths, to: lab.paths, plugins: group.plugins.map(\.name))
             batch.withSettings = await runChecks(lab, known: seen, reportKnown: false, underSettings: true)
             batch.rejoinLog = lastRestartLog
@@ -913,7 +913,7 @@ public final class LabController {
     /// A lab seeded on the server's current version, then moved to the new one with updated plugins.
     private func stationUpgrade(_ model: ServerController) async throws {
         guard let build = state.target else { throw AppError("Choose a version first.") }
-        say("Reading \(model.profile.name)'s plugin list…")
+        say("Reading \(model.displayName)'s plugin list…")
         let current = try await Self.spec(copying: model)
         var checks = current.leftOut.map { LabCheck($0, .skipped) } + current.skipped.map(\.check)
         say("Building a lab on \(current.build.label), the version you're on now…")
@@ -958,12 +958,12 @@ public final class LabController {
         spec.build = build
         say("Building a fresh lab on \(build.label)…")
         let lab = try await rebuild(spec).controller
-        say("Trying \(model.profile.name)'s plugin settings…")
+        say("Trying \(model.displayName)'s plugin settings…")
         var checks = try Self.copySettings(from: model.paths, to: lab.paths, plugins: lab.plugins.filter(\.enabled).map(\.name)).map { LabCheck($0, .skipped) }
         checks += spec.skipped.map(\.check)
         checks += await runChecks(lab, known: state.knownProblems ?? [], underSettings: true)
         if lab.state.isLive { await shutDown(lab) }
-        record(.freshSettings, model: model, checks: checks, note: "The fresh install, given \(model.profile.name)'s plugin settings")
+        record(.freshSettings, model: model, checks: checks, note: "The fresh install, given \(model.displayName)'s plugin settings")
         updateReport(model)
     }
 

@@ -18,7 +18,7 @@ struct LabPage: View {
     private var included: Set<LabStation> { Set(checksText.split(separator: ",").compactMap { LabStation(rawValue: String($0)) }) }
 
     var body: some View {
-        Page(title: "Lab", subtitle: "Tests \(server.profile.name)'s plugins and rehearses its upgrades on a practice server.") {
+        Page(title: "Lab", subtitle: "Tests \(server.displayName)'s plugins and rehearses its upgrades on a practice server.") {
             if server.isLab {
                 LabRunCard(model: model)
             } else {
@@ -158,7 +158,7 @@ struct LabRunCard: View {
             LabProgress(lab: model.lab)
             if let real = model.lab.model(from: model.servers) {
                 Button("Open the Lab") { model.openLabBoard() }.buttonStyle(.themed)
-                    .accessibilityHint("\(real.profile.name)'s Lab page")
+                    .accessibilityHint("\(real.displayName)'s Lab page")
             }
         }
     }
@@ -433,7 +433,7 @@ struct RehearsalVerdict: View {
     var body: some View {
         Divider()
         Callout(tone: good ? .good : .warning, title: report.headline, detail: report.explanation) {
-            Button("Open \(server.profile.name)'s Software") {
+            Button("Open \(server.displayName)'s Software") {
                 model.selectedID = server.id
                 model.page = .software
             }

@@ -56,6 +56,8 @@ public final class ServerController: Identifiable {
     public private(set) var backups: [BackupRecord] = []
     public private(set) var configs: [ConfigFile] = []
     public private(set) var worlds: [WorldEntry] = []
+    /// The server's name as its server message gives it, or nil when the message isn't usable as one (K824).
+    public private(set) var messageName: String?
     public private(set) var worldOperation: WorldOperation?
     /// An upgrade you haven't yet decided to keep or roll back.
     public private(set) var activeUpgrade: UpgradeRecord?
@@ -169,7 +171,14 @@ public final class ServerController: Identifiable {
     public init(root: URL, profile: ServerProfile) {
         self.id = profile.id
         self.paths = ServerPaths(root: root)
-        self.profile = profile
+        // A server named before K824 keeps that name: it was the owner's label, so it becomes their name for it.
+        // Nothing is written here. Opening a server never changes its files, and the next save carries this along.
+        var settled = profile
+        if !settled.customNameSettled {
+            if settled.customName == nil, !settled.isLab, settled.name != root.lastPathComponent { settled.customName = settled.name }
+            settled.customNameSettled = true
+        }
+        self.profile = settled
         load()
     }
 
@@ -361,21 +370,62 @@ public final class ServerController: Identifiable {
         let clean = name.trimmingCharacters(in: .whitespacesAndNewlines)
         guard !isLab else { throw AppError("The Lab keeps its name, so GilaMonster can always find it.") }
         guard !clean.isEmpty else { throw AppError("The name can't be empty.") }
-        var moved: URL?
-        if let folderName, folderName != paths.root.lastPathComponent {
-            guard !state.isLive else { throw AppError("Stop the server before renaming its folder.") }
-            guard !folderName.isEmpty, !folderName.contains("/"), !folderName.hasPrefix(".") else {
-                throw AppError("That isn't a usable folder name.")
-            }
-            let target = paths.root.deletingLastPathComponent().appendingPathComponent(folderName, isDirectory: true)
-            guard !FileOps.exists(target) else { throw AppError("A folder called \(folderName) already exists there.") }
-            try FileManager.default.moveItem(at: paths.root, to: target)
-            paths = ServerPaths(root: target)
-            moved = target
-        }
+        let moved = try moveFolder(to: folderName)
         profile.name = clean
+        // A name the owner typed is theirs, and it's what the headline shows from now on (K824).
+        profile.customName = clean
         moveBackupFolderForRename()
         return moved
+    }
+
+    /// Moves the server's folder, leaving its name alone. Only possible while it's stopped.
+    @discardableResult
+    public func moveFolder(to folderName: String?) throws -> URL? {
+        guard let folderName, folderName != paths.root.lastPathComponent else { return nil }
+        guard !isLab else { throw AppError("The Lab keeps its folder, so GilaMonster can always find it.") }
+        guard !state.isLive else { throw AppError("Stop the server before renaming its folder.") }
+        guard !folderName.isEmpty, !folderName.contains("/"), !folderName.hasPrefix(".") else {
+            throw AppError("That isn't a usable folder name.")
+        }
+        let target = paths.root.deletingLastPathComponent().appendingPathComponent(folderName, isDirectory: true)
+        guard !FileOps.exists(target) else { throw AppError("A folder called \(folderName) already exists there.") }
+        try FileManager.default.moveItem(at: paths.root, to: target)
+        paths = ServerPaths(root: target)
+        // Saved now, so the folder's new name is never mistaken for an old label at the next launch.
+        saveProfile()
+        return target
+    }
+
+    // MARK: The name shown (K824)
+
+    public var folderName: String { paths.root.lastPathComponent }
+
+    /// What GilaMonster calls this server on screen, aloud and in notifications: the owner's name for it, then the
+    /// server message, then the folder. The Lab and test copies keep the names GilaMonster gave them.
+    public var displayName: String {
+        profile.isLab ? profile.name : ServerName.resolve(custom: profile.customName, message: messageName, folder: folderName)
+    }
+
+    /// What the name would be without the owner's own: the server message when it's usable, or the folder.
+    public var automaticName: String { ServerName.resolve(custom: nil, message: messageName, folder: folderName) }
+
+    /// Drops the owner's name, so the server message names the server again. Only GilaMonster's own settings change.
+    public func resetDisplayName() {
+        guard !profile.isLab else { return }
+        profile.customName = nil
+        saveProfile()
+    }
+
+    /// The Overview's headline, and the same sentence with the state for VoiceOver.
+    public var headline: String { NeedsYou.sentence(name: displayName, state: state, players: players.count) }
+    public var headlineSpoken: String { "\(headline) State: \(state.title)." }
+    /// The folder's name for the small line under the headline, when the headline shows something else.
+    public var folderLine: String? { ServerName.folderLine(display: displayName, folder: folderName) }
+
+    /// Reads the name from the server message again. Only the motd line of server.properties is kept.
+    func refreshMessageName() {
+        let fresh = ServerName.fromServerMessage(properties: paths.properties)
+        if fresh != messageName { messageName = fresh }
     }
 
     // MARK: Lifecycle
@@ -599,13 +649,13 @@ public final class ServerController: Identifiable {
         state = .crashed(code: code)
         appendWrapper(failedToStart ? "The server gave up before it finished starting. The Issues panel has what it reported." : "The server exited unexpectedly (code \(code)).", level: .error)
         recordEvent(.crash, "Crashed", detail: "Exit code \(code)")
-        raiseAlert("\(profile.name) \(failedToStart ? "couldn't start" : "crashed")", failedToStart ? "It gave up while starting. The Issues panel has what it reported." : "Exit code \(code).\(profile.launch.restartOnCrash ? " Restarting in 10 seconds." : "")")
+        raiseAlert("\(displayName) \(failedToStart ? "couldn't start" : "crashed")", failedToStart ? "It gave up while starting. The Issues panel has what it reported." : "Exit code \(code).\(profile.launch.restartOnCrash ? " Restarting in 10 seconds." : "")")
         reportCrash(code: code)
         crashTimes = crashTimes.filter { Date().timeIntervalSince($0) < 600 } + [Date()]
         // Starting again won't help something that can't start.
         guard profile.launch.restartOnCrash, !failedToStart else { return }
         if crashTimes.count >= 3 {
-            raiseAlert("\(profile.name) keeps crashing", "Automatic restarts are paused after \(crashTimes.count) crashes in 10 minutes.")
+            raiseAlert("\(displayName) keeps crashing", "Automatic restarts are paused after \(crashTimes.count) crashes in 10 minutes.")
             appendWrapper("Crashed \(crashTimes.count) times in 10 minutes, so automatic restarts are paused. Check the Issues panel.", level: .error)
             return
         }
@@ -1157,7 +1207,7 @@ public final class ServerController: Identifiable {
                             : ["Free up space, or add a storage drive with room on the Backups page.", "Or back up by hand once there's room."],
                         action: IssueAction(page: "backups", label: "Open Backups"), sample: detail, firstSeen: now, lastSeen: now))
                     appendWrapper("Scheduled backup failed: \(error.localizedDescription)", level: .error)
-                    raiseAlert("\(profile.name)'s backup failed", error.localizedDescription)
+                    raiseAlert("\(displayName)'s backup failed", error.localizedDescription)
                 }
             }
         }
@@ -1537,7 +1587,10 @@ public final class ServerController: Identifiable {
 
     // MARK: Configs
 
-    public func refreshConfigs() { configs = ConfigCatalog.scan(paths, plugins: plugins) }
+    public func refreshConfigs() {
+        configs = ConfigCatalog.scan(paths, plugins: plugins)
+        refreshMessageName()
+    }
 
     /// A plugin's settings files, in the order its page should show them.
     public func configs(for plugin: InstalledPlugin) -> [ConfigFile] {
@@ -1561,6 +1614,12 @@ public final class ServerController: Identifiable {
         guard let motd = PropertiesDocument(configText(file)).value("motd") else { return nil }
         let plain = ConfigForm.plainMOTD(motd)
         return plain.isEmpty ? nil : plain
+    }
+
+    /// The server message as typed, codes and all, counting an edit that waits for a restart. For the rename sheet.
+    public var editableServerMessage: String? {
+        let file = configs.first { $0.path == "server.properties" } ?? ConfigCatalog.serverProperties
+        return ServerName.message(inProperties: configText(file))
     }
 
     /// Changes the server message, by the usual route: now if stopped, at the next restart if running.
@@ -1596,6 +1655,7 @@ public final class ServerController: Identifiable {
         try FileOps.writeAtomic(text, to: url)
         // A direct save supersedes any older staged edit.
         if let staged = pending.first(where: { $0.target == "config:\(file.path)" }) { discard(staged) }
+        if file.path == "server.properties" { refreshMessageName() }
         return .saved
     }
 

@@ -68,7 +68,7 @@ struct SessionAccessSection: View {
                 ForEach(service.servers().filter { !$0.isLab }, id: \.profile.id) { server in
                     let mark = marks[server.profile.id] ?? server.sessionPermission
                     VStack(alignment: .leading, spacing: 4) {
-                        Text(server.profile.name).font(.body.weight(.semibold)).foregroundStyle(Theme.ink)
+                        Text(server.displayName).font(.body.weight(.semibold)).foregroundStyle(Theme.ink)
                         Toggle("Children may play here", isOn: Binding(get: { mark.childrenMayPlay }, set: { on in
                             if on { setMark(server, true) } else { clearing = server }
                         }))
@@ -104,7 +104,7 @@ struct SessionAccessSection: View {
         }
         .onAppear { reload(); reloadMarks() }
         .onChange(of: service.calls) { reload() }
-        .confirmationDialog("Clear \"Children may play here\" for \(clearing?.profile.name ?? "this server")?", isPresented: Binding(get: { clearing != nil }, set: { if !$0 { clearing = nil } })) {
+        .confirmationDialog("Clear \"Children may play here\" for \(clearing?.displayName ?? "this server")?", isPresented: Binding(get: { clearing != nil }, set: { if !$0 { clearing = nil } })) {
             Button("Clear the Mark", role: .destructive) { if let s = clearing { setMark(s, false) }; clearing = nil }
         } message: {
             Text("Only clear it if no child ever plays here. Cleared, the server can be given standing permission, so sessions could start, stop or change its packs without asking. The change is written to the server's log.")

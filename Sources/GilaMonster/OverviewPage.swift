@@ -68,7 +68,7 @@ struct OverviewPage: View {
             }
             .padding(20).frame(minWidth: 460)
         }
-        .confirmationDialog("Remove \(server.profile.name) from GilaMonster?", isPresented: $confirmRemove) {
+        .confirmationDialog("Remove \(server.displayName) from GilaMonster?", isPresented: $confirmRemove) {
             Button("Remove", role: .destructive) { model.remove(server) }
         } message: {
             Text("The server's folder stays where it is, with all its files and worlds. Backups aren't deleted either.")
@@ -83,13 +83,17 @@ struct OverviewPage: View {
             HStack(alignment: .center, spacing: 10) {
                 GlyphView(glyph: server.state.glyph, size: 22)
                     .scaleEffect(pulse ? 1.35 : 1)
-                Text(NeedsYou.sentence(name: server.profile.name, state: server.state, players: server.players.count))
+                Text(server.headline)
                     .font(Theme.display(28)).foregroundStyle(Theme.ink)
                     .fixedSize(horizontal: false, vertical: true)
                     .accessibilityAddTraits(.isHeader)
-                    .accessibilityLabel("\(NeedsYou.sentence(name: server.profile.name, state: server.state, players: server.players.count)) State: \(server.state.title).")
+                    .accessibilityLabel(server.headlineSpoken)
                 Spacer(minLength: 12)
                 actions
+            }
+            // The folder's name, small, when the headline shows the server message or the owner's name (K824).
+            if let folder = server.folderLine {
+                Text(folder).foregroundStyle(Theme.muted).lineLimit(1).truncationMode(.middle).textSelection(.enabled)
             }
             Text(NeedsYou.factLine(software: server.profile.software.label, running: server.state == .running, since: server.startedAt,
                                    lastBackup: server.backups.first?.date, isLab: server.isLab,

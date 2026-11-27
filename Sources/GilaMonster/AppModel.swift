@@ -451,6 +451,7 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
                     ("servers-folder", AnyView(ServersFolderSheet())),
                     ("add-server", AnyView(AddServerSheet(model: model))),
                     ("rename", AnyView(RenameSheet(model: model, server: server))),
+                    ("switcher-rows", AnyView(SwitcherRowsPreview(model: model))),
                     ("server-rename", AnyView(ServerRenameSheet(model: model, server: server, onDone: {}))),
                     ("add-plugin", AnyView(AddPluginSheet(server: server))),
                     ("welcome", AnyView(WelcomeView(model: model).frame(width: 1000, height: 700))),
@@ -600,8 +601,8 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
         }
         // K728 (owner, 2026-11-24: "Build and install (Recommended)"): a quit stopped a live server with one keypress, because
         // Return chose Stop and Quit. Now the alert names what stops, and Return keeps everything running.
-        let text = QuitWording.make(running: model.servers.filter { $0.state.isLive }.map(\.profile.name),
-                                    leftOver: model.leftOver.map(\.profile.name),
+        let text = QuitWording.make(running: model.servers.filter { $0.state.isLive }.map(\.displayName),
+                                    leftOver: model.leftOver.map(\.displayName),
                                     packHost: model.servers.contains { $0.packHostIsListening },
                                     sessionAccess: SessionAccessService.shared.isListening)
         let alert = NSAlert()
@@ -796,11 +797,11 @@ struct StatusMenu: View {
             Divider()
         }
         ForEach(model.listed) { server in
-            Text("\(server.profile.name): \(server.state.title)")
+            Text("\(server.displayName): \(server.state.title)")
             if server.state.canStart {
-                Button("Start \(server.profile.name)") { Task { await server.start() } }.disabled(!server.canStartNow)
+                Button("Start \(server.displayName)") { Task { await server.start() } }.disabled(!server.canStartNow)
             } else if server.state == .running {
-                Button("Stop \(server.profile.name)") { server.stop(by: .menuBar) }
+                Button("Stop \(server.displayName)") { server.stop(by: .menuBar) }
             }
             Divider()
         }

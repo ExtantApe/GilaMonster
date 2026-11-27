@@ -29,7 +29,7 @@ struct AllowlistPage: View {
     private var running: Bool { server.state == .running }
 
     var body: some View {
-        Page(title: "Allowlist", subtitle: "Who can join \(server.profile.name). This only changes this server.") {
+        Page(title: "Allowlist", subtitle: "Who can join \(server.displayName). This only changes this server.") {
             if let blocked = server.playerAccessBlocked { Callout(tone: .warning, title: "Adding players is off here", detail: blocked) }
             if let message { Callout(tone: .danger, title: message) }
             if server.hasSheriff { sheriffNote }

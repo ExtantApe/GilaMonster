@@ -273,8 +273,7 @@ public enum ConfigForm {
 
     /// A motd as plain text: without `§a` or `&a` color codes, and on one line.
     public static func plainMOTD(_ motd: String) -> String {
-        regex("[§&][0-9a-fk-orA-FK-OR]").stringByReplacingMatches(in: motd, range: NSRange(motd.startIndex..., in: motd), withTemplate: "")
-            .replacingOccurrences(of: "\n", with: " ").trimmingCharacters(in: .whitespaces)
+        ServerName.withoutCodes(motd).replacingOccurrences(of: "\n", with: " ").trimmingCharacters(in: .whitespaces)
     }
 }
 
