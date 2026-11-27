@@ -101,6 +101,53 @@ public enum Overflow {
         return (pages, expected, lines.filter { $0.hasPrefix("OVERFLOW ") })
     }
 
+    /// Which things go on which row when a row of buttons is laid out in `available` points: as many as fit, in
+    /// order, then the next row. The fit is exact: things fit when their widths and the gaps between them are no
+    /// wider than the room, so a row breaks only when it really doesn't fit. One thing wider than the room still
+    /// gets a row to itself.
+    public static func flowRows(_ widths: [Double], spacing: Double, available: Double) -> [[Int]] {
+        var rows: [[Int]] = [], used = 0.0
+        for (index, width) in widths.enumerated() {
+            if let last = rows.last, !last.isEmpty, used + spacing + width <= available + 0.0001 {
+                rows[rows.count - 1].append(index)
+                used += spacing + width
+            } else {
+                rows.append([index])
+                used = width
+            }
+        }
+        return rows
+    }
+
+    /// A long path or name on a button, cut in its middle to `limit` characters. The whole of it goes in the
+    /// button's tooltip and VoiceOver label.
+    public static func middle(_ text: String, limit: Int) -> String {
+        guard limit >= 5, text.count > limit else { return text }
+        let keep = limit - 1, head = (keep + 1) / 2, tail = keep / 2
+        return String(text.prefix(head)) + "…" + String(text.suffix(tail))
+    }
+
+    /// Reads the snapshot's dialog-report.txt: "checked N of M dialogs", a CLIPPED line for each sheet whose content
+    /// reaches the left or right edge of its picture, and a SKIPPED line naming each sheet that can't be judged that
+    /// way and why. A report that isn't in that form counts as not having run.
+    public static func readDialogReport(_ text: String) -> (checked: Int, expected: Int, clipped: [String], skipped: [String]) {
+        let lines = text.split(separator: "\n").map(String.init)
+        var checked = 0, expected = 0
+        for line in lines where line.hasPrefix("checked ") && line.hasSuffix(" dialogs") {
+            let parts = line.dropFirst(8).dropLast(8).split(separator: " ")
+            if parts.count == 3, parts[1] == "of", let n = Int(parts[0]), let m = Int(parts[2]) { checked = n; expected = m }
+        }
+        return (checked, expected, lines.filter { $0.hasPrefix("CLIPPED ") }, lines.filter { $0.hasPrefix("SKIPPED ") })
+    }
+
+    /// Whether a row of one column's pixels shows content at a picture's edge: any pixel that differs from the
+    /// column's first by more than a little. A sheet has padding all round, so its edge columns are one flat color
+    /// unless something has run off the side. Each pixel is red, green and blue, 0 to 255.
+    public static func edgeHasContent(_ column: [(r: Int, g: Int, b: Int)], tolerance: Int = 10) -> Bool {
+        guard let first = column.first else { return false }
+        return column.contains { abs($0.r - first.r) > tolerance || abs($0.g - first.g) > tolerance || abs($0.b - first.b) > tolerance }
+    }
+
     /// Whether the allowlist shows its search field.
     public static func showsAllowlistSearch(entries: Int) -> Bool { entries > Limit.allowlistSearchFrom }
     /// Whether the Worlds page shows its filter.

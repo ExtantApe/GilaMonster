@@ -241,15 +241,79 @@ struct SymbolText: View {
     }
 }
 
-/// Buttons side by side whenever they fit at full size, stacked only when they don't. Their padding never shrinks.
-struct WrapRow<Content: View>: View {
-    @ViewBuilder var content: Content
-    var body: some View {
-        ViewThatFits(in: .horizontal) {
-            HStack(spacing: 8) { content }
-            VStack(alignment: .leading, spacing: 8) { content }
+/// A row of buttons that keeps them side by side whenever they fit at full size, and moves the ones that don't to
+/// the next row (`Overflow.flowRows`). Their padding never shrinks and no label is cut.
+struct WrapRow: Layout {
+    var spacing: CGFloat = 8
+    /// Rows hug the trailing edge, for the buttons at the foot of a sheet.
+    var trailing = false
+
+    private func rows(_ subviews: Subviews, width: CGFloat?) -> (rows: [[Int]], sizes: [CGSize]) {
+        let sizes = subviews.map { $0.sizeThatFits(.unspecified) }
+        let rows = Overflow.flowRows(sizes.map { Double($0.width) }, spacing: Double(spacing), available: Double(width ?? .greatestFiniteMagnitude))
+        return (rows, sizes)
+    }
+
+    func sizeThatFits(proposal: ProposedViewSize, subviews: Subviews, cache: inout ()) -> CGSize {
+        let laid = rows(subviews, width: proposal.width)
+        let widths = laid.rows.map { row in row.reduce(CGFloat(0)) { $0 + laid.sizes[$1].width } + spacing * CGFloat(max(0, row.count - 1)) }
+        let heights = laid.rows.map { row in row.map { laid.sizes[$0].height }.max() ?? 0 }
+        return CGSize(width: widths.max() ?? 0, height: heights.reduce(0, +) + spacing * CGFloat(max(0, heights.count - 1)))
+    }
+
+    func placeSubviews(in bounds: CGRect, proposal: ProposedViewSize, subviews: Subviews, cache: inout ()) {
+        let laid = rows(subviews, width: bounds.width)
+        var y = bounds.minY
+        for row in laid.rows {
+            let height = row.map { laid.sizes[$0].height }.max() ?? 0
+            let width = row.reduce(CGFloat(0)) { $0 + laid.sizes[$1].width } + spacing * CGFloat(max(0, row.count - 1))
+            var x = trailing ? bounds.maxX - width : bounds.minX
+            for index in row {
+                subviews[index].place(at: CGPoint(x: x, y: y + (height - laid.sizes[index].height) / 2), proposal: ProposedViewSize(laid.sizes[index]))
+                x += laid.sizes[index].width + spacing
+            }
+            y += height + spacing
         }
     }
+}
+
+/// A card or group heading. With pixel type on it is drawn in capitals, so VoiceOver is given the words as written.
+/// Every heading in capitals goes through this, and a check holds that. A heading that shows the owner's own data (a
+/// world, a config section, a service) is never put in capitals, because case matters there: it uses `.dataHeading`.
+struct HeadingText: View {
+    let text: String
+    /// A fact card's quieter heading.
+    var fact = false
+    init(_ text: String, fact: Bool = false) { self.text = text; self.fact = fact }
+    var body: some View { Text(text).type(fact ? TypeToken.factHeading : TypeToken.headline).accessibilityLabel(text) }
+}
+
+extension TypeToken {
+    /// A heading made of the owner's own data: the label face as written, never capitals. Bold in the system font.
+    static var dataHeading: TypeToken { label(.bold) }
+}
+
+extension Theme {
+    /// The usable width of the screen the app's windows are on, for sheets and the Allow window.
+    static var screenWidth: CGFloat { (NSApp.keyWindow?.screen ?? NSScreen.main)?.visibleFrame.width ?? 1280 }
+    /// A sheet's width: its width at the default text size, growing with the text, and never wider than the screen.
+    static func sheet(_ width: CGFloat) -> CGFloat { min(width * grow, max(320, screenWidth - 40)) }
+}
+
+/// A text field that is as tall as its font. At the default text size it is the system's rounded field. That field
+/// keeps one height, so above the default size the field is GilaMonster's own, which grows.
+struct GrowingFieldStyle: TextFieldStyle {
+    func _body(configuration: TextField<Self._Label>) -> some View {
+        if Theme.grow == 1 {
+            configuration.textFieldStyle(.growing)
+        } else {
+            configuration.textFieldStyle(.themed)
+        }
+    }
+}
+
+extension TextFieldStyle where Self == GrowingFieldStyle {
+    static var growing: GrowingFieldStyle { GrowingFieldStyle() }
 }
 
 extension BrandFonts {

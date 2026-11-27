@@ -26,6 +26,16 @@ public enum SessionAskPlacement {
         return CGRect(x: x.rounded(), y: y.rounded(), width: width, height: height)
     }
 
+    /// How wide the window's content is: what it asks for, but never wider than the usable screen. Narrower than it
+    /// asks for, the words wrap and the buttons move under them, so Deny and Allow are always fully in view.
+    public static func contentWidth(ideal: CGFloat, visible: CGFloat) -> CGFloat { max(0, min(ideal, visible)) }
+
+    /// Whether a row's words and its buttons sit side by side at this width: only when the buttons, a gap and a
+    /// readable column for the words all fit. Otherwise the buttons go under the words.
+    public static func sideBySide(width: CGFloat, wordsAtLeast: CGFloat, buttons: CGFloat, gap: CGFloat) -> Bool {
+        wordsAtLeast + gap + buttons <= width + 0.0001
+    }
+
     /// When the reminder sound plays for an ask: one minute before the deadline, if that is at least 20 seconds after
     /// it was asked. Nil when the wait is too short for a second sound to mean anything.
     public static func reminder(asked: Date, deadline: Date) -> Date? {

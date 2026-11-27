@@ -143,6 +143,7 @@ final class SessionPrompts: NSObject, UNUserNotificationCenterDelegate, @uncheck
 @MainActor final class SessionAskWindow {
     static let shared = SessionAskWindow()
     private var panel: NSPanel?
+    private var hosting: NSHostingController<AnyView>?
     private var attention: Int?
 
     /// A panel that can take keyboard focus, which a non-activating utility panel won't do by itself.
@@ -188,13 +189,25 @@ final class SessionPrompts: NSObject, UNUserNotificationCenterDelegate, @uncheck
             p.hidesOnDeactivate = false
             p.collectionBehavior = [.canJoinAllSpaces, .fullScreenAuxiliary]
             p.setAccessibilityLabel("A session is asking")
-            p.contentView = NSHostingView(rootView: AskPanelLook { SessionAskList(service: .shared, focusFirst: true) }.tint(Theme.accent))
+            let host = NSHostingController(rootView: AnyView(AskPanelLook { SessionAskList(service: .shared, focusFirst: true) }.tint(Theme.accent)))
+            host.sizingOptions = []   // sized below, each time it opens
+            p.contentViewController = host
+            hosting = host
             panel = p
         }
         guard let panel else { return }
-        let size = panel.contentView?.fittingSize ?? panel.frame.size
+        // Never wider than the usable screen it opens on (K820 review). Narrower than it asks for, the words wrap and
+        // the buttons go under them, so the height is asked for again at the width it will really have.
+        let pointer = NSEvent.mouseLocation
+        let screen = NSScreen.screens.first { $0.frame.contains(pointer) } ?? NSScreen.screens.first
+        let visible = screen?.visibleFrame.width ?? 1280
+        AskPanelSize.shared.widest = visible
+        let ideal = hosting?.view.fittingSize ?? panel.frame.size
+        let width = SessionAskPlacement.contentWidth(ideal: ideal.width, visible: visible)
+        let height = hosting?.sizeThatFits(in: CGSize(width: width, height: 10_000)).height ?? ideal.height
+        let size = CGSize(width: width, height: height)
         let screens = NSScreen.screens.map { (frame: $0.frame, visible: $0.visibleFrame) }
-        if let content = SessionAskPlacement.frame(size: size, pointer: NSEvent.mouseLocation, screens: screens) {
+        if let content = SessionAskPlacement.frame(size: size, pointer: pointer, screens: screens) {
             panel.setFrame(panel.frameRect(forContentRect: content), display: true)
         }
         if activate {
@@ -224,7 +237,10 @@ final class SessionPrompts: NSObject, UNUserNotificationCenterDelegate, @uncheck
 /// How the ask window looks (K786): a thin bead band across the top and the sand surface below it. Looks only: the list
 /// inside, its wording, buttons, focus and guard are SessionAskList's, unchanged.
 struct AskPanelLook<Content: View>: View {
+    /// 580 pt at the default text size, more with larger text.
     static var minWidth: CGFloat { 580 * Theme.grow }
+    /// The widest it may be. Nil means the screen the window last opened on.
+    var widest: CGFloat?
     @ViewBuilder var content: Content
     var body: some View {
         VStack(spacing: 0) {
@@ -234,7 +250,8 @@ struct AskPanelLook<Content: View>: View {
         // 580 pt at the 13 pt text size. In SessionAskList every button is `.fixedSize()`, so it is as wide as its
         // label and never clips it (K800), and the words on the left ask for a 262 pt column, which is what they had
         // at 580 pt. The window is sized from those, so larger text makes it wider instead of squeezing a button.
-        .frame(minWidth: AskPanelLook.minWidth)
+        // Never wider than the screen: the minimum gives way to it.
+        .frame(minWidth: min(AskPanelLook.minWidth, widest ?? AskPanelSize.shared.widest), maxWidth: widest ?? AskPanelSize.shared.widest)
         .background(Theme.surface)
         .typeRoot()
     }
@@ -245,42 +262,86 @@ extension Notification.Name {
     static let askPanelFocus = Notification.Name("gilamonster.askPanelFocus")
 }
 
-/// The ask's sentence, with the server's name always whole (K820). This is a security prompt, so the name is never
-/// broken across lines. A name that fits on a line is kept together by no-break spaces and hyphens, and the sentence
-/// wraps before it. A longer name gets a line to itself and the window grows to show it. Only a name wider than the
-/// widest window is cut in the middle, with the whole name in its tooltip. VoiceOver always gets the plain sentence.
+/// The ask's sentence, with the server's name always shown whole (K820). This is a security prompt, so the name is
+/// never cut short and never hidden in a tooltip. It gets lines of its own under the words before it, and a long one
+/// wraps at its spaces, or anywhere only when a single word is wider than the window. Nothing is measured: the layout
+/// decides, with the font as it is really drawn, Bold Text included. VoiceOver gets the plain sentence.
 struct AskSentence: View {
     let sentence: String
     let server: String
 
-    /// The words' column at the default text size, and the widest it grows for a long name.
-    static var normalColumn: CGFloat { 262 * Theme.grow }
-    static var widestColumn: CGFloat { 560 * Theme.grow }
-
-    /// How wide the name is on one line in the prompt's font.
-    static func width(of name: String) -> CGFloat {
-        let font = NSFont.systemFont(ofSize: TypeToken.prompt.size, weight: .semibold)
-        return ceil(NSAttributedString(string: name, attributes: [.font: font]).size().width) + 2
-    }
-
-    /// The column the words ask for: wider than usual only when the name needs it.
-    static func column(for name: String) -> CGFloat { min(widestColumn, max(normalColumn, width(of: name))) }
+    /// The column the words ask for beside the buttons, and the narrowest they are kept at before the buttons move
+    /// under them.
+    static var column: CGFloat { 262 * Theme.grow }
+    static var narrowest: CGFloat { 200 * Theme.grow }
 
     var body: some View {
-        if Self.width(of: server) > Self.normalColumn, let parts = PixelType.split(sentence, around: server) {
+        if let parts = PixelType.split(sentence, around: server) {
             VStack(alignment: .leading, spacing: 2) {
                 if !parts.before.isEmpty { Text(parts.before).type(.prompt).fixedSize(horizontal: false, vertical: true) }
-                Text(server).type(.prompt).lineLimit(1).truncationMode(.middle).help(server)
+                Text(server).type(.prompt).fixedSize(horizontal: false, vertical: true)
                 if !parts.after.isEmpty { Text(parts.after).type(.prompt).fixedSize(horizontal: false, vertical: true) }
             }
             .foregroundStyle(Theme.ink)
             .accessibilityElement(children: .ignore)
             .accessibilityLabel(sentence)
         } else {
-            Text(PixelType.unbroken(sentence, name: server))
-                .type(.prompt).foregroundStyle(Theme.ink).fixedSize(horizontal: false, vertical: true).accessibilityLabel(sentence)
+            Text(sentence).type(.prompt).foregroundStyle(Theme.ink).fixedSize(horizontal: false, vertical: true)
         }
     }
+}
+
+/// One ask's row: its words, then its buttons. Side by side when the buttons and a readable column of words both
+/// fit; otherwise the buttons go under the words, so the window can be as narrow as the screen and Deny and Allow
+/// are still fully in view (`SessionAskPlacement.sideBySide`). Side by side, the words' first line sits on the
+/// buttons' text line, as before.
+struct AskRow: Layout {
+    var gap: CGFloat = 12
+
+    private func parts(_ subviews: Subviews) -> (words: LayoutSubview, buttons: LayoutSubview)? {
+        guard let words = subviews.first, let buttons = subviews.last, subviews.count >= 2 else { return nil }
+        return (words, buttons)
+    }
+
+    func sizeThatFits(proposal: ProposedViewSize, subviews: Subviews, cache: inout ()) -> CGSize {
+        guard let (words, buttons) = parts(subviews) else { return .zero }
+        let b = buttons.sizeThatFits(.unspecified)
+        guard let width = proposal.width, width.isFinite else {
+            let w = words.sizeThatFits(.unspecified)
+            return CGSize(width: w.width + gap + b.width, height: max(w.height, b.height))
+        }
+        if SessionAskPlacement.sideBySide(width: width, wordsAtLeast: AskSentence.narrowest, buttons: b.width, gap: gap) {
+            let w = words.sizeThatFits(ProposedViewSize(width: width - gap - b.width, height: nil))
+            return CGSize(width: width, height: max(w.height, b.height) + 6)
+        }
+        let w = words.sizeThatFits(ProposedViewSize(width: width, height: nil))
+        let under = buttons.sizeThatFits(ProposedViewSize(width: width, height: nil))
+        return CGSize(width: width, height: w.height + gap + under.height)
+    }
+
+    func placeSubviews(in bounds: CGRect, proposal: ProposedViewSize, subviews: Subviews, cache: inout ()) {
+        guard let (words, buttons) = parts(subviews) else { return }
+        for extra in subviews.dropFirst().dropLast() { extra.place(at: bounds.origin, proposal: .zero) }   // the spacer between them
+        let b = buttons.sizeThatFits(.unspecified)
+        if SessionAskPlacement.sideBySide(width: bounds.width, wordsAtLeast: AskSentence.narrowest, buttons: b.width, gap: gap) {
+            let room = ProposedViewSize(width: bounds.width - gap - b.width, height: nil)
+            // The words' first line on the buttons' text line.
+            let drop = max(0, buttons.dimensions(in: .unspecified)[.firstTextBaseline] - words.dimensions(in: room)[.firstTextBaseline])
+            words.place(at: CGPoint(x: bounds.minX, y: bounds.minY + min(drop, 6)), proposal: room)
+            buttons.place(at: CGPoint(x: bounds.maxX - b.width, y: bounds.minY), proposal: ProposedViewSize(b))
+        } else {
+            let room = ProposedViewSize(width: bounds.width, height: nil)
+            let w = words.sizeThatFits(room)
+            words.place(at: bounds.origin, proposal: room)
+            buttons.place(at: CGPoint(x: bounds.minX, y: bounds.minY + w.height + gap), proposal: room)
+        }
+    }
+}
+
+/// The widest the Allow window's content may be: the usable width of the screen it opens on. Set each time it opens.
+@Observable final class AskPanelSize: @unchecked Sendable {
+    static let shared = AskPanelSize()
+    var widest: CGFloat = .greatestFiniteMagnitude
 }
 
 /// Each waiting ask with Deny and Allow. Used by the ask window and by Settings.
@@ -321,7 +382,7 @@ struct SessionAskList: View {
                 Text("Nothing is waiting.").foregroundStyle(Theme.muted)
             }
             ForEach(Array(service.waiting.enumerated()), id: \.element.id) { index, ask in
-                HStack(alignment: .firstTextBaseline) {
+                AskRow {
                     VStack(alignment: .leading, spacing: 2) {
                         AskSentence(sentence: ask.sentence, server: ask.server)
                         if let family = ask.action.todayFamily {
@@ -335,10 +396,10 @@ struct SessionAskList: View {
                                 // A second-by-second label would make VoiceOver chatter, so it says the minutes.
                                 .accessibilityLabel("The name is the session's own. No answer in about \(max(1, (left + 30) / 60)) minutes means no.")
                         }
-                    }.frame(idealWidth: AskSentence.column(for: ask.server), alignment: .leading)
+                    }.frame(idealWidth: AskSentence.column, alignment: .leading)
                     Spacer(minLength: 12)
                     VStack(alignment: .trailing, spacing: 6) {
-                        HStack {
+                        WrapRow(trailing: true) {
                             Button("Deny") { if settled() { service.resolve(ask.id, allow: false) } }.buttonStyle(.themed).fixedSize()
                                 .keyboardShortcut(index == 0 && focusFirst ? .defaultAction : nil)
                                 .focused($focused, equals: ask.id)

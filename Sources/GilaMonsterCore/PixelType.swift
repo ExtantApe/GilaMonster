@@ -11,8 +11,9 @@ import Foundation
 public enum PixelType {
     /// The words under the Pixel font switch. Off sends headings, labels, buttons and numbers to the system font. The
     /// status sentence, a player's name and the Allow prompt's sentence go back to the display face they had before,
-    /// so the hint says "for them" and promises nothing about the rest.
-    public static let settingHint = "Headings, labels, buttons and numbers use a pixel typeface. Turn this off to use the system font for them."
+    /// so the hint says "for them" and promises nothing about the rest. Its last sentence is `firstLaunchDefault`
+    /// in words.
+    public static let settingHint = "Headings, labels, buttons and numbers use a pixel typeface. Turn this off to use the system font for them. It starts off when text is larger than the default, Bold Text is on, or the Mac has no Retina screen."
     /// The Pixel font setting's key.
     public static let key = "pixelFont"
     /// Both pixel faces are drawn on an 11-pixel em, so text is sharp only when one font pixel is a whole number of
@@ -209,16 +210,9 @@ public enum PixelType {
 
     // MARK: A server's name in the Allow prompt
 
-    /// The sentence with the server's name made unbreakable: its spaces and hyphens become their no-break twins, so a
-    /// line can wrap before the name but never inside it. A security prompt has to show the name whole.
-    public static func unbroken(_ sentence: String, name: String) -> String {
-        guard !name.isEmpty else { return sentence }
-        let whole = name.replacingOccurrences(of: " ", with: "\u{00A0}").replacingOccurrences(of: "-", with: "\u{2011}")
-        return sentence.replacingOccurrences(of: name, with: whole)
-    }
-
-    /// The sentence cut around the server's name, for a name long enough to need a line to itself. Nil when the name
-    /// isn't in the sentence. The words before and after lose the space or the full stop's gap next to the name.
+    /// The sentence cut around the server's name, so the name gets lines of its own. It is a security prompt: the
+    /// name is always shown whole on screen, wrapped at its spaces when it is long, and never cut short. Nil when the
+    /// name isn't in the sentence. The words before and after lose the space next to the name.
     public static func split(_ sentence: String, around name: String) -> (before: String, after: String)? {
         guard !name.isEmpty, let range = sentence.range(of: name) else { return nil }
         return (sentence[..<range.lowerBound].trimmingCharacters(in: .whitespaces), sentence[range.upperBound...].trimmingCharacters(in: .whitespaces))
