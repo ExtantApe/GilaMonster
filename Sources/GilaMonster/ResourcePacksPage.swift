@@ -44,6 +44,8 @@ struct ResourcePacksPage: View {
     }
     private var mc: String? { server.profile.software.mcVersion.isEmpty ? nil : server.profile.software.mcVersion }
     private var enabled: [PackRecipe.Entry] { recipe.entries.filter(\.enabled) }
+    /// Publishing to a web server comes first once it's set up, since it's then the one in use (2026-11-16).
+    private var publishFirst: Bool { !server.packPublishSettings.folder.isEmpty }
 
     var body: some View {
         Page(title: "Resource Packs", subtitle: "Look through packs, rank them into one, and use it on this server.") {
@@ -52,16 +54,12 @@ struct ResourcePacksPage: View {
             libraryCard
             if !packs.isEmpty { recipeCard }
             if !history.isEmpty { buildsCard }
-            if !packs.isEmpty {
-                // Publishing to a web server comes first once it's set up, since it's then the one in use (2026-11-16).
-                if server.packPublishSettings.folder.isEmpty {
-                    PackHostingCard(server: server, recipeNames: recipeNames, live: live) { hostingRefresh += 1 }
-                    PackPublishCard(server: server, recipeNames: recipeNames)
-                } else {
-                    PackPublishCard(server: server, recipeNames: recipeNames)
-                    PackHostingCard(server: server, recipeNames: recipeNames, live: live) { hostingRefresh += 1 }
-                }
-            }
+            // Hosting shows whatever the library holds (K812). Exact packs are served without one, and this card is
+            // where the first is added, so hiding it also hid the Serving badge and the switch for only players joining.
+            // Publishing is for recipe builds, so it still needs a library pack.
+            if publishFirst, !packs.isEmpty { PackPublishCard(server: server, recipeNames: recipeNames) }
+            PackHostingCard(server: server, recipeNames: recipeNames, live: live) { hostingRefresh += 1 }
+            if !publishFirst, !packs.isEmpty { PackPublishCard(server: server, recipeNames: recipeNames) }
             if let browsing { PackBrowser(pack: browsing) { self.browsing = nil } }
         }
         .task { await start() }

@@ -261,6 +261,7 @@ if CommandLine.arguments.contains("--connections") {
     overflowChecks()
     inviteTicketChecks()
     await packPublishChecks()
+    await packCardChecks()
     scratchDefaultsChecks()
     // --live: also asks this Mac's own playit agent, read-only, and prints only health and summaries.
     if CommandLine.arguments.contains("--live") {
@@ -5002,6 +5003,7 @@ func makePack(_ name: String, _ files: [String: String], inside: String? = nil) 
     overflowChecks()
     inviteTicketChecks()
     await packPublishChecks()
+    await packCardChecks()
     await packSongChecks()
     await pluginUpgradeChecks()
     await serverIconChecks()
