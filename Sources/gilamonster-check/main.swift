@@ -50,6 +50,32 @@ if let flag = CommandLine.arguments.firstIndex(of: "--demo-packs") {
     exit(0)
 }
 
+// ... --lab-fixture <home> <servers> <server folder>  Made-up Lab results for the off-screen pictures
+//     (scripts/snapshot-fixtures.sh): a group that passed, one whose player couldn't rejoin, a plugin skipped for want
+//     of another, and a restart log on each group that ran. Writes only the lab's results file in <servers>. Starts nothing.
+if let flag = CommandLine.arguments.firstIndex(of: "--lab-fixture"), flag + 3 < CommandLine.arguments.count {
+    setenv("GILAMONSTER_HOME", CommandLine.arguments[flag + 1], 1)
+    setenv("GILAMONSTER_SERVERS", CommandLine.arguments[flag + 2], 1)
+    guard let model = ServerController.open(root: URL(fileURLWithPath: CommandLine.arguments[flag + 3], isDirectory: true)) else { print("no server there"); exit(1) }
+    await model.refreshPlugins()
+    let names = model.plugins.map(\.name)
+    guard names.count >= 3 else { print("the fixture server needs three plugins"); exit(1) }
+    let lab = LabController(existing: nil)
+    lab.acceptEULA()
+    let ok = ["Starts", "A player can join", "Inventory came through", "Stops cleanly", "A change survives a restart"].map { LabCheck($0, .passed) }
+    var first = MirrorBatch(title: "Everything else 1", plugins: Array(names.prefix(names.count - 2)), fresh: ok)
+    first.rejoinLog = ["[GilaMonster] Server stopped.", "[12:00:01 INFO]: Starting minecraft server version 26.3", "[12:00:09 INFO]: Done (7.512s)! For help, type \"help\"", "[12:00:10 INFO]: Alice joined the game", "[12:00:11 INFO]: Test passed"]
+    let refused = "Alice couldn't get back in after the restart. The server said: You are not on the made-up list."
+    var second = MirrorBatch(title: "Everything else 2", plugins: [names[names.count - 2]], fresh: ok.dropLast() + [LabCheck("A change survives a restart", .failed, refused)])
+    second.rejoinLog = ["[GilaMonster] Server stopped.", "[12:03:01 INFO]: Starting minecraft server version 26.3",
+                        "[12:03:08 WARN]: [\(names[names.count - 2])] A made-up warning with a long message that keeps going so the log has to scroll sideways: the value at section.subsection.key was read from a file written by a newer version of the plugin",
+                        "[12:03:09 INFO]: Done (7.904s)! For help, type \"help\"", "[12:03:10 INFO]: Disconnecting Alice: You are not on the made-up list.", "[GilaMonster] Lab: \(refused)"]
+    let third = MirrorBatch(title: "Everything else 3", plugins: [names[names.count - 1]], fresh: [LabCheck("\(names[names.count - 1]) \(model.plugins[names.count - 1].version) loads", .skipped, "Skipped: needs MadeUpMaps (left out of the lab).")])
+    lab.place(.plugins, outcome: .failed, model: model, groups: [first, second, third], note: LabController.note("Paper 26.3 build 1", skipped: 1), leftOut: ["MadeUpMaps reaches outside this Mac, so it doesn't run here."])
+    model.stopTicker()
+    exit(0)
+}
+
 // ... --songs <folder> <zip>  Reads a pack's songs.json in a throwaway folder, then builds it with each song off in turn.
 if let flag = CommandLine.arguments.firstIndex(of: "--songs") {
     let scratch = URL(fileURLWithPath: CommandLine.arguments[flag + 1])
@@ -175,6 +201,8 @@ if CommandLine.arguments.contains("--connections") {
     await todayGrantChecks()
     await launchStartChecks()
     await labRunChecks()
+    await labDependencyChecks()
+    await labRestartLogChecks()
     await smartBackupChecks()
     await backupCapChecks()
     shutdownSignalChecks()
@@ -4905,6 +4933,8 @@ func makePack(_ name: String, _ files: [String: String], inside: String? = nil) 
     await todayGrantChecks()
     await launchStartChecks()
     await labRunChecks()
+    await labDependencyChecks()
+    await labRestartLogChecks()
     await smartBackupChecks()
     await backupCapChecks()
     shutdownSignalChecks()
@@ -5883,6 +5913,13 @@ func residentBytes() -> UInt64 {
                 for line in batch.fresh where line.outcome != .passed { print("          [\(line.outcome.rawValue)] \(line.title) \(line.detail.prefix(200))") }
                 for line in batch.withSettings ?? [] where line.outcome != .passed { print("          [\(line.outcome.rawValue)] \(line.title) \(line.detail.prefix(200))") }
                 for note in batch.notes { print("          note: \(note)") }
+                // The group's kept restart log (K804): how long it is, and how it ended.
+                if let log = batch.rejoinLog {
+                    print("          restart log: \(log.count) lines")
+                    for line in log.suffix(8) { print("            | \(line.prefix(200))") }
+                } else {
+                    print("          restart log: none")
+                }
             }
         }
         await lab.run(.plugins, model: model)

@@ -186,7 +186,8 @@ struct LabStationRow: View {
     let lab: LabController
     let server: ServerController
     @Binding var included: Bool
-    @State private var open = false
+    /// Open in the off-screen pictures, so a result's details get looked at.
+    @State private var open = AppModel.isSnapshot
 
     private var light: StationLight { lab.light(station, model: server) }
     private var result: StationResult? { lab.result(station) }
@@ -243,7 +244,7 @@ struct LabStationRow: View {
     private var nextStep: String? {
         guard let result else { return nil }
         let first = result.checks.first { $0.outcome == .failed }?.title
-            ?? result.groups.first { $0.outcome != .passed }.map { "\($0.title): \($0.plugins.prefix(3).joined(separator: ", "))" }
+            ?? result.groups.first(where: \.isProblem).map { "\($0.title): \($0.plugins.prefix(3).joined(separator: ", "))" }
         let what: String = switch station {
         case .plugins: "Update or remove that plugin, then run again."
         case .settings: "Fresh settings passed, so one of your plugin settings is the cause. Check that plugin's config, then run again."
@@ -322,6 +323,7 @@ struct StationDetails: View {
                     Hint(group.plugins.joined(separator: ", "))
                     CheckList(checks: (group.fresh + (group.withSettings ?? [])).filter { $0.outcome != .passed })
                     ForEach(group.notes, id: \.self) { Hint($0) }
+                    if let log = group.rejoinLog, !log.isEmpty { RestartLog(group: group.title, lines: log) }
                 }
             }
             ForEach(result.leftOut, id: \.self) { Hint($0) }
@@ -333,6 +335,7 @@ struct StationDetails: View {
         case .passed: "Passed"
         case .pluginProblem: "Plugin problem"
         case .settingsProblem: "Settings problem"
+        case .skipped: "Skipped"
         }
     }
 
@@ -341,7 +344,49 @@ struct StationDetails: View {
         case .passed: .good
         case .pluginProblem: .danger
         case .settingsProblem: .warning
+        case .skipped: .neutral
         }
+    }
+}
+
+/// A group's console from its restart step, kept with the result because the lab is deleted when the run ends (K804).
+/// Closed until asked for. The text can be selected, and Copy Log takes all of it.
+struct RestartLog: View {
+    let group: String
+    let lines: [String]
+    @State private var open = AppModel.isSnapshot
+    /// One line of the log, growing with the text size, so a short log is only as tall as it needs.
+    @ScaledMetric(relativeTo: .body) private var lineHeight: CGFloat = 16
+
+    var body: some View {
+        DisclosureGroup("Restart log, \(lines.count) \(lines.count == 1 ? "line" : "lines")", isExpanded: $open) {
+            VStack(alignment: .leading, spacing: 6) {
+                // Sideways inside up-and-down, so a short log sits at the left edge and a long line scrolls.
+                ScrollView(.vertical) {
+                    ScrollView(.horizontal) {
+                        Text(lines.joined(separator: "\n"))
+                            .font(.system(.body, design: .monospaced))
+                            .foregroundStyle(Theme.ink)
+                            .textSelection(.enabled)
+                            .frame(maxWidth: .infinity, alignment: .leading)
+                            .padding(8)
+                    }
+                }
+                .frame(height: min(CGFloat(lines.count) * lineHeight + 28, 240))
+                .background(Theme.raised, in: RoundedRectangle(cornerRadius: 6))
+                .accessibilityLabel("Restart log for \(group)")
+                Button("Copy Log") {
+                    NSPasteboard.general.clearContents()
+                    NSPasteboard.general.setString(lines.joined(separator: "\n"), forType: .string)
+                }
+                .buttonStyle(.themed)
+                .accessibilityLabel("Copy the restart log for \(group)")
+                .helped("The lab's console from stopping to the player rejoining. It has only the lab's bot players in it.")
+            }
+        }
+        .font(.body)
+        .foregroundStyle(Theme.ink)
+        .accessibilityHint("The lab's console from stopping to the player rejoining")
     }
 }
 

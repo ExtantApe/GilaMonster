@@ -94,6 +94,9 @@ fi
 scratch="${SCRATCH:-.build}"
 case "${KEYCHAIN:-}" in ""|wait|denied) ;; *) echo "KEYCHAIN is wait or denied" >&2; exit 2;; esac
 swift build --scratch-path "$scratch" --product GilaMonster >/dev/null
+# Made-up Lab results for the first server, so the Lab page's details, a skipped plugin and a restart log are drawn (K804).
+swift build --scratch-path "$scratch" --product gilamonster-check >/dev/null
+"$scratch/debug/gilamonster-check" --lab-fixture "$home" "$servers" "${list[0]}" >/dev/null
 for theme in ${THEMES:-bold quiet}; do
     for look in ${LOOKS:-light dark}; do
         dir="$out/$kind/$theme-$look"; mkdir -p "$dir"
