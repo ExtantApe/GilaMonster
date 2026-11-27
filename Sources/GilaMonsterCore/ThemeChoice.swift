@@ -6,11 +6,11 @@ public enum ThemeChoice {
     public static let key = "themeFlavor"
 
     /// Bold unless Quiet was chosen. Anything else saved there, from a later version or by hand, reads as Bold.
-    public static func load(_ defaults: UserDefaults = .standard) -> Palette.Flavor {
+    public static func load(_ defaults: UserDefaults = AppDefaults.store) -> Palette.Flavor {
         defaults.string(forKey: key).flatMap(Palette.Flavor.init(rawValue:)) ?? .bold
     }
 
-    public static func save(_ flavor: Palette.Flavor, _ defaults: UserDefaults = .standard) {
+    public static func save(_ flavor: Palette.Flavor, _ defaults: UserDefaults = AppDefaults.store) {
         defaults.set(flavor.rawValue, forKey: key)
     }
 }

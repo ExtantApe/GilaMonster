@@ -80,22 +80,22 @@ final class AppModel {
     /// Asks for the EULA before something that needs the Lab, then carries on with it.
     var labSetup: LabSetupRequest?
     /// A snapshot run draws every server in turn and must leave the saved choice alone (D226).
-    var selectedID: UUID? { didSet { if !Self.isSnapshot { UserDefaults.standard.set(selectedID?.uuidString, forKey: "selectedServer") } } }
+    var selectedID: UUID? { didSet { if !Self.isSnapshot { AppDefaults.store.set(selectedID?.uuidString, forKey: "selectedServer") } } }
     nonisolated static var isSnapshot: Bool { ProcessInfo.processInfo.environment["GILAMONSTER_SNAPSHOT"] != nil }
     var page: PageID = .overview { didSet { if let id = Sections.section(of: page.rawValue)?.id { lastPage[id] = page } } }
     /// Opened from the toolbar while nothing is open, to look at ignored issues. Not saved: the panel goes back to
     /// showing itself only when there's something open (UX audit finding 2).
     var issuesOpenedByHand = false
-    var showIssues = UserDefaults.standard.object(forKey: "showIssues") as? Bool ?? true {
-        didSet { UserDefaults.standard.set(showIssues, forKey: "showIssues") }
+    var showIssues = AppDefaults.store.object(forKey: "showIssues") as? Bool ?? true {
+        didSet { AppDefaults.store.set(showIssues, forKey: "showIssues") }
     }
     var showAddServer = false
     /// The file open on the Configs page, so other pages can jump to one.
     var configPath: String?
-    var showFolderSetup = AppPaths.needsServersFolderChoice
+    var showFolderSetup = AppPaths.asksForServersFolder
     var appUpdate: (version: String, url: URL)?
-    var checkAppUpdates = UserDefaults.standard.object(forKey: "checkAppUpdates") as? Bool ?? true {
-        didSet { UserDefaults.standard.set(checkAppUpdates, forKey: "checkAppUpdates") }
+    var checkAppUpdates = AppDefaults.store.object(forKey: "checkAppUpdates") as? Bool ?? true {
+        didSet { AppDefaults.store.set(checkAppUpdates, forKey: "checkAppUpdates") }
     }
 
     /// The page last open in each section, so a bead goes back to it (K786). Not saved between launches.
@@ -158,7 +158,7 @@ final class AppModel {
         self.lab = lab
         if let found = lab.server, !opened.contains(where: { $0.id == found.id }) { opened.append(found) }
         servers = opened
-        selectedID = (Self.isSnapshot ? nil : UserDefaults.standard.string(forKey: "selectedServer").flatMap(UUID.init)) ?? servers.first?.id
+        selectedID = (Self.isSnapshot ? nil : AppDefaults.store.string(forKey: "selectedServer").flatMap(UUID.init)) ?? servers.first?.id
         // Only servers with "Start when GilaMonster opens" on, which is off by default (owner, 2026-11-16).
         for server in LaunchStart.servers(servers, advisorTrial: AdvisorTrial.isOn,
                                           snapshot: ProcessInfo.processInfo.environment["GILAMONSTER_SNAPSHOT"] != nil) {
@@ -277,8 +277,8 @@ final class AppModel {
 /// Tells you when something goes wrong and GilaMonster isn't in front of you.
 @MainActor enum Alerts {
     static var enabled: Bool {
-        get { UserDefaults.standard.object(forKey: "macAlerts") as? Bool ?? true }
-        set { UserDefaults.standard.set(newValue, forKey: "macAlerts") }
+        get { AppDefaults.store.object(forKey: "macAlerts") as? Bool ?? true }
+        set { AppDefaults.store.set(newValue, forKey: "macAlerts") }
     }
 
     static func connect(_ server: ServerController) {
@@ -631,8 +631,8 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
 struct GilaMonsterApp: App {
     @NSApplicationDelegateAdaptor(AppDelegate.self) private var delegate
     @State private var model: AppModel
-    @AppStorage("appearance") private var appearance = "auto"
-    @AppStorage(ThemeChoice.key) private var themeFlavor = Palette.Flavor.bold.rawValue
+    @AppStorage("appearance", store: AppDefaults.store) private var appearance = "auto"
+    @AppStorage(ThemeChoice.key, store: AppDefaults.store) private var themeFlavor = Palette.Flavor.bold.rawValue
 
     init() {
         // GILAMONSTER_SAMPLE_TICKET=<file.png>: draws a ticket with made-up data and quits, to look at the layout.
@@ -816,8 +816,8 @@ struct StatusMenu: View {
 struct SettingsView: View {
     @Bindable var model: AppModel
     @State private var serversFolder = AppPaths.servers.path
-    @AppStorage("appearance") private var appearance = "auto"
-    @AppStorage(ThemeChoice.key) private var themeFlavor = Palette.Flavor.bold.rawValue
+    @AppStorage("appearance", store: AppDefaults.store) private var appearance = "auto"
+    @AppStorage(ThemeChoice.key, store: AppDefaults.store) private var themeFlavor = Palette.Flavor.bold.rawValue
     var body: some View {
         Form {
             Picker("Theme", selection: Binding(get: { Palette.Flavor(rawValue: themeFlavor) ?? .bold }, set: { flavor in

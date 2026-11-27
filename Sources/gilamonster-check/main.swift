@@ -214,6 +214,7 @@ if CommandLine.arguments.contains("--connections") {
     inviteTicketChecks()
     await packPublishChecks()
     await packCardChecks()
+    appDefaultsChecks()
     scratchDefaultsChecks()
     // --live: also asks this Mac's own playit agent, read-only, and prints only health and summaries.
     if CommandLine.arguments.contains("--live") {
@@ -4948,6 +4949,7 @@ func makePack(_ name: String, _ files: [String: String], inside: String? = nil) 
     inviteTicketChecks()
     await packPublishChecks()
     await packCardChecks()
+    appDefaultsChecks()
     await packSongChecks()
     await pluginUpgradeChecks()
     await serverIconChecks()
