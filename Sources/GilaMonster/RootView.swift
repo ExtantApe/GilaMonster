@@ -113,7 +113,41 @@ struct WelcomeView: View {
             Button("Add a Server") { model.showAddServer = true }.buttonStyle(.themedPrimary)
         }
         .frame(maxWidth: .infinity, maxHeight: .infinity)
+        // With no server there's no banner row, and a Keychain wait still has to show.
+        .safeAreaInset(edge: .top, spacing: 0) { KeychainBanner().padding(.horizontal, 20).padding(.top, 12) }
         .background(Theme.background)
+    }
+}
+
+// MARK: - Waiting on the Keychain
+
+/// Shown while a Keychain call has waited on the owner for a couple of seconds, and after a no (K809). macOS puts its
+/// password window wherever it likes, often behind this one, so the app says to look for it.
+struct KeychainBanner: View {
+    private let wait = KeychainWait.shared
+    private let sessions = SessionAccessService.shared
+
+    @MainActor static var isShown: Bool { KeychainWait.shared.isWaiting || !KeychainWait.shared.denied.isEmpty }
+
+    var body: some View {
+        VStack(spacing: 8) {
+            if wait.isWaiting {
+                // Nothing here moves or blinks, so there's nothing for Reduce Motion to turn off. A stop for the Tab
+                // key, so it can be reached and read without a pointer.
+                Callout(tone: .warning, title: KeychainWait.title, detail: KeychainWait.detail(wait.waitingOn))
+                    .focusable()
+                    .accessibilityHint("Answer the macOS password window to carry on")
+            }
+            if wait.denied.contains(.sessionToken), !wait.isPending(.sessionToken) {
+                Callout(tone: .danger, title: KeychainWait.deniedTitle, detail: KeychainWait.deniedDetail(.sessionToken)) {
+                    VStack(alignment: .trailing, spacing: 6) {
+                        Button("Try Again") { Task { await sessions.apply(SessionAccess.loadSettings()) } }.buttonStyle(.themedPrimary)
+                            .accessibilityHint("macOS asks for Keychain access once more")
+                        Button("Dismiss") { wait.setDenied(.sessionToken, false) }.buttonStyle(.themed)
+                    }
+                }
+            }
+        }
     }
 }
 
@@ -158,6 +192,7 @@ struct ServerWindow: View {
 
     @ViewBuilder private var banners: some View {
         VStack(spacing: 8) {
+            KeychainBanner()
             if let warning = server.diskWarning { Callout(tone: .warning, title: warning) }
             TrialBanner(server: server)
             if let notice = server.notice {
@@ -177,7 +212,7 @@ struct ServerWindow: View {
             }
         }
         .padding(.horizontal, 20)
-        .padding(.top, server.notice == nil && model.appUpdate == nil && !isExternal && server.diskWarning == nil && server.trialPhase == nil ? 0 : 12)
+        .padding(.top, server.notice == nil && model.appUpdate == nil && !isExternal && server.diskWarning == nil && server.trialPhase == nil && !KeychainBanner.isShown ? 0 : 12)
     }
 
     private var isExternal: Bool {

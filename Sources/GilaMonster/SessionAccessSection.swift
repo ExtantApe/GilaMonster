@@ -24,7 +24,7 @@ struct SessionAccessSection: View {
             }))
             if let error = service.error { Text(error).foregroundStyle(Theme.danger).font(.body) }
             if settings.enabled {
-                Text(service.isListening ? "Listening on this Mac only." : service.waitingForKeychain ? "Waiting for Keychain access. macOS may be asking you to allow GilaMonster." : "Not listening yet.").font(.body).foregroundStyle(Theme.muted)
+                Text(service.waitingForKeychain ? "Waiting for Keychain access. macOS may be asking you to allow GilaMonster. Until you answer, sessions are told to wait." : service.isListening ? "Listening on this Mac only." : "Not listening yet.").font(.body).foregroundStyle(Theme.muted)
             }
             VStack(alignment: .leading, spacing: 6) {
                 Text("Commands sessions may run").font(.body.weight(.semibold)).foregroundStyle(Theme.ink)

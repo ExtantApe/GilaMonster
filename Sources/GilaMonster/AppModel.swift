@@ -184,6 +184,12 @@ final class AppModel {
         // Session access: off until the owner turns it on in Settings, and never in a snapshot or the Advisor trial.
         SessionAccessService.shared.servers = { [weak self] in self?.servers ?? [] }
         SessionPrompts.shared.install()
+        // A Keychain call that waits on the owner says so (K809): spoken, and as one Mac notification.
+        KeychainWait.shared.onShown = { purposes in
+            Announcer.say("\(Tone.warning.announcement.prefix): \(KeychainWait.title)", urgent: true, force: true)
+            Alerts.keychainWait(purposes)
+        }
+        KeychainWait.shared.onCleared = { Alerts.keychainWaitEnded() }
         if ProcessInfo.processInfo.environment["GILAMONSTER_SNAPSHOT"] == nil, !AdvisorTrial.isOn {
             // After the window is up, so a Keychain prompt can't hold up the launch.
             Task { await SessionAccessService.shared.apply(SessionAccess.loadSettings()) }
@@ -280,6 +286,30 @@ final class AppModel {
     static func ask() {
         guard Bundle.main.bundleIdentifier != nil else { return }
         UNUserNotificationCenter.current().requestAuthorization(options: [.alert, .sound]) { _, _ in }
+    }
+
+    /// One notification while a Keychain call waits on the owner, and only if macOS already allows notifications:
+    /// nobody is asked for permission here.
+    static func keychainWait(_ purposes: [KeychainWait.Purpose]) {
+        guard Bundle.main.bundleIdentifier != nil else { return }
+        let alertsOn = enabled
+        let content = UNMutableNotificationContent()
+        content.title = KeychainWait.title
+        content.body = KeychainWait.notificationBody(purposes)
+        content.sound = .default
+        let request = UNNotificationRequest(identifier: KeychainWait.notificationID, content: content, trigger: nil)
+        let center = UNUserNotificationCenter.current()
+        center.getNotificationSettings { settings in
+            guard KeychainWait.mayNotify(authorization: settings.authorizationStatus.rawValue, alertsOn: alertsOn) else { return }
+            center.add(request)
+        }
+    }
+
+    /// Takes the notification away once the wait is over, so it can't be read later as still true.
+    static func keychainWaitEnded() {
+        guard Bundle.main.bundleIdentifier != nil else { return }
+        UNUserNotificationCenter.current().removeDeliveredNotifications(withIdentifiers: [KeychainWait.notificationID])
+        UNUserNotificationCenter.current().removePendingNotificationRequests(withIdentifiers: [KeychainWait.notificationID])
     }
 
     private static func show(_ title: String, _ detail: String) {

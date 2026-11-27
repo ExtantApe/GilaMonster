@@ -1,5 +1,13 @@
 # Changelog
 
+## Unreleased
+
+- **A Keychain wait now shows in the app (K809).** GilaMonster isn't signed, so after an update macOS asks again before handing over what GilaMonster saved in the Keychain. On 2026-11-26 that password window sat behind other windows for about 40 minutes. Nothing in the app said so, and session access didn't answer. Now, once a Keychain call has waited 2 seconds, a banner at the top of the window says: "GilaMonster is waiting for you to allow Keychain access. Look for a macOS password window. It may be behind other windows." It also names what is waiting: session access, the Advisor's key, or both. The banner goes when you answer. VoiceOver announces it, and Tab reaches it. If macOS already lets GilaMonster send notifications and Mac alerts are on, one notification is posted too, and removed when the wait ends. Nobody is asked for notification permission for this.
+- **Sessions are told about the wait.** The session socket now opens before the token is read. Until the token is in hand, every request is refused with "GilaMonster is waiting for Keychain access on the Mac", and each refusal is in the call log. Nothing is allowed without the token.
+- **A no at the password window is kept.** GilaMonster used to answer a refused read by making a new token and listening anyway. Now session access stays off, a banner says sessions can't check status or run commands, and Try Again asks macOS once more. A new token is made only when there is none.
+- **Allow Keychain Access on the Advisor page no longer freezes the window.** That press waited for macOS on the main thread. It now waits in the background, with the same banner.
+- Tested: the full check suite from a scratch build, with new checks that use a stand-in Keychain that blocks until released. They cover the banner turning on after the threshold and off on return, the read staying off the main thread, the refusal a session gets during the wait, the denied case, a failed read, Try Again, and turning session access off or off and on during the wait. Not tested: a real macOS password window (none was triggered on purpose), the banner on screen in light and dark, VoiceOver's speech, the Tab stop, and the notification as macOS shows it.
+
 ## 0.6.1 (2026-11-26)
 
 - **Installing:** quitting GilaMonster stops every server it runs. With servers running, Quit asks first; Keep Running is the default and cancels the quit. So install at a quiet time: quit with Stop and Quit, replace GilaMonster in Applications, open it, and start your servers again.

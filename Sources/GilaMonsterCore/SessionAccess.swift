@@ -95,13 +95,14 @@ public enum SessionAccess {
     }
 
     public enum Refusal: Error, Equatable, Sendable {
-        case off, unreadable, noToken, badToken, noCaller, unknownCall(String), notOnList(String), lineBreak, tooLong, server(String)
+        case off, unreadable, noToken, badToken, keychainWait, noCaller, unknownCall(String), notOnList(String), lineBreak, tooLong, server(String)
         public var message: String {
             switch self {
             case .off: "Session access is off. The owner turns it on in GilaMonster's Settings."
             case .unreadable: "The request couldn't be read. Send one JSON object on one line."
             case .noToken: "No token was sent."
             case .badToken: "The token is wrong. A new one may have been made."
+            case .keychainWait: "GilaMonster is waiting for Keychain access on the Mac, so it can't check your token yet. Someone at the Mac needs to answer the macOS password window. Nothing was done. Try again after that."
             case .noCaller: "Say who's asking, in caller."
             case let .unknownCall(c): "\(c.isEmpty ? "No call" : "\"\(c)\"") isn't a call. Use status, log, run, or one of: \(SessionAction.allCases.map(\.rawValue).joined(separator: ", "))."
             case let .notOnList(c): "\"\(c)\" isn't on the owner's list of commands, so it wasn't sent."
@@ -221,15 +222,45 @@ public enum SessionAccess {
     /// The current token, made if there isn't one. Only GilaMonster can read it without asking: anything else, such as
     /// `security find-generic-password`, makes macOS ask the owner first.
     public static func token(create: Bool, keychain: SecKeychain? = nil) -> String? {
+        if case let .token(value) = readToken(create: create, keychain: keychain) { return value }
+        return nil
+    }
+
+    /// How a read of the token ended. A no is kept apart from other failures, so the app can say what won't work.
+    public enum TokenRead: Equatable, Sendable {
+        case token(String)
+        /// The owner said no at the macOS password window, or the Keychain refused this program.
+        case denied
+        /// There's no token, and none was asked for.
+        case missing
+        case failed(OSStatus)
+    }
+
+    /// What a Keychain answer means for the token. A new token is made only when there is none (`missing`): a no
+    /// from the owner is never answered by replacing the token and carrying on (K809).
+    static func tokenRead(status: OSStatus, data: Data?) -> TokenRead {
+        switch status {
+        case errSecSuccess:
+            guard let data, !data.isEmpty else { return .failed(status) }
+            return .token(String(decoding: data, as: UTF8.self))
+        case errSecItemNotFound: return .missing
+        case errSecUserCanceled, errSecAuthFailed, errSecNoAccessForItem: return .denied
+        default: return .failed(status)
+        }
+    }
+
+    /// Reads the token, and with `create` makes one if there's none. This can wait on a macOS password window for as
+    /// long as the owner takes, so the app only calls it through `KeychainWait`, never on the main thread.
+    public static func readToken(create: Bool, keychain: SecKeychain? = nil) -> TokenRead {
         var q: [String: Any] = [kSecClass as String: kSecClassGenericPassword, kSecAttrService as String: keychainService,
                                 kSecAttrAccount as String: keychainAccount, kSecReturnData as String: true]
         if let keychain { q[kSecMatchSearchList as String] = [keychain] }
         var found: CFTypeRef?
-        if SecItemCopyMatching(q as CFDictionary, &found) == errSecSuccess, let data = found as? Data, !data.isEmpty {
-            return String(decoding: data, as: UTF8.self)
-        }
-        guard create else { return nil }
-        return try? newToken(keychain: keychain)
+        let status = SecItemCopyMatching(q as CFDictionary, &found)
+        let read = tokenRead(status: status, data: found as? Data)
+        guard read == .missing, create else { return read }
+        guard let fresh = try? newToken(keychain: keychain) else { return .failed(errSecIO) }
+        return .token(fresh)
     }
 
     /// Replaces the token, so anything holding the old one is refused from now on.
@@ -408,27 +439,52 @@ public final class SessionAccessService {
     public private(set) var waitingForKeychain = false
     /// The token once read, so requests don't go back to the Keychain. Only GilaMonster changes it.
     @ObservationIgnored var cachedToken: String?
+    /// Where slow Keychain calls are shown to the owner. Checks give each service its own.
+    @ObservationIgnored public var keychainWait = KeychainWait.shared
+    /// For checks: a stand-in for the Keychain read, so one can block or refuse with no real prompt. The app leaves it nil.
+    @ObservationIgnored var tokenReader: (@Sendable (_ create: Bool) -> SessionAccess.TokenRead)?
+    /// What the owner's switch last said, so a read that comes back late follows the latest answer.
+    @ObservationIgnored private var wanted = false
+    @ObservationIgnored private var wantedPath = SessionAccess.socketPath
 
     /// Starts or stops the socket to match the owner's switch. The Keychain is read off the main thread: after a
     /// rebuild macOS can ask the owner before handing it over, and on 2026-11-16 that prompt, waited for on the main
-    /// thread, kept the window from ever opening. Without a token nothing listens.
+    /// thread, kept the window from ever opening.
+    ///
+    /// The socket opens before the token is read (K809), so a session that asks during the wait is told why instead
+    /// of finding nobody there. Until the token is in hand every request is refused, and if the read fails or the
+    /// owner says no, the socket closes again: without a token nothing listens.
     public func apply(_ settings: SessionAccessSettings, path: String = SessionAccess.socketPath) async {
-        if settings.enabled {
-            guard socket == nil, !waitingForKeychain else { return }
-            waitingForKeychain = true
-            let token = await Self.readToken(create: true, keychain: keychain)
-            waitingForKeychain = false
-            guard let token, !token.isEmpty else {
-                error = "GilaMonster couldn't read its session token from the Keychain, so sessions can't connect. Turn this off and on to try again."
-                return
-            }
+        wanted = settings.enabled
+        wantedPath = path
+        guard settings.enabled else { stop(); keychainWait.setDenied(.sessionToken, false); return }
+        guard !waitingForKeychain else { return }
+        guard listen() else { return }
+        guard cachedToken == nil else { return }
+        waitingForKeychain = true
+        let read = await readToken(create: true)
+        waitingForKeychain = false
+        switch read {
+        case let .token(token) where !token.isEmpty:
             cachedToken = token
-            guard socket == nil else { return }
-            let s = SessionSocket(path: path) { data in await SessionAccessService.answerOnMain(self, data) }
-            do { try s.start(); socket = s; error = nil } catch { self.error = error.localizedDescription }
-        } else {
+            keychainWait.setDenied(.sessionToken, false)
+            // Turned off and on again during the wait: follow the switch as it is now.
+            if wanted { _ = listen() } else { stop() }
+        case .denied:
             stop()
+            keychainWait.setDenied(.sessionToken, wanted)
+            error = "macOS didn't let GilaMonster read its session token, so sessions can't connect. Turn this off and on to try again."
+        default:
+            stop()
+            error = "GilaMonster couldn't read its session token from the Keychain, so sessions can't connect. Turn this off and on to try again."
         }
+    }
+
+    /// Opens the socket if it isn't open. False, with `error` set, when it couldn't.
+    private func listen() -> Bool {
+        guard socket == nil else { return true }
+        let s = SessionSocket(path: wantedPath) { data in await SessionAccessService.answerOnMain(self, data) }
+        do { try s.start(); socket = s; error = nil; return true } catch { self.error = error.localizedDescription; return false }
     }
 
     /// Stops listening and removes the socket.
@@ -437,13 +493,18 @@ public final class SessionAccessService {
     /// Replaces the token, off the main thread, and remembers the new one.
     public func newToken() async throws {
         let box = KeychainBox(keychain)
-        let value = try await Task.detached { try SessionAccess.newToken(keychain: box.keychain) }.value
-        cachedToken = value
+        let made: Result<String, AppError> = await keychainWait.run(.sessionToken) {
+            do { return .success(try SessionAccess.newToken(keychain: box.keychain)) }
+            catch { return .failure(error as? AppError ?? AppError(error.localizedDescription)) }
+        }
+        cachedToken = try made.get()
     }
 
-    nonisolated static func readToken(create: Bool, keychain: SecKeychain?) async -> String? {
+    /// One read of the token, off the main thread and shown to the owner if it takes long.
+    func readToken(create: Bool) async -> SessionAccess.TokenRead {
         let box = KeychainBox(keychain)
-        return await Task.detached { SessionAccess.token(create: create, keychain: box.keychain) }.value
+        let reader = tokenReader
+        return await keychainWait.run(.sessionToken) { reader?(create) ?? SessionAccess.readToken(create: create, keychain: box.keychain) }
     }
 
     nonisolated static func answerOnMain(_ service: SessionAccessService, _ data: Data) async -> Data {
@@ -452,10 +513,19 @@ public final class SessionAccessService {
 
     public func answer(_ data: Data) async -> Data {
         let settings = SessionAccess.loadSettings()
-        if cachedToken == nil { cachedToken = await Self.readToken(create: false, keychain: keychain) }
-        let (request, decision) = SessionAccess.authorize(data, settings: settings, token: cachedToken)
         defer { calls += 1 }
         let log = logFile ?? SessionAccess.logFile
+        if cachedToken == nil, waitingForKeychain {
+            // No token to compare with yet, so nothing is allowed, whatever was sent. A request that's wrong in some
+            // other way hears that; the rest hear that GilaMonster is waiting, instead of having their token blamed.
+            let (request, early) = SessionAccess.authorize(data, settings: settings, token: nil)
+            var refusal = SessionAccess.Refusal.keychainWait
+            if case let .failure(why) = early, why != .badToken { refusal = why }
+            SessionAccess.record(request, outcome: .failure(refusal), server: nil, to: log)
+            return Self.reply(["ok": false, "error": refusal.message])
+        }
+        if cachedToken == nil, case let .token(token) = await readToken(create: false) { cachedToken = token }
+        let (request, decision) = SessionAccess.authorize(data, settings: settings, token: cachedToken)
         guard case let .success(call) = decision else {
             SessionAccess.record(request, outcome: decision, server: nil, to: log)
             if case let .failure(refusal) = decision { return Self.reply(["ok": false, "error": refusal.message]) }

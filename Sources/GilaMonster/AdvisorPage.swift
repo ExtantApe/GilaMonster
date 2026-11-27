@@ -187,16 +187,21 @@ final class AdvisorCenter {
     }
 
     /// The one place macOS may ask. It asks for this app first, then for the helper, each only if needed.
+    /// Both waits run off the main thread and through KeychainWait (K809), so the window keeps working and says
+    /// what it's waiting for. This used to hold the main thread for as long as the password window was up.
     func allowKeychain(_ server: ServerController) async {
         let path = server.paths.root.path
         guard let program = advisorProgram else { phases[path] = .failed("This build of GilaMonster is missing its Advisor program."); return }
-        do {
-            _ = try KeychainVault(interactive: true, alsoTrusted: [program]).key(create: true)
-        } catch {
-            phases[path] = .failed((error as? KeyVaultProblem)?.message ?? KeyVaultProblem.unavailable.message)
-            return
+        let wait = KeychainWait.shared
+        let problem: KeyVaultProblem? = await wait.run(.advisorKey) {
+            do { _ = try KeychainVault(interactive: true, alsoTrusted: [program]).key(create: true); return nil }
+            catch { return (error as? KeyVaultProblem) ?? .unavailable }
         }
-        if let refused = await Self.helper(program, "--allow-keychain") { phases[path] = .failed(refused); return }
+        if let problem { phases[path] = .failed(problem.message); return }
+        let asking = wait.begin(.advisorKey)
+        let refused = await Self.helper(program, "--allow-keychain")
+        wait.end(asking)
+        if let refused { phases[path] = .failed(refused); return }
         if let still = await keychainProblem() { phases[path] = .failed(still); return }
         phases[path] = .idle
         say(server, .good, "The Advisor can use its key", "Nothing else needs allowing until GilaMonster is updated.")
