@@ -646,3 +646,4 @@ The README's promises, mapped to the sections that prove them (section names as 
 ### Next audit
 
 After the next feature or fix, or by 2026-11-22.
+- 2026-11-27: the `--with-ports` check "an IPv4-only server that answers the ping is ready" failed twice in the v0.6.3 release run and once on PR #37. The stand-in served one connection at a time and waited up to a second on a silent one. A new check holds two silent connections open and pings beside them: it fails on the old stand-in and passes now. Three `--with-ports` runs here: 2626 passed, 0 failed.

@@ -429,14 +429,17 @@ final class StandInServer: @unchecked Sendable {
                 while true {
                     let c = accept(listening, nil, nil)
                     guard c >= 0 else { return }
-                    var noSignal: Int32 = 1
-                    setsockopt(c, SOL_SOCKET, SO_NOSIGPIPE, &noSignal, socklen_t(MemoryLayout<Int32>.size))
-                    var wait = timeval(tv_sec: 1, tv_usec: 0)
-                    setsockopt(c, SOL_SOCKET, SO_RCVTIMEO, &wait, socklen_t(MemoryLayout<timeval>.size))
-                    var buffer = [UInt8](repeating: 0, count: 4096)
-                    let n = read(c, &buffer, buffer.count)
-                    if n > 0, case let .answers(reply) = manner { reply.withUnsafeBytes { _ = write(c, $0.baseAddress, $0.count) } }
-                    close(c)
+                    // Each connection gets its own thread, as on a real server, so a silent one holds up nobody else.
+                    Thread.detachNewThread {
+                        var noSignal: Int32 = 1
+                        setsockopt(c, SOL_SOCKET, SO_NOSIGPIPE, &noSignal, socklen_t(MemoryLayout<Int32>.size))
+                        var wait = timeval(tv_sec: 1, tv_usec: 0)
+                        setsockopt(c, SOL_SOCKET, SO_RCVTIMEO, &wait, socklen_t(MemoryLayout<timeval>.size))
+                        var buffer = [UInt8](repeating: 0, count: 4096)
+                        let n = read(c, &buffer, buffer.count)
+                        if n > 0, case let .answers(reply) = manner { reply.withUnsafeBytes { _ = write(c, $0.baseAddress, $0.count) } }
+                        close(c)
+                    }
                 }
             }
         }
@@ -513,6 +516,21 @@ final class StandInServer: @unchecked Sendable {
     status = await ConnectionCheck.run(game(answering.port), context: context(answering.port), probe: real)
     equal(status.health, .ready, "an IPv4-only server that answers the ping is ready: \(status.summary)")
     check(status.details.contains("The server answers at 127.0.0.1:\(answering.port)."), "and says it answers")
+    // Two connections that say nothing mustn't hold up the next one. The stand-in once served one at a time and
+    // waited a second on each silent one, which could use up the ping's whole time limit on a slow runner.
+    let silent = (0..<2).compactMap { _ -> Int32? in
+        let c = socket(AF_INET, SOCK_STREAM, 0)
+        guard c >= 0 else { return nil }
+        var to = StandInServer.loopback(port: answering.port)
+        let joined = withUnsafePointer(to: &to) { $0.withMemoryRebound(to: sockaddr.self, capacity: 1) { Darwin.connect(c, $0, socklen_t(MemoryLayout<sockaddr_in>.size)) } }
+        if joined != 0 { close(c); return nil }
+        return c
+    }
+    equal(silent.count, 2, "two silent connections are open on the stand-in")
+    let pinged = Date()
+    let answeredBesideSilent = await real.minecraftStatus(host: "127.0.0.1", port: answering.port, timeout: 2)
+    check(answeredBesideSilent && Date().timeIntervalSince(pinged) < 0.9, "the stand-in answers a ping at once beside two silent connections")
+    silent.forEach { close($0) }
     answering.stop()
 
     section("Connections: refused, timed out and still starting (K822)")
