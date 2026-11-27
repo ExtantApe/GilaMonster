@@ -301,6 +301,7 @@ private final class Lines: @unchecked Sendable {
 @MainActor func runDrillSignalChild(_ args: [String]) async -> Never {
     guard args.count == 5, let major = Int(args[2]) else { print("usage: --drill-signal-child <folder> <java> <java major> <stand-in jar> <stop|terminate>"); exit(2) }
     let dir = URL(fileURLWithPath: args[0], isDirectory: true)
+    adoptStandInPorts()
     setenv("GILAMONSTER_HOME", dir.appendingPathComponent("home").path, 1)
     setenv("GILAMONSTER_SERVERS", dir.appendingPathComponent("servers").path, 1)
     do {

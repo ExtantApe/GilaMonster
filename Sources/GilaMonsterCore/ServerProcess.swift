@@ -15,7 +15,13 @@ public final class ServerProcess: @unchecked Sendable {
     public var onLine: (@Sendable (String) -> Void)?
     public var onExit: (@Sendable (Int32) -> Void)?
 
+    /// For checks only: told about every launch just before it happens, so a check suite can audit what it starts
+    /// (the heap it asks for, the folder it runs in). The app never sets it.
+    nonisolated(unsafe) public static var launchObserver: ((_ java: String, _ arguments: [String], _ directory: URL) -> Void)?
+    private let launchRecord: (java: String, arguments: [String], directory: URL)
+
     public init(java: String, arguments: [String], directory: URL) {
+        launchRecord = (java, arguments, directory)
         process.executableURL = URL(fileURLWithPath: java)
         process.arguments = arguments
         process.currentDirectoryURL = directory
@@ -43,6 +49,7 @@ public final class ServerProcess: @unchecked Sendable {
                 self.onExit?(p.terminationStatus)
             }
         }
+        Self.launchObserver?(launchRecord.java, launchRecord.arguments, launchRecord.directory)
         try process.run()
     }
 
@@ -122,7 +129,12 @@ public enum SystemInfo {
         return String(cString: buffer)
     }
 
+    /// For checks only: answers `isPortBusy` without touching a socket, so a check suite can run without ever
+    /// binding a TCP port. The app never sets it.
+    nonisolated(unsafe) public static var portProbeStandIn: ((Int) -> Bool)?
+
     public static func isPortBusy(_ port: Int) -> Bool {
+        if let standIn = portProbeStandIn { return standIn(port) }
         // Observed: on a Mac, binding to every address succeeds even while something holds the port on 127.0.0.1 alone,
         // as the Lab does. So both are tried.
         for host in [INADDR_ANY, INADDR_LOOPBACK] {
