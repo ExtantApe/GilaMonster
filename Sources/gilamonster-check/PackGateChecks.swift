@@ -66,6 +66,11 @@ import GilaMonsterCore
         let port = 28772
         try c.setPackHost(address: "http://127.0.0.1:\(port)", port: port)
         check(c.packHostSettings.joiningOnly, "only players joining is on by default")
+        // Settings saved before this existed keep their addresses, and get the check switched on.
+        let saved = Data(#"{"enabled":true,"port":8766,"address":"http://127.0.0.1:1","recipes":{"x":{"token":"made-up-token"}}}"#.utf8)
+        let decoded = try JSONDecoder().decode(PackHostSettings.self, from: saved)
+        check(decoded.joiningOnly && decoded.recipes["x"]?.token == "made-up-token" && decoded.enabled, "older saved settings keep their addresses and get the check on")
+        guard portsAllowed else { needsPorts("Serving packs, only players joining: the real listener on 127.0.0.1"); return }
         try c.startPackHost()
         await checkUntil(5, "listening") { c.packHostIsListening }
         let url = c.packBuildAddress(recipe: "gate-pack", sha1: build.sha1)!
@@ -189,11 +194,6 @@ import GilaMonsterCore
         await checkUntil(5, "listening, gated again") { c.packHostIsListening }
         let back = await PackHosting.check(url: url, expected: build.sha1)
         equal(back.outcome, .status(404), "and back on, it's refused again")
-
-        // Settings saved before this existed keep their addresses, and get the check switched on.
-        let saved = Data(#"{"enabled":true,"port":8766,"address":"http://127.0.0.1:1","recipes":{"x":{"token":"made-up-token"}}}"#.utf8)
-        let decoded = try JSONDecoder().decode(PackHostSettings.self, from: saved)
-        check(decoded.joiningOnly && decoded.recipes["x"]?.token == "made-up-token" && decoded.enabled, "older saved settings keep their addresses and get the check on")
     } catch { failures.append("pack gate checks threw: \(error)") }
 }
 

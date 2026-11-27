@@ -311,7 +311,9 @@ final class FakeConnectionProbe: ConnectionProbe, @unchecked Sendable {
     check(!MinecraftPing.looksLikeStatus(Data()), "and nothing isn't")
 
     let real = SystemConnectionProbe()
-    if let game = try? fakeListener(reply: Data(answer)), let web = try? fakeListener(reply: Data("HTTP/1.1 404 Not Found\r\nContent-Length: 0\r\n\r\n".utf8)) {
+    if !portsAllowed {
+        needsPorts("Connections: the game's status ping and a plain connection, against real listeners")
+    } else if let game = try? fakeListener(reply: Data(answer)), let web = try? fakeListener(reply: Data("HTTP/1.1 404 Not Found\r\nContent-Length: 0\r\n\r\n".utf8)) {
         let gp = Int(game.port!.rawValue), wp = Int(web.port!.rawValue)
         // Generous waits for the answers that should arrive: a busy run once took longer than 3 seconds (2026-11-14).
         // They return as soon as the answer comes, so a passing run isn't slower.
@@ -354,6 +356,7 @@ final class FakeConnectionProbe: ConnectionProbe, @unchecked Sendable {
 
 /// A listener on 127.0.0.1 that answers every connection with fixed bytes once it has read something.
 func fakeListener(reply: Data) throws -> NWListener {
+    guard portsAllowed else { throw AppError("a listener was asked for in a run that mustn't open ports") }
     let params = NWParameters.tcp
     params.requiredLocalEndpoint = NWEndpoint.hostPort(host: "127.0.0.1", port: .any)
     let listener = try NWListener(using: params)
