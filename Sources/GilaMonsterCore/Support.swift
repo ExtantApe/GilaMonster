@@ -2,7 +2,7 @@ import CryptoKit
 import Foundation
 
 public enum GilaMonster {
-    public static let version = "0.6.1"
+    public static let version = "0.6.2"
     public static let repository = "ExtantApe/GilaMonster"
     public static let userAgent = "GilaMonster/\(version) (https://github.com/\(repository))"
 }
