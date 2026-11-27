@@ -76,6 +76,29 @@ if let flag = CommandLine.arguments.firstIndex(of: "--lab-fixture"), flag + 3 < 
     exit(0)
 }
 
+// ... --backup-fixture <home> <servers> <server folder>  Made-up backups for the off-screen pictures (K823): one in the
+//     server's own backup folder from 23 hours ago, and an added storage folder under <home> with one from 4 days ago.
+//     Placeholder archives with GilaMonster's record beside them, all inside <home> and <servers>. The weekly drill
+//     is turned off for that server, so the snapshot has nothing to unpack or start. Starts nothing.
+if let flag = CommandLine.arguments.firstIndex(of: "--backup-fixture"), flag + 3 < CommandLine.arguments.count {
+    setenv("GILAMONSTER_HOME", CommandLine.arguments[flag + 1], 1)
+    setenv("GILAMONSTER_SERVERS", CommandLine.arguments[flag + 2], 1)
+    guard let model = ServerController.open(root: URL(fileURLWithPath: CommandLine.arguments[flag + 3], isDirectory: true)) else { print("no server there"); exit(1) }
+    let storage = URL(fileURLWithPath: CommandLine.arguments[flag + 1], isDirectory: true).appendingPathComponent("made-up-drive", isDirectory: true)
+    try FileOps.ensureDir(storage)
+    model.profile.backup.smart.targets = [storage.path]
+    model.profile.backup.enabled = true
+    // The app's ticker runs the weekly drill on any whole-folder backup it finds, in a snapshot too. These are
+    // placeholders, and a snapshot starts nothing, so the drill is off for this made-up server.
+    model.profile.backup.autoDrill = false
+    let there = Backups.targetFolder(storage.path, for: model.profile)
+    try Backups.claim(there, for: model.profile.id)
+    writeMadeUpBackup(in: Backups.destination(model.profile), madeAt: Date().addingTimeInterval(-23 * 3600), serverName: model.profile.name)
+    writeMadeUpBackup(in: there, madeAt: Date().addingTimeInterval(-4 * 86_400), serverName: model.profile.name, trigger: "scheduled")
+    model.stopTicker()
+    exit(0)
+}
+
 // ... --songs <folder> <zip>  Reads a pack's songs.json in a throwaway folder, then builds it with each song off in turn.
 if let flag = CommandLine.arguments.firstIndex(of: "--songs") {
     let scratch = URL(fileURLWithPath: CommandLine.arguments[flag + 1])
@@ -208,6 +231,7 @@ if CommandLine.arguments.contains("--connections") {
     shutdownSignalChecks()
     needsYouChecks()
     await serverNameChecks()
+    backupSeenChecks()
     await driveFallbackChecks()
     sessionAskPlacementChecks()
     overflowChecks()
@@ -4941,6 +4965,7 @@ func makePack(_ name: String, _ files: [String: String], inside: String? = nil) 
     shutdownSignalChecks()
     needsYouChecks()
     await serverNameChecks()
+    backupSeenChecks()
     await driveFallbackChecks()
     sessionAskPlacementChecks()
     overflowChecks()
@@ -6310,9 +6335,9 @@ exit(failures.isEmpty ? 0 : 1)
     equal(kinds(lab), [.issues], "the Lab: no backup, drive or connection items, but issues still show")
     let now = Date(timeIntervalSince1970: 1_800_000_000)
     equal(NeedsYou.statusLine(running: false, starting: false, since: nil, players: 0, software: "Paper 26.3 build 253", lastBackup: nil, isLab: false, now: now),
-          "Stopped. Paper 26.3 build 253. No backup yet.", "stopped, never backed up")
+          "Stopped. Paper 26.3 build 253. No GilaMonster backup yet.", "stopped, never backed up")
     let line = NeedsYou.statusLine(running: true, starting: false, since: now.addingTimeInterval(-7200), players: 3, software: "Paper", lastBackup: now.addingTimeInterval(-2400), isLab: false, now: now)
-    check(line.hasPrefix("Running for 2 hours. 3 players on. Last backup "), "running: how long, who's on, last backup (\(line))")
+    check(line.hasPrefix("Running for 2 hours. 3 players on. Last GilaMonster backup "), "running: how long, who's on, last backup (\(line))")
     equal(NeedsYou.statusLine(running: true, starting: false, since: now, players: 1, software: "Paper", lastBackup: nil, isLab: true, now: now),
           "Running for 1 minute. 1 player on.", "the Lab never mentions backups; under a minute reads as one")
     equal(NeedsYou.statusLine(running: false, starting: true, since: nil, players: 0, software: "Paper", lastBackup: nil, isLab: true, now: now), "Starting.", "starting")
