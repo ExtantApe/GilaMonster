@@ -72,10 +72,17 @@ import GilaMonsterCore
 
     section("Pixel type: Bold Text")
     let bold = C(boldText: true)
-    for (name, role) in roles where ["sheet title", "heading", "label", "button", "number"].contains(name) {
+    // macOS makes every system font bolder itself under Bold Text. So the app asks for the weight each label had,
+    // and nothing is thickened twice.
+    let asked: [(String, PixelType.Role, PixelType.Weight)] = [("sheet title", .title(17), .semibold), ("heading", .heading, .bold), ("label", .label(.regular), .regular),
+                                                               ("tab", .label(.medium), .medium), ("button", .label(.semibold), .semibold), ("number", .number, .regular)]
+    for (name, role, weight) in asked {
         let drawn = PixelType.resolve(role, bold)
-        check(drawn.face == .system && drawn.weight == .bold, "\(name): the bold system font")
+        equal(drawn.face, .system, "\(name): the system font, which macOS bolds")
+        equal(drawn.weight, weight, "\(name): at the weight it had, so it isn't bolded twice")
+        equal(drawn.weight, PixelType.resolve(role, C(on: false)).weight, "\(name): the same weight as with pixel type off")
     }
+    equal(PixelType.resolve(.promptSentence, bold).weight, .semibold, "the Allow prompt's sentence keeps its weight too")
     check(PixelType.resolve(.number, bold).tabularDigits, "numbers keep digits of equal width")
     check(!PixelType.resolve(.heading, bold).caps, "a system-font heading isn't set in capitals")
     let boldTitle = PixelType.resolve(.screenTitle(26), bold)
@@ -142,7 +149,13 @@ import GilaMonsterCore
     equal(PixelType.resolve(.label(.regular), C(on: false, boldText: true)).weight, .regular, "off leaves Bold Text to the system, as before")
     let type = source("Type.swift"), settings = source("AppModel.swift")
     check(settings.contains("Toggle(\"Pixel font\", isOn: Binding(get: { TypeState.shared.on }") && settings.contains("PixelType.save(on)"), "Settings has the Pixel font switch, and it is saved")
-    check(settings.contains("Hint(\"Headings, labels, buttons and numbers use a pixel typeface. Turn this off to use the system font everywhere.\")"), "with its hint")
+    // The hint is held to what off does: the system font for the four things it names, and no promise about the rest.
+    equal(PixelType.settingHint, "Headings, labels, buttons and numbers use a pixel typeface. Turn this off to use the system font for them.", "the hint's words")
+    check(settings.contains("Hint(PixelType.settingHint)") && !settings.contains("system font everywhere"), "Settings shows that hint, and nowhere says the system font is used everywhere")
+    for (name, role) in roles where ["heading", "label", "button", "number"].contains(name) {
+        check(PixelType.resolve(role, normal).isPixel && PixelType.resolve(role, off).face == .system, "\(name): a pixel typeface when on and the system font when off, as the hint says")
+    }
+    check(PixelType.resolve(.display(28), off).face == .lilita && PixelType.resolve(.promptSentence, off).face == .lilita, "off keeps Lilita One on the status sentence, a player's name and the Allow sentence, which is why the hint doesn't say everywhere")
     check(type.contains("PixelType.load(bodySize: bodySize, boldText: boldText, screenScales: Self.screenScales, remember: true)"), "the first window settles the first-launch default, once it knows about Bold Text")
     check(type.contains(".onChange(of: displayScale) { report() }") && type.contains(".onChange(of: legibilityWeight) { report() }"), "a change of screen scale or Bold Text is reported, so sizes snap again")
     check(settings.contains("if !AppModel.isSnapshot { PixelType.save(on) }") && type.contains("guard !fixed else { return }"), "a snapshot saves nothing")

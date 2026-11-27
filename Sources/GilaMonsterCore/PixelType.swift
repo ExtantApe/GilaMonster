@@ -9,6 +9,10 @@ import Foundation
 /// it snaps to, what Bold Text and a 1x screen change, and what the setting starts as. The app only turns the answer
 /// into a font (`TypeToken` in the app target).
 public enum PixelType {
+    /// The words under the Pixel font switch. Off sends headings, labels, buttons and numbers to the system font. The
+    /// status sentence, a player's name and the Allow prompt's sentence go back to the display face they had before,
+    /// so the hint says "for them" and promises nothing about the rest.
+    public static let settingHint = "Headings, labels, buttons and numbers use a pixel typeface. Turn this off to use the system font for them."
     /// The Pixel font setting's key.
     public static let key = "pixelFont"
     /// Both pixel faces are drawn on an 11-pixel em, so text is sharp only when one font pixel is a whole number of
@@ -75,9 +79,9 @@ public enum PixelType {
 
         /// How much larger than the default the system's text is.
         public var factor: Double { bodySize > 0 ? bodySize / PixelType.defaultBody : 1 }
-        /// Labels, buttons and numbers are in Departure Mono. It has one weight, so Bold Text sends them to the bold
-        /// system font. On a 1x screen above the default size the next sharp size is double, so they go to the system
-        /// font there too.
+        /// Labels, buttons and numbers are in Departure Mono. It has one weight, so Bold Text sends them to the system
+        /// font, which macOS bolds itself. On a 1x screen above the default size the next sharp size is double, so
+        /// they go to the system font there too.
         public var pixelLabels: Bool { on && departureLoaded && !boldText && !(scale < 2 && factor > 1.0001) }
         public var pixelTitle: Bool { on && pixelifyLoaded }
         /// The label size in points.
@@ -124,8 +128,9 @@ public enum PixelType {
         let f = c.factor
         func system(_ points: Double, _ weight: Weight) -> Resolved { Resolved(face: .system, size: points * f, weight: weight) }
         func departure(_ points: Double) -> Resolved { Resolved(face: .departure, size: snap(points, body: c.bodySize, scale: c.scale), weight: .regular, tabularDigits: true) }
-        /// Labels in the system font: bold under Bold Text, the asked weight otherwise.
-        func systemLabel(_ points: Double, _ weight: Weight) -> Resolved { system(points, c.on && c.boldText ? .bold : weight) }
+        /// Labels in the system font, at the weight they were asked for. Under Bold Text macOS makes every system
+        /// font bolder itself, so asking for bold as well would thicken them twice.
+        func systemLabel(_ points: Double, _ weight: Weight) -> Resolved { system(points, weight) }
 
         switch role {
         case .screenTitle(let points):
@@ -137,7 +142,7 @@ public enum PixelType {
             return resolve(.screenTitle(points), c)
         case .promptSentence:
             guard c.on else { return Resolved(face: .lilita, size: 19 * f, weight: .regular) }
-            return system(15, c.boldText ? .bold : .semibold)
+            return system(15, .semibold)
         case .title(let points):
             return c.pixelLabels ? departure(points) : systemLabel(points, .semibold)
         case .heading:

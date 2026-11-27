@@ -878,7 +878,7 @@ struct SettingsView: View {
                 if !AppModel.isSnapshot { PixelType.save(on) }
                 Announcer.say(on ? "Pixel font on" : "Pixel font off", force: true)
             }))
-            Hint("Headings, labels, buttons and numbers use a pixel typeface. Turn this off to use the system font everywhere.")
+            Hint(PixelType.settingHint)
             Toggle("Tell me when a new GilaMonster is on GitHub", isOn: $model.checkAppUpdates)
             Toggle("Notify me about crashes, failed backups and low disk space", isOn: Binding(get: { Alerts.enabled }, set: { Alerts.enabled = $0 }))
             LabeledContent("Version", value: GilaMonster.version)

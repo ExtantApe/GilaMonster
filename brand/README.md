@@ -143,13 +143,15 @@ sets it explicitly. Increase Contrast in System Settings gets the stronger value
 ## Accessibility
 
 - **Pixel font** in Settings turns the pixel type off: "Headings, labels, buttons and numbers use a pixel typeface.
-  Turn this off to use the system font everywhere." It is on by default. On a first launch it starts off when the
+  Turn this off to use the system font for them." Off also puts Lilita One back on the status sentence, a
+  player's name and the Allow prompt's sentence, as before the pixel type. It is on by default. On a first launch it starts off when the
   Mac's text size is above the default, Bold Text is on, or every screen is 1x. After that it stays as the owner
   left it.
 - Text follows the system's text size. Pixel labels move up to the next sharp size and never down, and controls
   grow with them so nothing is cut off.
-- With **Bold Text** on, labels, buttons and numbers use the bold system font, because Departure Mono has one
-  weight. The title keeps Pixelify Sans 700.
+- With **Bold Text** on, labels, buttons and numbers use the system font, because Departure Mono has one weight.
+  macOS bolds the system font itself, so the app asks for the usual weight and nothing is thickened twice. The
+  title keeps Pixelify Sans 700.
 - On a 1x screen above the default text size, labels, buttons and numbers use the system font, because the next
   sharp pixel size there is double.
 - Muted labels at 11 pt keep the Muted color: it is 6.9:1 or better on the background, surface and raised colors.
