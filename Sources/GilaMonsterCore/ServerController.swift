@@ -41,7 +41,9 @@ public final class ServerController: Identifiable {
     public private(set) var paths: ServerPaths
     public var profile: ServerProfile { didSet { if profile != oldValue { saveProfile() } } }
 
-    public private(set) var state: ServerState = .stopped
+    // What a connection check found belongs to the state it was run in. A start or stop clears it, so the
+    // Overview's Needs you never repeats an old answer; the connections card checks again.
+    public private(set) var state: ServerState = .stopped { didSet { if state != oldValue { connectionProblems = [] } } }
     public private(set) var startedAt: Date?
     public private(set) var players: Set<String> = []
     /// Who is connected, from the server's own login and disconnect lines. Plugins that hide or rewrite the join

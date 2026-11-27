@@ -343,7 +343,8 @@ public protocol ConnectionProbe: Sendable {
     /// The last part of a text file, or nil.
     func tail(_ path: String, bytes: Int) -> String?
     func keychain(_ account: String) -> SecretPresence
-    func tcp(host: String, port: Int, timeout: TimeInterval) async -> Bool
+    /// Opens a plain connection, sends nothing and closes it. Says whether something is listening, nothing is, or it couldn't tell.
+    func connect(host: String, port: Int, timeout: TimeInterval) async -> ConnectAnswer
     /// Asks a Minecraft server for its status, as the game's server list does.
     func minecraftStatus(host: String, port: Int, timeout: TimeInterval) async -> Bool
     /// The HTTP status code, or nil when nothing answered.
@@ -354,14 +355,60 @@ public protocol ConnectionProbe: Sendable {
     var home: String { get }
 }
 
+/// What a plain connection to an address found.
+public enum ConnectAnswer: Equatable, Sendable {
+    /// Something accepted the connection.
+    case connected
+    /// The Mac refused it at once: nothing is listening there.
+    case refused
+    /// No verdict, with why in a few words ("no answer within 2 seconds").
+    case undecided(String)
+}
+
+extension ConnectionProbe {
+    /// True only when something accepted the connection.
+    public func tcp(host: String, port: Int, timeout: TimeInterval) async -> Bool {
+        await connect(host: host, port: port, timeout: timeout) == .connected
+    }
+}
+
 /// What the check needs to know about the server itself.
 public struct ConnectionContext: Sendable {
     public var serverRunning: Bool
+    /// The server has been started and hasn't finished loading, so its port may not be open yet.
+    public var serverStarting = false
     public var serverIP: String
     public var serverPort: Int
     public var packHostPort: Int?
+    /// Paper's proxy-protocol is on: the server drops any connection that doesn't begin with the PROXY header,
+    /// so a status ping sent straight to it gets no answer while players coming through the tunnel get in.
+    public var proxyProtocol = false
+    /// enable-status in server.properties. Off means the server answers no status ping at all.
+    public var statusEnabled = true
     public init(serverRunning: Bool, serverIP: String, serverPort: Int, packHostPort: Int? = nil) {
         self.serverRunning = serverRunning; self.serverIP = serverIP; self.serverPort = serverPort; self.packHostPort = packHostPort
+    }
+}
+
+/// The one Paper setting the connection checks need, read without a YAML library.
+public enum PaperGlobalSettings {
+    /// True when `proxy-protocol: true` sits directly under the top-level `proxies:` section.
+    public static func proxyProtocol(_ text: String) -> Bool {
+        var inProxies = false
+        var childIndent: Int?
+        for raw in text.split(separator: "\n", omittingEmptySubsequences: false) {
+            let line = raw.prefix { $0 != "#" }
+            let trimmed = line.trimmingCharacters(in: .whitespaces)
+            guard !trimmed.isEmpty else { continue }
+            let indent = line.prefix { $0 == " " }.count
+            if indent == 0 { inProxies = trimmed == "proxies:"; childIndent = nil; continue }
+            guard inProxies else { continue }
+            if childIndent == nil { childIndent = indent }
+            guard indent == childIndent, trimmed.hasPrefix("proxy-protocol:") else { continue }
+            let value = trimmed.dropFirst("proxy-protocol:".count).trimmingCharacters(in: .whitespaces)
+            return value.trimmingCharacters(in: CharacterSet(charactersIn: "\"'")).lowercased() == "true"
+        }
+        return false
     }
 }
 
@@ -476,15 +523,32 @@ public enum ConnectionCheck {
             if service.traffic == .web, let pack = context.packHostPort, local.port != pack, service.provider == .playit {
                 details.append("It forwards to port \(local.port); pack serving here uses \(pack).")
             }
-            let answers: Bool = service.traffic == .game
-                ? await probe.minecraftStatus(host: local.host, port: local.port, timeout: 2)
-                : await probe.tcp(host: local.host, port: local.port, timeout: 2)
-            if answers {
-                details.append("Something answers at \(local.text).")
-            } else if service.traffic == .game && !context.serverRunning {
-                note(.warning, "The server isn't running, so nothing answers at \(local.text) yet.")
-            } else {
-                note(service.traffic == .game ? .notReady : .warning, "Nothing answers at \(local.text), so the tunnel has nowhere to send people.")
+            // A plain connection decides whether anything is listening. It sends nothing, so it works whatever the
+            // server expects first. The status ping is only extra proof, and only where the server would answer one.
+            let wait: TimeInterval = 2
+            switch await probe.connect(host: local.host, port: local.port, timeout: wait) {
+            case .connected:
+                if service.traffic != .game {
+                    details.append("Something answers at \(local.text).")
+                } else if context.proxyProtocol {
+                    details.append("The server is listening at \(local.text). It expects the PROXY header (proxy-protocol in Paper's settings), so no status ping is sent to it here.")
+                } else if !context.statusEnabled {
+                    details.append("The server is listening at \(local.text). Its status is turned off (enable-status), so no status ping is sent.")
+                } else if await probe.minecraftStatus(host: local.host, port: local.port, timeout: wait) {
+                    details.append("The server answers at \(local.text).")
+                } else {
+                    note(.unknown, "Something is listening at \(local.text), but it didn't answer the game's status ping in \(Int(wait)) seconds. Couldn't tell whether it's the server.")
+                }
+            case .refused:
+                if service.traffic == .game && context.serverStarting {
+                    note(.unknown, "The server is still starting, so nothing is listening at \(local.text) yet. This is checked again when it's up.")
+                } else if service.traffic == .game && !context.serverRunning {
+                    note(.warning, "The server isn't running, so nothing answers at \(local.text) yet.")
+                } else {
+                    note(service.traffic == .game ? .notReady : .warning, "Nothing is listening at \(local.text), so the tunnel has nowhere to send people.")
+                }
+            case let .undecided(why):
+                note(.unknown, "Couldn't check \(local.text): \(why).")
             }
         }
 
@@ -508,6 +572,15 @@ public enum ConnectionCheck {
         switch worst {
         case .ready: return ConnectionStatus(.ready, readySummary(service), details: details)
         default: return ConnectionStatus(worst, headline ?? worst.title, details: details)
+        }
+    }
+
+    /// "Service: summary" for each connection that belongs in the Overview's Needs you: turned on, checked, and
+    /// needing a look or not ready. One that wasn't checked or couldn't be checked is unknown, and stays out.
+    public static func problems(_ services: [ConnectionService], _ results: [String: ConnectionStatus]) -> [String] {
+        services.filter(\.enabled).compactMap { service in
+            guard let status = results[service.id], status.health >= .warning else { return nil }
+            return "\(service.name): \(status.summary)"
         }
     }
 
@@ -684,12 +757,12 @@ public struct SystemConnectionProbe: ConnectionProbe {
         }.value
     }
 
-    public func tcp(host: String, port: Int, timeout: TimeInterval) async -> Bool {
-        await exchange(host: host, port: port, timeout: timeout, send: nil)
+    public func connect(host: String, port: Int, timeout: TimeInterval) async -> ConnectAnswer {
+        await exchange(host: host, port: port, timeout: timeout, send: nil).connect
     }
 
     public func minecraftStatus(host: String, port: Int, timeout: TimeInterval) async -> Bool {
-        await exchange(host: host, port: port, timeout: timeout, send: MinecraftPing.request(host: host, port: port))
+        await exchange(host: host, port: port, timeout: timeout, send: MinecraftPing.request(host: host, port: port)) == .answered
     }
 
     public func httpStatus(_ url: URL, timeout: TimeInterval) async -> Int? {
@@ -702,47 +775,76 @@ public struct SystemConnectionProbe: ConnectionProbe {
         return (response as? HTTPURLResponse)?.statusCode
     }
 
-    /// Connects, optionally sends a status request, and says whether a real answer came back in time.
-    private func exchange(host: String, port: Int, timeout: TimeInterval, send: Data?) async -> Bool {
-        guard let p = NWEndpoint.Port(rawValue: UInt16(port)) else { return false }
+    /// How one exchange ended. `connect` is what it says about the address alone.
+    private enum Exchange: Equatable {
+        case answered, wrongAnswer, refused, undecided(String)
+        var connect: ConnectAnswer {
+            switch self {
+            case .answered, .wrongAnswer: .connected
+            case .refused: .refused
+            case let .undecided(why): .undecided(why)
+            }
+        }
+    }
+
+    /// Only a refusal means nothing is listening. Any other error leaves it undecided.
+    private static func verdict(_ error: NWError) -> Exchange {
+        if case let .posix(code) = error {
+            if code == .ECONNREFUSED { return .refused }
+            return .undecided(String(cString: strerror(code.rawValue)).lowercased())
+        }
+        return .undecided("the connection couldn't be made")
+    }
+
+    private static func limit(_ timeout: TimeInterval) -> String {
+        let n = timeout.rounded() == timeout ? String(Int(timeout)) : String(timeout)
+        return "no answer within \(n) second\(timeout == 1 ? "" : "s")"
+    }
+
+    /// Connects, optionally sends a status request, and says how it went, whichever of the answer or the time limit comes first.
+    private func exchange(host: String, port: Int, timeout: TimeInterval, send: Data?) async -> Exchange {
+        guard let p = NWEndpoint.Port(rawValue: UInt16(port)) else { return .undecided("the port isn't one") }
         let connection = NWConnection(host: NWEndpoint.Host(host), port: p, using: .tcp)
         let queue = DispatchQueue(label: "gilamonster.connection-check")
         return await withCheckedContinuation { continuation in
             let once = Once(connection: connection, continuation: continuation)
-            let finish: @Sendable (Bool) -> Void = { once.finish($0) }
+            let finish: @Sendable (Exchange) -> Void = { once.finish($0) }
             connection.stateUpdateHandler = { state in
                 switch state {
                 case .ready:
-                    guard let send else { finish(true); return }
+                    guard let send else { finish(.answered); return }
                     connection.send(content: send, completion: .contentProcessed { _ in })
                     connection.receive(minimumIncompleteLength: 1, maximumLength: 64 << 10) { data, _, _, _ in
-                        finish(MinecraftPing.looksLikeStatus(data ?? Data()))
+                        finish(MinecraftPing.looksLikeStatus(data ?? Data()) ? .answered : .wrongAnswer)
                     }
-                case .failed, .cancelled: finish(false)
-                case .waiting: finish(false)
+                case let .failed(error), let .waiting(error): finish(Self.verdict(error))
+                case .cancelled: finish(.undecided("the check was stopped"))
                 default: break
                 }
             }
             connection.start(queue: queue)
-            queue.asyncAfter(deadline: .now() + timeout) { finish(false) }
+            // Once connected, silence is a wrong answer to the ping, and still a connection.
+            queue.asyncAfter(deadline: .now() + timeout) {
+                if send != nil, case .ready = connection.state { finish(.wrongAnswer) } else { finish(.undecided(Self.limit(timeout))) }
+            }
         }
     }
 }
 
 /// Answers a check exactly once, whichever of the connection or the time limit comes first.
-private final class Once: @unchecked Sendable {
+private final class Once<Answer: Sendable>: @unchecked Sendable {
     private let lock = NSLock()
     private var done = false
     private let connection: NWConnection
-    private let continuation: CheckedContinuation<Bool, Never>
-    init(connection: NWConnection, continuation: CheckedContinuation<Bool, Never>) { self.connection = connection; self.continuation = continuation }
-    func finish(_ ok: Bool) {
+    private let continuation: CheckedContinuation<Answer, Never>
+    init(connection: NWConnection, continuation: CheckedContinuation<Answer, Never>) { self.connection = connection; self.continuation = continuation }
+    func finish(_ answer: Answer) {
         lock.lock()
         guard !done else { lock.unlock(); return }
         done = true
         lock.unlock()
         connection.cancel()
-        continuation.resume(returning: ok)
+        continuation.resume(returning: answer)
     }
 }
 
@@ -815,14 +917,21 @@ extension ServerController {
     /// What the connection checks compare against: the server's own address and port, and pack serving's port.
     public var connectionContext: ConnectionContext {
         let text = (try? String(contentsOf: paths.properties, encoding: .utf8)) ?? ""
-        let ip = PropertiesDocument(text).value("server-ip") ?? ""
+        let properties = PropertiesDocument(text)
+        let ip = properties.value("server-ip") ?? ""
         let hosting = packHostSettings
         let running: Bool
         switch state {
         case .running, .external: running = true  // A server started outside GilaMonster is still running.
         default: running = false
         }
-        return ConnectionContext(serverRunning: running, serverIP: ip, serverPort: serverPort,
-                                 packHostPort: hosting.enabled ? hosting.port : nil)
+        var context = ConnectionContext(serverRunning: running, serverIP: ip, serverPort: serverPort,
+                                        packHostPort: hosting.enabled ? hosting.port : nil)
+        context.serverStarting = state == .starting
+        context.statusEnabled = properties.value("enable-status")?.trimmingCharacters(in: .whitespaces).lowercased() != "false"
+        // Only the one setting is looked for. The file's text goes no further.
+        let paper = (try? String(contentsOf: paths.root.appendingPathComponent("config/paper-global.yml"), encoding: .utf8)) ?? ""
+        context.proxyProtocol = PaperGlobalSettings.proxyProtocol(paper)
+        return context
     }
 }
