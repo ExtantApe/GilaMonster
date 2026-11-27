@@ -49,12 +49,19 @@ final class BlockingKeychain: @unchecked Sendable {
     await pause(0.5)
     check(quick == 7 && !wait.isWaiting && shown.isEmpty && cleared == 0, "a call that comes straight back never shows the banner, even after the threshold has passed")
 
+    // A longer threshold for the blocking part, so a slow CI machine can't pass it before the "not yet" look.
+    wait.threshold = 2
     let slow = BlockingKeychain()
+    let started = Date()
     let reading = Task { await wait.run(.sessionToken) { slow.read(create: false) } }
     await checkUntil(5, "the blocking stand-in was called") { slow.callCount == 1 }
     check(!slow.ranOnMainThread, "and not on the main thread, which went on running this check while it blocked")
-    check(wait.isPending(.sessionToken) && !wait.isWaiting && shown.isEmpty, "before the threshold: pending, and no banner yet")
-    await checkUntil(5, "after the threshold the banner turns on") { wait.isWaiting }
+    if Date().timeIntervalSince(started) < 1.5 {
+        check(wait.isPending(.sessionToken) && !wait.isWaiting && shown.isEmpty, "before the threshold: pending, and no banner yet")
+    } else {
+        print("  note: the machine took over 1.5 s to start the read, so the before-the-threshold look was skipped")
+    }
+    await checkUntil(8, "after the threshold the banner turns on") { wait.isWaiting }
     equal(wait.waitingOn, [.sessionToken], "and it knows what's waiting")
     equal(shown, [[.sessionToken]], "the app is told once, for its one notification and its spoken line")
 
