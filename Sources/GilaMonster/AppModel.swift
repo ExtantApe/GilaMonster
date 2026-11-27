@@ -374,7 +374,7 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
 
     /// Which side edges of a sheet's picture have content on them, below its top band (the Allow window's bead band
     /// runs edge to edge). The rule is `Overflow.edgeHasContent`.
-    @MainActor private static func edgesWithContent(_ rep: NSBitmapImageRep) -> [String] {
+    @MainActor private static func edgesWithContent(_ rep: NSBitmapImageRep, cut: Int = 0) -> [String] {
         let top = Int(12 * snapshotScale)
         guard rep.pixelsHigh > top + 4, rep.pixelsWide > 4 else { return [] }
         func column(_ x: Int) -> [(r: Int, g: Int, b: Int)] {
@@ -384,8 +384,8 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
             }
         }
         var sides: [String] = []
-        if Overflow.edgeHasContent(column(0)) || Overflow.edgeHasContent(column(1)) { sides.append("left") }
-        if Overflow.edgeHasContent(column(rep.pixelsWide - 1)) || Overflow.edgeHasContent(column(rep.pixelsWide - 2)) { sides.append("right") }
+        if Overflow.edgeHasContent(column(cut)) || Overflow.edgeHasContent(column(cut + 1)) { sides.append("left") }
+        if Overflow.edgeHasContent(column(rep.pixelsWide - 1 - cut)) || Overflow.edgeHasContent(column(rep.pixelsWide - 2 - cut)) { sides.append("right") }
         return sides
     }
 
@@ -519,7 +519,7 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
             // one flat color unless something has run off the side. Read by gilamonster-check --snapshot. Sheets that
             // can't be judged that way are named with the reason.
             let notJudged = ["settings": "a system form that scrolls, with its scroller at the edge", "welcome": "a whole window, drawn to its edges"]
-            // GILAMONSTER_SNAPSHOT_FORCE_NARROW=1 draws every sheet in 60% of the width it asks for, to prove the report catches it.
+            // GILAMONSTER_SNAPSHOT_FORCE_NARROW=1 reads each sheet's edges as if the picture were 60% as wide, with a fifth of each side cut off, to prove the report catches content at an edge. A window won't shrink below its content, so the picture itself can't be narrowed.
             let narrow = environment["GILAMONSTER_SNAPSHOT_FORCE_NARROW"] != nil
             var dialogLines: [String] = [], dialogsChecked = 0
             let dialogs = quitDialogs + serverDialogs
@@ -527,7 +527,7 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
                     let host = NSHostingView(rootView: view.typeRoot().environment(\.legibilityWeight, boldText ? .bold : .regular).tint(Theme.accent).background(Theme.background))
                     look(host)
                     let size = host.fittingSize
-                    host.frame = NSRect(origin: .zero, size: NSSize(width: max(size.width, 320) * (narrow ? 0.6 : 1), height: max(min(size.height, 1100), 200)))
+                    host.frame = NSRect(origin: .zero, size: NSSize(width: max(size.width, 320), height: max(min(size.height, 1100), 200)))
                     let window = NSWindow(contentRect: NSRect(x: -6000, y: -6000, width: host.frame.width, height: host.frame.height), styleMask: [.borderless], backing: .buffered, defer: false)
                     window.isReleasedWhenClosed = false
                     window.contentView = host
@@ -540,7 +540,7 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
                             dialogLines.append("SKIPPED \(name): \(why)")
                         } else {
                             dialogsChecked += 1
-                            let sides = Self.edgesWithContent(rep)
+                            let sides = Self.edgesWithContent(rep, cut: narrow ? rep.pixelsWide / 5 : 0)
                             if !sides.isEmpty { dialogLines.append("CLIPPED \(name): content reaches the \(sides.joined(separator: " and ")) edge of the sheet") }
                         }
                     }
