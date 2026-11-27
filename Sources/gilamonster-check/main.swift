@@ -172,7 +172,7 @@ nonisolated(unsafe) var passed = 0
 nonisolated(unsafe) var failures: [String] = []
 
 // ... --snapshot  Draws every page with heavy made-up data (scripts/snapshot-fixtures.sh) and fails if any page is wider
-//     than its window. Needs a debug build of GilaMonster and takes several minutes. GILAMONSTER_SNAPSHOT_OUT=<folder>
+//     than its window, or if a row of made-up banners pushes a page out of view (K815). Needs a debug build of GilaMonster and takes several minutes. GILAMONSTER_SNAPSHOT_OUT=<folder>
 //     keeps the pictures there; otherwise they go in a temporary folder that's deleted at the end.
 if CommandLine.arguments.contains("--snapshot") {
     await snapshotOverflowChecks()
@@ -196,6 +196,7 @@ if CommandLine.arguments.contains("--connections") {
     quitReasonChecks()
     await sessionAccessChecks()
     await keychainWaitChecks()
+    bannerRowChecks()
     commandPatternChecks()
     await sessionActionChecks()
     await todayGrantChecks()
@@ -4929,6 +4930,7 @@ func makePack(_ name: String, _ files: [String: String], inside: String? = nil) 
     quitReasonChecks()
     await sessionAccessChecks()
     await keychainWaitChecks()
+    bannerRowChecks()
     commandPatternChecks()
     await sessionActionChecks()
     await todayGrantChecks()
