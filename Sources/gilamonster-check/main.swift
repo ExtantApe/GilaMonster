@@ -90,7 +90,7 @@ if let flag = CommandLine.arguments.firstIndex(of: "--lab-fixture"), flag + 3 < 
 // ... --backup-fixture <home> <servers> <server folder>  Made-up backups for the off-screen pictures (K823): one in the
 //     server's own backup folder from 23 hours ago, and an added storage folder under <home> with one from 4 days ago.
 //     Placeholder archives with GilaMonster's record beside them, all inside <home> and <servers>. The weekly drill
-//     is turned off for that server, so the snapshot has nothing to unpack or start. Starts nothing.
+//     stays on for that server: a snapshot run starts nothing for any server (K829). Starts nothing.
 if let flag = CommandLine.arguments.firstIndex(of: "--backup-fixture"), flag + 3 < CommandLine.arguments.count {
     setenv("GILAMONSTER_HOME", CommandLine.arguments[flag + 1], 1)
     setenv("GILAMONSTER_SERVERS", CommandLine.arguments[flag + 2], 1)
@@ -99,13 +99,34 @@ if let flag = CommandLine.arguments.firstIndex(of: "--backup-fixture"), flag + 3
     try FileOps.ensureDir(storage)
     model.profile.backup.smart.targets = [storage.path]
     model.profile.backup.enabled = true
-    // The app's ticker runs the weekly drill on any whole-folder backup it finds, in a snapshot too. These are
-    // placeholders, and a snapshot starts nothing, so the drill is off for this made-up server.
-    model.profile.backup.autoDrill = false
     let there = Backups.targetFolder(storage.path, for: model.profile)
     try Backups.claim(there, for: model.profile.id)
     writeMadeUpBackup(in: Backups.destination(model.profile), madeAt: Date().addingTimeInterval(-23 * 3600), serverName: model.profile.name)
     writeMadeUpBackup(in: there, madeAt: Date().addingTimeInterval(-4 * 86_400), serverName: model.profile.name, trigger: "scheduled")
+    model.stopTicker()
+    exit(0)
+}
+
+// ... --startable-fixture <home> <servers> <server folder> <stand-in java>  Makes that made-up server one that would
+//     start (K829, scripts/snapshot-fixtures.sh STARTABLE=): Start when GilaMonster opens is on, its Java is the
+//     stand-in script, it has a placeholder jar, and it gets a real whole-folder backup of its own made-up files, so a
+//     drill would unpack it and get as far as running Java. Everything stays inside <home> and <servers>. Starts nothing.
+if let flag = CommandLine.arguments.firstIndex(of: "--startable-fixture"), flag + 4 < CommandLine.arguments.count {
+    setenv("GILAMONSTER_HOME", CommandLine.arguments[flag + 1], 1)
+    setenv("GILAMONSTER_SERVERS", CommandLine.arguments[flag + 2], 1)
+    let root = URL(fileURLWithPath: CommandLine.arguments[flag + 3], isDirectory: true)
+    // A port of its own, so nothing here ever looks at the usual one.
+    var properties = PropertiesDocument((try? String(contentsOf: ServerPaths(root: root).properties, encoding: .utf8)) ?? "")
+    properties.set("server-port", "25611")
+    properties.set("server-ip", "127.0.0.1")
+    try FileOps.writeAtomic(properties.text, to: ServerPaths(root: root).properties)
+    write("a made-up jar", root.appendingPathComponent("server.jar"))
+    guard let model = ServerController.open(root: root) else { print("no server there"); exit(1) }
+    model.profile.software.jarName = "server.jar"
+    model.profile.launch.javaPath = CommandLine.arguments[flag + 4]
+    model.profile.launch.startWhenAppOpens = true
+    model.profile.backup.autoDrill = true
+    _ = try await model.backupNow(trigger: "manual", scope: .everything)
     model.stopTicker()
     exit(0)
 }
@@ -212,6 +233,17 @@ nonisolated(unsafe) var failures: [String] = []
 //     keeps the pictures there; otherwise they go in a temporary folder that's deleted at the end.
 if CommandLine.arguments.contains("--snapshot") {
     await snapshotOverflowChecks()
+    await snapshotStartsNothingChecks()
+    print(failures.isEmpty ? "\(passed) passed" : "\(failures.count) FAILED:\n" + failures.joined(separator: "\n"))
+    exit(failures.isEmpty ? 0 : 1)
+}
+
+// ... --snapshot-quiet  Only the check that a snapshot run starts nothing (K829): draws one theme with a made-up server
+//     that would start, and watches for Java and drill copies. Needs a debug build of GilaMonster; about a minute.
+if CommandLine.arguments.contains("--snapshot-quiet") {
+    await snapshotGateChecks()
+    await snapshotStartsNothingChecks()
+    cleanUpScratch()
     print(failures.isEmpty ? "\(passed) passed" : "\(failures.count) FAILED:\n" + failures.joined(separator: "\n"))
     exit(failures.isEmpty ? 0 : 1)
 }
@@ -254,6 +286,7 @@ if CommandLine.arguments.contains("--connections") {
     await sessionActionChecks()
     await todayGrantChecks()
     await launchStartChecks()
+    await snapshotGateChecks()
     await labRunChecks()
     await labDependencyChecks()
     await labRestartLogChecks()
@@ -5013,6 +5046,7 @@ func makePack(_ name: String, _ files: [String: String], inside: String? = nil) 
     await sessionActionChecks()
     await todayGrantChecks()
     await launchStartChecks()
+    await snapshotGateChecks()
     await labRunChecks()
     await labDependencyChecks()
     await labRestartLogChecks()

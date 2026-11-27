@@ -646,6 +646,7 @@ extension ServerController {
 
     /// A required pack with nothing answering at its address would turn players away, so this comes back by itself.
     public func startPackHostIfWanted() {
+        guard !AppMode.isSnapshot else { return }
         guard !isTrialCopy, packHost == nil, packHostSettings.enabled, Modules.shared.isOn(.resourcePacks) else { return }
         do { try startPackHost() } catch { packHostError = error.localizedDescription }
     }

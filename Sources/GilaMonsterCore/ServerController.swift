@@ -507,6 +507,7 @@ public final class ServerController: Identifiable {
     }
 
     public func start() async {
+        guard !AppMode.isSnapshot else { return }
         guard !AdvisorTrial.isOn, canStartNow else { return }
         busyWith = "Starting"   // before the first wait, so a second Start can't slip in
         defer { endBusy() }
@@ -520,6 +521,7 @@ public final class ServerController: Identifiable {
     }
 
     private func launch() {
+        guard !AppMode.isSnapshot else { return }
         guard state.canStart, process == nil else { return }
         // GilaMonster is quitting: a throwaway copy that hasn't started yet doesn't start (K813).
         guard !(isTrialCopy && DrillCopies.isClosing) else { return }
@@ -1138,6 +1140,7 @@ public final class ServerController: Identifiable {
     }
 
     private func startTicker() {
+        guard !AppMode.isSnapshot else { return }   // a snapshot only draws pages (K829)
         ticker?.cancel()
         ticker = Task { [weak self] in
             while !Task.isCancelled {
@@ -1152,6 +1155,7 @@ public final class ServerController: Identifiable {
     }
 
     func tick() async {
+        guard !AppMode.isSnapshot else { return }
         let now = Date()
         tickPlayerSnapshots(elapsed: now.timeIntervalSince(lastTick ?? now))
         lastTick = now
@@ -1748,6 +1752,7 @@ public final class ServerController: Identifiable {
     /// Takes a consistent backup. While running, saving is paused so the world doesn't change underneath it.
     @discardableResult
     public func backupNow(trigger: String = "manual", scope: BackupScope? = nil) async throws -> BackupRecord {
+        guard !AppMode.isSnapshot else { throw AppError(AppMode.snapshotRefusal) }
         guard !backingUp else { throw AppError("A backup is already running.") }
         guard state == .running || state.canStart else { throw AppError("Wait until the server has finished starting or stopping.") }
         // Observed: Folia has no save-off or save-all, so a running world can't be held still.
@@ -2360,7 +2365,9 @@ public final class ServerController: Identifiable {
         runtimes = await JavaManager.discover()
     }
 
-    public func stopTicker() { ticker?.cancel() }
+    public func stopTicker() { ticker?.cancel(); ticker = nil }
+    /// For the checks: whether this server's ticker was ever started and is still going.
+    var tickerIsRunning: Bool { ticker.map { !$0.isCancelled } ?? false }
 }
 
 #if DEBUG
