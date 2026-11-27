@@ -109,9 +109,9 @@ import GilaMonsterCore
     equal(NeedsYou.sentence(name: "Riverside", state: .crashed(code: 1), players: 0), "Riverside is down. It stopped unexpectedly.", "crashed")
     let now = Date()
     equal(NeedsYou.factLine(software: "Paper 26.2", running: true, since: now.addingTimeInterval(-7200), lastBackup: nil, isLab: false, needs: 0, openIssues: 0, now: now),
-          "Paper 26.2 · up for 2 hours · no backup yet · nothing needs you", "the fact line in plain words")
+          "Paper 26.2 · up for 2 hours · no GilaMonster backup yet · nothing needs you", "the fact line in plain words")
     let line = NeedsYou.factLine(software: "Paper 26.2", running: false, since: nil, lastBackup: now.addingTimeInterval(-1500), isLab: false, needs: 2, openIssues: 1, now: now)
-    check(line.contains("backed up") && line.contains("2 things need you") && line.hasSuffix("1 open issue") && !line.contains("up for"), "backups, what needs you and open issues, and no uptime when stopped (\(line))")
+    check(line.contains("GilaMonster backup") && line.contains("2 things need you") && line.hasSuffix("1 open issue") && !line.contains("up for"), "backups, what needs you and open issues, and no uptime when stopped (\(line))")
     check(!NeedsYou.factLine(software: "Paper", running: false, since: nil, lastBackup: nil, isLab: true, needs: 1, openIssues: 0, now: now).contains("backup"), "the Lab has no backup words")
     let overview = source("OverviewPage.swift")
     check(overview.contains("Theme.display(28)") && overview.contains("GlyphView(glyph: server.state.glyph, size: 22)"), "the sentence is in the display face beside the glyph")

@@ -8,6 +8,8 @@
 #                                             and no name of the owner's, so the message names it (K824). RENAME='Pebble Garden'
 #                                             adds the owner's own name on top. TWIN=1 adds a second server with the same
 #                                             server message. The switcher's rows are drawn as dialog-switcher-rows.png.
+#   BACKUPS=none  leaves out the first server's made-up backups, to draw one that GilaMonster has never backed up.
+#   HEIGHT=1800  draws taller pictures, to see the bottom of a long page.
 #   PAGES=overview,console  draws only those pages. SCRATCH=<folder>  builds there instead of .build.
 # Everything is made-up and lives under a temp folder that's removed at the end, pass or fail (D226). Nothing
 # starts: the snapshot only draws. Pictures land in OUT/<fixture>/<theme>-<light|dark>/.
@@ -122,12 +124,17 @@ swift build --scratch-path "$scratch" --product GilaMonster >/dev/null
 # Made-up Lab results for the first server, so the Lab page's details, a skipped plugin and a restart log are drawn (K804).
 swift build --scratch-path "$scratch" --product gilamonster-check >/dev/null
 "$scratch/debug/gilamonster-check" --lab-fixture "$home" "$servers" "${list[0]}" >/dev/null
+# Made-up backups for the first server (K823): one from 23 hours ago, and an added storage folder with an older one.
+# BACKUPS=none leaves them out, to draw a server GilaMonster has never backed up.
+case "${BACKUPS:-}" in ""|none) ;; *) echo "BACKUPS is none or unset" >&2; exit 2;; esac
+[[ "${BACKUPS:-}" == none ]] || "$scratch/debug/gilamonster-check" --backup-fixture "$home" "$servers" "${list[0]}" >/dev/null
 for theme in ${THEMES:-bold quiet}; do
     for look in ${LOOKS:-light dark}; do
         dir="$out/$kind/$theme-$look"; mkdir -p "$dir"
         rm -f "$dir/overflow-report.txt"   # a run that draws nothing must not pass on an old report
         var=GILAMONSTER_SNAPSHOT_LIGHT; [[ $look == dark ]] && var=GILAMONSTER_SNAPSHOT_DARK
         [[ "$kind" == heavy ]] && height=2800 || height=1000   # tall enough that Show More and group headings are in the picture
+        height="${HEIGHT:-$height}"
         env GILAMONSTER_SNAPSHOT_HEIGHT=$height GILAMONSTER_HOME="$home" GILAMONSTER_SERVERS="$servers" GILAMONSTER_SNAPSHOT="$dir" GILAMONSTER_SNAPSHOT_FIRST=1 \
             GILAMONSTER_SNAPSHOT_THEME=$theme GILAMONSTER_SNAPSHOT_KEYCHAIN="${KEYCHAIN:-}" ${PAGES:+GILAMONSTER_SNAPSHOT_PAGES="$PAGES"} "$var=1" \
             perl -e 'alarm 900; exec @ARGV' "$scratch/debug/GilaMonster" >/dev/null 2>&1 || true

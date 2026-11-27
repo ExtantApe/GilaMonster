@@ -324,10 +324,10 @@ struct OverviewPage: View {
     private var backupsCard: some View {
         FactCard(title: "Backups") {
             if let latest = server.backups.first {
-                Fact(label: "Latest", value: latest.date.formatted(.relative(presentation: .named)))
+                Fact(label: BackupSeen.latestLabel, value: latest.date.formatted(.relative(presentation: .named)))
                 Fact(label: "Size", value: Format.bytes(latest.size))
             } else {
-                Fact(label: "Latest", value: "None yet")
+                Fact(label: BackupSeen.latestLabel, value: "None yet")
             }
             Fact(label: "Automatic", value: server.profile.backup.enabled ? "Every \(server.profile.backup.intervalHours) h" : "Off")
             if let drill = server.profile.lastDrill {
@@ -335,6 +335,8 @@ struct OverviewPage: View {
             }
             Button("Back Up Now") { server.attempt { try await server.backupNow() } }
                 .buttonStyle(.themed).disabled(server.isBackingUp)
+            // The ages above are GilaMonster's own backups only (K823).
+            Hint(BackupSeen.cardNote)
         }
     }
 }
