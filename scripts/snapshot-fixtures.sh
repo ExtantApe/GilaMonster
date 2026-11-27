@@ -90,6 +90,9 @@ fi
 { echo "["; for ((i = 0; i < ${#list[@]}; i++)); do printf '  "%s"' "${list[$i]}"; (( i < ${#list[@]} - 1 )) && echo "," || echo; done; echo "]"; } > "$home/servers.json"
 
 swift build --product GilaMonster >/dev/null
+# Made-up Lab results for the first server, so the Lab page's details, a skipped plugin and a restart log are drawn (K804).
+swift build --product gilamonster-check >/dev/null
+.build/debug/gilamonster-check --lab-fixture "$home" "$servers" "${list[0]}" >/dev/null
 for theme in ${THEMES:-bold quiet}; do
     for look in ${LOOKS:-light dark}; do
         dir="$out/$kind/$theme-$look"; mkdir -p "$dir"

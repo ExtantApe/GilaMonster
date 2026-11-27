@@ -147,6 +147,8 @@ public struct LabSpec: Sendable {
     public var jars: [URL]
     /// Not run in the Lab, and why.
     public var leftOut: [String] = []
+    /// Not run either, because something they require isn't in the lab (K804). Reported as skipped, never as failed.
+    public var skipped: [LabDependencies.Skip] = []
     public init(build: SoftwareBuild, sources: [PluginSource] = LabRecipe.defaultPlugins, jars: [URL] = []) {
         self.build = build; self.sources = sources; self.jars = jars
     }
@@ -174,6 +176,10 @@ public final class LabController {
     /// The station running now, for its light.
     public private(set) var running: LabStation?
     private var lastProblems: Set<String> = []
+    /// The console from the last checks' restart step, from the stop to the rejoin. Nil when they never got that far.
+    private var lastRestartLog: [String]?
+    /// What the server told the last bot that couldn't get in, if it said anything.
+    private var lastJoinRefusal: String?
     public var report: RehearsalReport? { state.lastReport }
     /// The chosen server, or the only one, or the first.
     public func model(from servers: [ServerController]) -> ServerController? {
@@ -293,16 +299,21 @@ public final class LabController {
         guard let build = found else { throw AppError("Couldn't find \(software.flavor.title) \(software.mcVersion) to download.") }
         var sources: [PluginSource] = [], jars: [URL] = []
         var leftOut: [String] = []
+        let skipped = LabDependencies.skips(installed: other.plugins, leftOut: reachesOutside)
+        let skippedFiles = Set(skipped.map(\.plugin.fileName))
         for plugin in other.plugins where plugin.enabled {
             if reachesOutside(plugin) {
                 leftOut.append("\(plugin.name) reaches outside this Mac, so it doesn't run here.")
                 continue
             }
+            // It can't load without what it needs, and that would look like the plugin's own failure.
+            if skippedFiles.contains(plugin.fileName) { continue }
             let source = other.record(for: plugin).source
             if source.isSet { sources.append(source) } else { jars.append(other.paths.plugins.appendingPathComponent(plugin.fileName)) }
         }
         var spec = LabSpec(build: build, sources: sources, jars: jars)
         spec.leftOut = leftOut
+        spec.skipped = skipped
         return spec
     }
 
@@ -439,11 +450,16 @@ public final class LabController {
     }
 
     private func join(_ name: String, _ c: ServerController, _ table: ProtocolTable) async -> Bot? {
-        guard let bot = try? Bot(name: name, port: c.serverPort, table: table) else { return nil }
+        lastJoinRefusal = nil
+        guard let bot = try? Bot(name: name, port: c.serverPort, table: table) else {
+            lastJoinRefusal = "Nothing answered on port \(c.serverPort)."
+            return nil
+        }
         for _ in 0..<(40 * 4) {
             if c.players.contains(name) { try? await Task.sleep(for: .milliseconds(500)); return bot }
             try? await Task.sleep(for: .milliseconds(250))
         }
+        lastJoinRefusal = bot.disconnectReason.map { "The server said: \($0.prefix(160))" }
         bot.leave()
         return nil
     }
@@ -530,6 +546,7 @@ public final class LabController {
     /// different profile on join, so what the seed saved under fresh settings says nothing about them.
     private func runChecks(_ c: ServerController, known: Set<String> = [], reportKnown: Bool = true, underSettings: Bool = false) async -> [LabCheck] {
         lastProblems = []
+        lastRestartLog = nil
         func problems(since: Date) -> [LabCheck] {
             var out: [LabCheck] = []
             for issue in c.issues where issue.lastSeen >= since && issue.severity >= .error {
@@ -622,24 +639,34 @@ public final class LabController {
                 let placed = await ask(c, "setblock 1 100 0 minecraft:emerald_block", expecting: "Changed the block")
                 await leave(bot, c)
                 say("Stopping and starting again…")
+                // From here to the rejoin is kept with the result (K804): it's the only record of why a rejoin failed
+                // once the lab is deleted.
+                let restartFrom = c.console.last?.id ?? -1
+                var survives = LabCheck("A change survives a restart", .passed)
                 let stopStart = Date()
                 await shutDown(c)
                 let cleanly = c.state == .stopped
                 out.append(LabCheck("Stops cleanly", cleanly ? .passed : .failed, Self.took(stopStart)))
                 do {
                     try await boot(c)
-                    if placed != nil, let again = await join("Alice", c, table) {
+                    // Each cause says which it was. They used to share one sentence, which left nothing to go on.
+                    if placed == nil {
+                        survives = LabCheck(survives.title, .failed, "The block couldn't be placed before the restart.")
+                    } else if let again = await join("Alice", c, table) {
                         let still = await ask(c, "execute if block 1 100 0 minecraft:emerald_block", expecting: "Test passed", seconds: 5)
-                        out.append(LabCheck("A change survives a restart", still != nil ? .passed : .failed))
+                        if still == nil { survives = LabCheck(survives.title, .failed, "Alice got back in, but the block placed before the restart was gone.") }
                         await leave(again, c)
                     } else {
-                        out.append(LabCheck("A change survives a restart", .failed, "The player couldn't rejoin, or the block wasn't placed."))
+                        survives = LabCheck(survives.title, .failed, Self.sentence("Alice couldn't get back in after the restart.", lastJoinRefusal))
                     }
                 } catch {
-                    out.append(LabCheck("A change survives a restart", .failed, error.localizedDescription))
+                    survives = LabCheck(survives.title, .failed, error.localizedDescription)
                 }
+                out.append(survives)
+                let ending = survives.outcome == .failed ? ["[GilaMonster] Lab: \(survives.detail)"] : []
+                lastRestartLog = LabDependencies.restartLog(c.console.filter { $0.id > restartFrom }.map(\.text) + ending)
             } else {
-                out.append(LabCheck("A player can join", .failed, "Alice couldn't get in."))
+                out.append(LabCheck("A player can join", .failed, Self.sentence("Alice couldn't get in.", lastJoinRefusal)))
             }
         } else {
             let why = seededPlayers ? "The packet list for this version couldn't be made." : "Bot players don't work on this Minecraft version."
@@ -655,6 +682,10 @@ public final class LabController {
         // Last, so errors from the restart count too.
         out += problems(since: bootStart)
         return out
+    }
+
+    private static func sentence(_ first: String, _ more: String?) -> String {
+        more.map { "\(first) \($0)" } ?? first
     }
 
     private static func took(_ start: Date) -> String {
@@ -776,8 +807,7 @@ public final class LabController {
     }
 
     private func record(_ station: LabStation, model: ServerController, checks: [LabCheck] = [], groups: [MirrorBatch] = [], note: String = "", leftOut: [String] = []) {
-        let failed = checks.contains { $0.outcome == .failed } || groups.contains { $0.outcome != .passed }
-        state.board[station] = StationResult(outcome: failed ? .failed : .passed, fingerprint: fingerprint(model), checks: checks, groups: groups, note: note, leftOut: leftOut)
+        state.board[station] = StationResult(outcome: StationResult.outcome(checks: checks, groups: groups), fingerprint: fingerprint(model), checks: checks, groups: groups, note: note, leftOut: leftOut)
     }
 
     /// The server's own version, its exact jars, a few at a time, with fresh settings.
@@ -786,13 +816,21 @@ public final class LabController {
         let spec = try await Self.spec(copying: model)
         let enabled = model.plugins.filter(\.enabled)
         let groups = PluginThemes.batches(enabled.filter { !Self.reachesOutside($0) })
+        // A plugin that needs something the lab doesn't have stays in its group, shown as skipped, and isn't installed.
+        let skips = Dictionary(spec.skipped.map { ($0.plugin.fileName, $0) }, uniquingKeysWith: { first, _ in first })
         var out: [MirrorBatch] = []
         var seen: Set<String> = []
         var lab: ServerController?
-        if groups.isEmpty { lab = try await rebuild(LabSpec(build: spec.build, sources: [], jars: [])).controller }
         for (index, group) in groups.enumerated() {
             var batch = MirrorBatch(title: group.title, plugins: group.plugins.map(\.name))
-            let jars = group.plugins.map { model.paths.plugins.appendingPathComponent($0.fileName) }
+            let running = group.plugins.filter { skips[$0.fileName] == nil }
+            let skippedChecks = group.plugins.compactMap { skips[$0.fileName]?.check }
+            if running.isEmpty {
+                batch.fresh = skippedChecks
+                out.append(batch)
+                continue
+            }
+            let jars = running.map { model.paths.plugins.appendingPathComponent($0.fileName) }
             if lab == nil {
                 say("Building the lab with \(group.title.lowercased())…")
                 lab = try await rebuild(LabSpec(build: spec.build, sources: [], jars: jars)).controller
@@ -803,19 +841,28 @@ public final class LabController {
             }
             guard let lab else { continue }
             say("Group \(index + 1) of \(groups.count): \(group.title)…")
-            batch.fresh = await runChecks(lab, known: seen, reportKnown: false)
+            let checks = await runChecks(lab, known: seen, reportKnown: false)
+            batch.rejoinLog = lastRestartLog
             seen.formUnion(lastProblems)
             // Take out what didn't load, so it doesn't get blamed for the next group too.
-            for plugin in group.plugins where batch.fresh.contains(where: { $0.outcome == .failed && $0.title.hasPrefix("\(plugin.name) ") }) {
+            for plugin in running where checks.contains(where: { $0.outcome == .failed && $0.title.hasPrefix("\(plugin.name) ") }) {
                 let jar = lab.paths.plugins.appendingPathComponent(plugin.fileName)
                 try? FileManager.default.moveItem(at: jar, to: jar.appendingPathExtension("disabled"))
                 batch.notes.append("\(plugin.name) was taken out before the next group.")
             }
+            batch.fresh = LabDependencies.markCascades(checks, group: running) + skippedChecks
             await lab.refreshPlugins()
             out.append(batch)
         }
+        // Nothing to install still gets a lab, so the run ends the same way.
+        if lab == nil { lab = try await rebuild(LabSpec(build: spec.build, sources: [], jars: [])).controller }
         state.knownProblems = seen
-        record(.plugins, model: model, groups: out, note: model.profile.software.label, leftOut: spec.leftOut)
+        record(.plugins, model: model, groups: out, note: Self.note(model.profile.software.label, skipped: spec.skipped.count), leftOut: spec.leftOut)
+    }
+
+    /// "Paper 26.3 build 12. 2 plugins skipped." So a pass that left something out says so without opening the details.
+    static func note(_ first: String, skipped: Int) -> String {
+        skipped == 0 ? first : "\(first). \(skipped) \(skipped == 1 ? "plugin" : "plugins") skipped."
     }
 
     /// The same groups, now with the real settings, on a lab built for this run with the server's version and jars,
@@ -823,9 +870,12 @@ public final class LabController {
     private func stationSettings(_ model: ServerController) async throws {
         say("Reading \(model.profile.name)'s plugin list…")
         let spec = try await Self.spec(copying: model)
+        // Skipped at the plugins station counts too: a plugin that needs one that didn't load can't load here either.
         let didntLoad = Set((state.board[.plugins]?.groups ?? []).flatMap { batch in
-            batch.plugins.filter { name in batch.fresh.contains { $0.outcome == .failed && $0.title.hasPrefix("\(name) ") } }
-        })
+            batch.plugins.filter { name in
+                batch.fresh.contains { $0.title.hasPrefix("\(name) ") && ($0.outcome == .failed || ($0.outcome == .skipped && $0.title.hasSuffix(" loads"))) }
+            }
+        }).union(spec.skipped.map(\.plugin.name))
         let jars = model.plugins.filter { $0.enabled && !Self.reachesOutside($0) && !didntLoad.contains($0.name) }
             .map { model.paths.plugins.appendingPathComponent($0.fileName) }
         say("Building the lab with \(model.profile.name)'s plugins…")
@@ -852,11 +902,12 @@ public final class LabController {
             say("Group \(index + 1) of \(groups.count): \(group.title), with \(model.profile.name)'s settings…")
             batch.notes += try Self.copySettings(from: model.paths, to: lab.paths, plugins: group.plugins.map(\.name))
             batch.withSettings = await runChecks(lab, known: seen, reportKnown: false, underSettings: true)
+            batch.rejoinLog = lastRestartLog
             seen.formUnion(lastProblems)
             try await backToBaseline()
             out.append(batch)
         }
-        record(.settings, model: model, groups: out, note: "World lists and player data stay the lab's own.")
+        record(.settings, model: model, checks: spec.skipped.map(\.check), groups: out, note: "World lists and player data stay the lab's own.")
     }
 
     /// A lab seeded on the server's current version, then moved to the new one with updated plugins.
@@ -864,7 +915,7 @@ public final class LabController {
         guard let build = state.target else { throw AppError("Choose a version first.") }
         say("Reading \(model.profile.name)'s plugin list…")
         let current = try await Self.spec(copying: model)
-        var checks = current.leftOut.map { LabCheck($0, .skipped) }
+        var checks = current.leftOut.map { LabCheck($0, .skipped) } + current.skipped.map(\.check)
         say("Building a lab on \(current.build.label), the version you're on now…")
         checks += try await rebuild(current).notes
         var route = "New seed on \(current.build.label), then moved it to \(build.label)"
@@ -887,7 +938,7 @@ public final class LabController {
         say("Building a fresh lab…")
         var spec = try await Self.spec(copying: model)
         spec.build = build
-        var checks = spec.leftOut.map { LabCheck($0, .skipped) }
+        var checks = spec.leftOut.map { LabCheck($0, .skipped) } + spec.skipped.map(\.check)
         do {
             let built = try await rebuild(spec)
             checks += built.notes
@@ -909,6 +960,7 @@ public final class LabController {
         let lab = try await rebuild(spec).controller
         say("Trying \(model.profile.name)'s plugin settings…")
         var checks = try Self.copySettings(from: model.paths, to: lab.paths, plugins: lab.plugins.filter(\.enabled).map(\.name)).map { LabCheck($0, .skipped) }
+        checks += spec.skipped.map(\.check)
         checks += await runChecks(lab, known: state.knownProblems ?? [], underSettings: true)
         if lab.state.isLive { await shutDown(lab) }
         record(.freshSettings, model: model, checks: checks, note: "The fresh install, given \(model.profile.name)'s plugin settings")
@@ -1031,28 +1083,47 @@ public enum PluginThemes {
             add(theme.title, members)
         }
         add("Everything else", remaining)
-        // A plugin can't load before what it needs, so anything needed earlier moves earlier.
-        var changed = true
-        while changed {
-            changed = false
-            for (index, batch) in out.enumerated() {
-                let needed = Set(batch.plugins.flatMap { $0.descriptor?.depend ?? [] }.map { $0.lowercased() })
-                for later in out.indices where later > index {
-                    let moving = out[later].plugins.filter { needed.contains($0.key) }
-                    if !moving.isEmpty {
-                        out[index].plugins += moving
-                        out[later].plugins.removeAll { needed.contains($0.key) }
-                        changed = true
-                    }
-                }
+        // A plugin and everything it requires go in one group, however long the chain, so a group never fails for want
+        // of a plugin that's waiting in another (K804). They all move to the earliest group any of them was in, which
+        // keeps worlds and permissions first. Optional needs don't pull anything along.
+        for family in families(plugins) {
+            let homes = out.indices.filter { index in out[index].plugins.contains { family.contains($0.key) } }
+            guard let first = homes.first, homes.count > 1 else { continue }
+            for later in homes.dropFirst() {
+                out[first].plugins += out[later].plugins.filter { family.contains($0.key) }
+                out[later].plugins.removeAll { family.contains($0.key) }
             }
         }
         return out.filter { !$0.plugins.isEmpty }
     }
+
+    /// Plugins joined by what they require, directly or through others, as sets of keys. Only sets of two or more.
+    /// A circle of plugins that need each other is one family like any other.
+    static func families(_ plugins: [InstalledPlugin]) -> [Set<String>] {
+        let keys = Set(plugins.map(\.key))
+        var leader: [String: String] = [:]
+        func find(_ key: String) -> String {
+            var at = key
+            while let next = leader[at], next != at { at = next }
+            return at
+        }
+        for plugin in plugins {
+            for wanted in plugin.descriptor?.depend ?? [] {
+                let other = wanted.lowercased()
+                guard keys.contains(other) else { continue }
+                let a = find(plugin.key), b = find(other)
+                if a != b { leader[max(a, b)] = min(a, b) }
+            }
+        }
+        var sets: [String: Set<String>] = [:]
+        for key in keys { sets[find(key), default: []].insert(key) }
+        return sets.values.filter { $0.count > 1 }.sorted { ($0.min() ?? "") < ($1.min() ?? "") }
+    }
 }
 
 public struct MirrorBatch: Codable, Identifiable, Equatable, Sendable {
-    public enum Outcome: String, Codable, Sendable { case passed, pluginProblem, settingsProblem }
+    /// `skipped`: none of its plugins ran, because each needs something the lab doesn't have.
+    public enum Outcome: String, Codable, Sendable { case passed, pluginProblem, settingsProblem, skipped }
     public var id: String { title }
     public var title: String
     public var plugins: [String]
@@ -1061,12 +1132,22 @@ public struct MirrorBatch: Codable, Identifiable, Equatable, Sendable {
     /// Nil when settings weren't tried.
     public var withSettings: [LabCheck]?
     public var notes: [String] = []
+    /// The lab's console from this group's restart step, from the stop to the rejoin, kept because the lab itself is
+    /// deleted when the run ends (K804). The lab has only its own bot players and listens only on this Mac, so no real
+    /// player or address is in it. At the settings station it does include what plugins print under the real settings.
+    /// It stays in the lab's results file on this Mac.
+    /// Nil when the group never got as far as restarting, and in results saved before this was kept.
+    public var rejoinLog: [String]?
 
     public var outcome: Outcome {
         if fresh.contains(where: { $0.outcome == .failed }) { return .pluginProblem }
         if withSettings?.contains(where: { $0.outcome == .failed }) == true { return .settingsProblem }
+        let all = fresh + (withSettings ?? [])
+        if !all.isEmpty, all.allSatisfy({ $0.outcome == .skipped }) { return .skipped }
         return .passed
     }
+    /// Whether this group turns the light red. A skipped group doesn't: nothing in it was tried.
+    public var isProblem: Bool { outcome == .pluginProblem || outcome == .settingsProblem }
 }
 
 /// One row of the board.
@@ -1115,6 +1196,11 @@ public struct StationResult: Codable, Equatable, Sendable {
     public var note = ""
     public var leftOut: [String] = []
     public var acknowledged = false
+
+    /// Red for a failed check or a group with a problem. Skipped checks and skipped groups never turn it red.
+    static func outcome(checks: [LabCheck], groups: [MirrorBatch]) -> Outcome {
+        checks.contains { $0.outcome == .failed } || groups.contains(where: \.isProblem) ? .failed : .passed
+    }
 }
 
 public enum StationLight: Equatable, Sendable {

@@ -50,7 +50,61 @@ public enum PluginYAML {
         d.depend = lists["depend"] ?? []
         d.softDepend = (lists["softdepend"] ?? []) + (lists["loadbefore"] ?? [])
         d.isPaperPlugin = paper
+        if paper {
+            // Paper's own format nests what a plugin needs, so the flat reading above never sees it (K804).
+            let nested = paperDependencies(text)
+            for name in nested.required where !d.depend.contains(where: { $0.lowercased() == name.lowercased() }) { d.depend.append(name) }
+            for name in nested.optional where !(d.depend + d.softDepend).contains(where: { $0.lowercased() == name.lowercased() }) { d.softDepend.append(name) }
+        }
         return d
+    }
+
+    /// What a `paper-plugin.yml` says it needs. Paper lists these under `dependencies:`, by phase (`server:` and
+    /// `bootstrap:`), one plugin per key, written either as a block or inline:
+    ///
+    ///     dependencies:
+    ///       server:
+    ///         MadeUpMaps:
+    ///           load: BEFORE
+    ///           required: true
+    ///         MadeUpExtras: { required: false }
+    ///
+    /// A plugin is required unless it says `required: false`, as Paper reads it. Needed in either phase counts as needed.
+    static func paperDependencies(_ text: String) -> (required: [String], optional: [String]) {
+        var found: [(name: String, required: Bool)] = []
+        var inside = false, wanted = false
+        var phaseIndent: Int?, nameIndent: Int?
+        for raw in text.components(separatedBy: .newlines) {
+            let trimmed = raw.trimmingCharacters(in: .whitespaces)
+            if trimmed.isEmpty || trimmed.hasPrefix("#") { continue }
+            let indent = raw.prefix { $0 == " " || $0 == "\t" }.count
+            guard let colon = trimmed.firstIndex(of: ":") else { if indent == 0 { inside = false }; continue }
+            let key = clean(String(trimmed[..<colon]))
+            let value = clean(String(trimmed[trimmed.index(after: colon)...]))
+            if indent == 0 {
+                inside = key.lowercased() == "dependencies"
+                phaseIndent = nil; nameIndent = nil; wanted = false
+                continue
+            }
+            guard inside else { continue }
+            if phaseIndent.map({ indent <= $0 }) ?? true {
+                phaseIndent = indent; nameIndent = nil
+                wanted = ["server", "bootstrap"].contains(key.lowercased())
+                continue
+            }
+            guard wanted else { continue }
+            if nameIndent.map({ indent <= $0 }) ?? true {
+                nameIndent = indent
+                let inline = value.lowercased().filter { $0 != " " && $0 != "'" && $0 != "\"" }
+                if !key.isEmpty { found.append((key, !inline.contains("required:false"))) }
+                continue
+            }
+            if key.lowercased() == "required", !found.isEmpty { found[found.count - 1].required = !["false", "no", "off"].contains(value.lowercased()) }
+        }
+        var required: [String] = [], optional: [String] = []
+        for entry in found where entry.required && !required.contains(where: { $0.lowercased() == entry.name.lowercased() }) { required.append(entry.name) }
+        for entry in found where !entry.required && !(required + optional).contains(where: { $0.lowercased() == entry.name.lowercased() }) { optional.append(entry.name) }
+        return (required, optional)
     }
 
     private static func clean(_ text: String) -> String {
