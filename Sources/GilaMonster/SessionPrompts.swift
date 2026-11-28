@@ -141,14 +141,29 @@ final class SessionPrompts: NSObject, UNUserNotificationCenterDelegate, @uncheck
 /// The ask window: a panel that stays in front without taking focus from whatever the owner is doing. It opens at the
 /// top of whichever screen the pointer is on, every time, so it lands where the owner is looking.
 @MainActor final class SessionAskWindow {
-    static let shared = SessionAskWindow()
+    static let shared = SessionAskWindow(service: .shared)
+    private let service: SessionAccessService
+    init(service: SessionAccessService) { self.service = service }
+    #if DEBUG
+    /// The snapshot's made-up screen, far off every real one. With it set the window is invisible, takes no clicks and
+    /// isn't held to a real screen, so the snapshot can drive the real window without showing anything.
+    var previewScreen: CGRect?
+    /// Where the top of the content is in the window. Below zero means the top, with the name, is out of view.
+    private(set) var previewContentTop: CGFloat = 0
+    var previewPanel: NSPanel? { panel }
+    #endif
     private var panel: NSPanel?
-    private var hosting: NSHostingController<AnyView>?
     private var attention: Int?
 
     /// A panel that can take keyboard focus, which a non-activating utility panel won't do by itself.
     private final class AskPanel: NSPanel {
         override var canBecomeKey: Bool { true }
+        #if DEBUG
+        var unconstrained = false
+        override func constrainFrameRect(_ frameRect: NSRect, to screen: NSScreen?) -> NSRect {
+            unconstrained ? frameRect : super.constrainFrameRect(frameRect, to: screen)
+        }
+        #endif
         /// Escape denies the first waiting ask, which is the one Deny has focus on. It never allows anything.
         override func cancelOperation(_ sender: Any?) {
             if let first = SessionAccessService.shared.waiting.first { SessionAccessService.shared.resolve(first.id, allow: false) }
@@ -189,26 +204,32 @@ final class SessionPrompts: NSObject, UNUserNotificationCenterDelegate, @uncheck
             p.hidesOnDeactivate = false
             p.collectionBehavior = [.canJoinAllSpaces, .fullScreenAuxiliary]
             p.setAccessibilityLabel("A session is asking")
-            let host = NSHostingController(rootView: AnyView(AskPanelLook { SessionAskList(service: .shared, focusFirst: true) }.tint(Theme.accent)))
-            host.sizingOptions = []   // sized below, each time it opens
+            // The content keeps its own height and sits at the top of the window, so it says when that height changes,
+            // and on a screen too short for all of it the name and the top of the prompt are what stays in view.
+            let host = NSHostingController(rootView: AnyView(content
+                .fixedSize(horizontal: false, vertical: true)
+                .onGeometryChange(for: CGRect.self, of: { $0.frame(in: .global) }) { [weak self] frame in self?.contentChanged(frame) }
+                .frame(minHeight: 0, maxHeight: .infinity, alignment: .top)
+                .background(Theme.surface)))
+            host.sizingOptions = []   // sized below, when it opens and whenever its content changes size
             p.contentViewController = host
-            hosting = host
             panel = p
+            #if DEBUG
+            if previewScreen != nil { p.unconstrained = true; p.level = .normal; p.alphaValue = 0; p.ignoresMouseEvents = true }
+            #endif
         }
         guard let panel else { return }
         // Never wider than the usable screen it opens on (K820 review). Narrower than it asks for, the words wrap and
         // the buttons go under them, so the height is asked for again at the width it will really have.
-        let pointer = NSEvent.mouseLocation
-        let screen = NSScreen.screens.first { $0.frame.contains(pointer) } ?? NSScreen.screens.first
-        let visible = screen?.visibleFrame.width ?? 1280
+        let (pointer, screens) = place()
+        let visible = (screens.first { $0.frame.contains(pointer) } ?? screens.first)?.visible.width ?? 1280
         AskPanelSize.shared.widest = visible
-        let ideal = hosting?.view.fittingSize ?? panel.frame.size
-        let width = SessionAskPlacement.contentWidth(ideal: ideal.width, visible: visible)
-        let height = hosting?.sizeThatFits(in: CGSize(width: width, height: 10_000)).height ?? ideal.height
-        let size = CGSize(width: width, height: height)
-        let screens = NSScreen.screens.map { (frame: $0.frame, visible: $0.visibleFrame) }
+        let size = neededSize(visible: visible)
         if let content = SessionAskPlacement.frame(size: size, pointer: pointer, screens: screens) {
-            panel.setFrame(panel.frameRect(forContentRect: content), display: true)
+            let frame = panel.frameRect(forContentRect: content)
+            // A window that appears or moves puts buttons where they weren't, so clicks wait out the guard.
+            if !panel.isVisible || frame != panel.frame { AskPanelSize.shared.moved = Date() }
+            panel.setFrame(frame, display: true)
         }
         if activate {
             NSApp.activate()
@@ -218,6 +239,51 @@ final class SessionPrompts: NSObject, UNUserNotificationCenterDelegate, @uncheck
             panel.orderFrontRegardless()
         }
         NSAccessibility.post(element: panel as Any, notification: .windowCreated)
+    }
+
+    private var content: some View { AskPanelLook { SessionAskList(service: service, focusFirst: true) }.tint(Theme.accent) }
+
+    /// What the content asks for on a screen this wide, from a fresh copy that no window has sized.
+    private func neededSize(visible: CGFloat) -> CGSize {
+        let fresh = NSHostingController(rootView: content)
+        let width = SessionAskPlacement.contentWidth(ideal: fresh.view.fittingSize.width, visible: visible)
+        return CGSize(width: width, height: fresh.sizeThatFits(in: CGSize(width: width, height: 10_000)).height)
+    }
+
+    #if DEBUG
+    /// The height the content needs at this width.
+    func previewNeededHeight(width: CGFloat) -> CGFloat { NSHostingController(rootView: content).sizeThatFits(in: CGSize(width: width, height: 10_000)).height }
+    #endif
+
+    /// The content changed size: buttons may have moved, so clicks wait out the guard, and the window is sized again.
+    private func contentChanged(_ frame: CGRect) {
+        #if DEBUG
+        previewContentTop = frame.minY
+        #endif
+        AskPanelSize.shared.moved = Date()
+        DispatchQueue.main.async { [weak self] in self?.resize() }   // after this layout pass, not during it
+    }
+
+    /// Sizes the open window to its content again. It only changes the frame: the window keeps its screen and top
+    /// edge, and nothing here takes focus, makes it key or brings it forward.
+    private func resize() {
+        guard let panel, panel.isVisible else { return }
+        let screens = place().screens
+        guard let area = SessionAskPlacement.area(of: panel.frame, screens: screens) else { return }
+        AskPanelSize.shared.widest = area.width
+        let wanted = panel.frameRect(forContentRect: NSRect(origin: .zero, size: neededSize(visible: area.width))).size
+        guard let frame = SessionAskPlacement.resized(panel.frame, to: wanted, screens: screens),
+              abs(frame.height - panel.frame.height) > 0.5 || abs(frame.width - panel.frame.width) > 0.5 else { return }
+        AskPanelSize.shared.moved = Date()
+        panel.setFrame(frame, display: true)
+    }
+
+    /// Where the pointer is and what screens there are.
+    private func place() -> (pointer: CGPoint, screens: [(frame: CGRect, visible: CGRect)]) {
+        #if DEBUG
+        if let previewScreen { return (CGPoint(x: previewScreen.midX, y: previewScreen.midY), [(previewScreen, previewScreen)]) }
+        #endif
+        return (NSEvent.mouseLocation, NSScreen.screens.map { (frame: $0.frame, visible: $0.visibleFrame) })
     }
 
     /// A sound GilaMonster plays itself, so a Focus that holds notifications back doesn't silence it, and a Dock bounce
@@ -342,6 +408,8 @@ struct AskRow: Layout {
 @Observable final class AskPanelSize: @unchecked Sendable {
     static let shared = AskPanelSize()
     var widest: CGFloat = .greatestFiniteMagnitude
+    /// When the window's layout last changed, for the click guard.
+    @ObservationIgnored var moved = Date.distantPast
 }
 
 /// Each waiting ask with Deny and Allow. Used by the ask window and by Settings.
@@ -362,7 +430,7 @@ struct SessionAskList: View {
     private func settled() -> Bool {
         let type = NSApp.currentEvent?.type
         let pointer = type == .leftMouseDown || type == .leftMouseUp || type == .rightMouseDown || type == .rightMouseUp || type == .otherMouseDown || type == .otherMouseUp
-        let ok = SessionAskPlacement.accepts(pointer: pointer, sinceChange: Date().timeIntervalSince(changed))
+        let ok = SessionAskPlacement.accepts(pointer: pointer, sinceChange: Date().timeIntervalSince(max(changed, AskPanelSize.shared.moved)))
         if !ok {
             dropped = true
             Announcer.say("The list just changed, so that click was ignored. Press again.", urgent: true, force: true)
@@ -407,8 +475,8 @@ struct SessionAskList: View {
                             Button("Allow") { if settled() { service.resolve(ask.id, allow: true) } }.buttonStyle(.themedPrimary).fixedSize()
                                 .accessibilityLabel("Allow: \(ask.sentence)").opacity(dropped ? 0.4 : 1)
                             if let family = ask.action.todayFamily {
-                                Divider().frame(height: 18 * Theme.grow).padding(.horizontal, 6)
                                 Button("Allow for Today") { if settled() { service.resolveForToday(ask.id) } }.buttonStyle(.themed).fixedSize()
+                                    .padding(.leading, 20 * Theme.grow)   // kept apart from Allow
                                     .helped("Allows \(family.words) on every server without asking again until midnight. Each one still checks nobody is online.")
                                     .accessibilityLabel("Allow for today: \(ask.sentence). Covers \(family.words) on every server until midnight.")
                             }
@@ -426,12 +494,16 @@ struct SessionAskList: View {
                         .accessibilityLabel("Need more time for: \(ask.sentence). Adds a minute, \(left) left. Nothing is allowed.")
                         if left <= 0 {
                             Text("No more time can be added. No answer means no.").type(.body).foregroundStyle(Theme.muted)
+                                .fixedSize(horizontal: false, vertical: true).multilineTextAlignment(.trailing)
+                                .frame(idealWidth: 180 * Theme.grow, alignment: .trailing)
                         }
                     }
                 }
             }
         }
         .onChange(of: service.waiting.map(\.id)) { changed = Date(); focusTop() }
+        // A row that runs out of extra time gains a line, which moves what is under it. Focus is left alone.
+        .onChange(of: service.waiting.map { $0.extensions >= SessionAccessService.maxExtensions }) { AskPanelSize.shared.moved = Date() }
         .onAppear { focusTop() }
         .onReceive(NotificationCenter.default.publisher(for: .askPanelFocus)) { _ in focusTop() }
     }

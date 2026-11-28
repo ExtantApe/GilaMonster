@@ -26,6 +26,25 @@ public enum SessionAskPlacement {
         return CGRect(x: x.rounded(), y: y.rounded(), width: width, height: height)
     }
 
+    /// The usable area of the screen most of this window is on.
+    public static func area(of window: CGRect, screens: [(frame: CGRect, visible: CGRect)]) -> CGRect? {
+        func shared(_ r: CGRect) -> CGFloat { let i = r.intersection(window); return i.isNull ? 0 : i.width * i.height }
+        return screens.max(by: { shared($0.frame) < shared($1.frame) })?.visible
+    }
+
+    /// Where an open window goes when what's in it changes size (K820 recheck). The top edge stays put, so the words
+    /// don't move, and so does the middle unless the new width would run off the side. It stays on the screen it is on,
+    /// and grows only down to that screen's usable bottom. A window already reaching below that (dragged there) is
+    /// never made shorter than it was while its content needs the room.
+    public static func resized(_ old: CGRect, to size: CGSize, screens: [(frame: CGRect, visible: CGRect)]) -> CGRect? {
+        guard let area = area(of: old, screens: screens) else { return nil }
+        let width = min(size.width, area.width)
+        let height = min(size.height, max(old.maxY - area.minY, old.height))
+        var x = old.minX
+        if abs(width - old.width) > 0.5 { x = min(max(old.midX - width / 2, area.minX), area.maxX - width).rounded() }
+        return CGRect(x: x, y: old.maxY - height, width: width, height: height)
+    }
+
     /// How wide the window's content is: what it asks for, but never wider than the usable screen. Narrower than it
     /// asks for, the words wrap and the buttons move under them, so Deny and Allow are always fully in view.
     public static func contentWidth(ideal: CGFloat, visible: CGFloat) -> CGFloat { max(0, min(ideal, visible)) }

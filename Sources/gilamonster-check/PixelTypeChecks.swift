@@ -269,7 +269,7 @@ import GilaMonsterCore
     check(PixelType.split("helper wants to stop it", around: "Made-up Server") == nil, "a sentence without the name isn't cut")
     check(prompts.contains("Text(server).type(.prompt).fixedSize(horizontal: false, vertical: true)") && !prompts.contains(".truncationMode(.middle)") && !prompts.contains(".lineLimit(1).truncationMode")
           && prompts.contains(".accessibilityLabel(sentence)") && prompts.contains("AskSentence(sentence: ask.sentence, server: ask.server)"), "the prompt wraps the name, never cuts it, and VoiceOver gets the plain sentence")
-    check(prompts.contains("AskRow {") && prompts.contains("maxWidth: widest ?? AskPanelSize.shared.widest") && prompts.contains("SessionAskPlacement.contentWidth(ideal: ideal.width, visible: visible)"), "the window is never wider than the screen, and the buttons move under the words when it is narrow")
+    check(prompts.contains("AskRow {") && prompts.contains("maxWidth: widest ?? AskPanelSize.shared.widest") && prompts.contains("SessionAskPlacement.contentWidth(ideal: fresh.view.fittingSize.width, visible: visible)"), "the window is never wider than the screen, and the buttons move under the words when it is narrow")
     equal(SessionAskPlacement.contentWidth(ideal: 900, visible: 700), 700, "the window's content is capped to the usable screen")
     equal(SessionAskPlacement.contentWidth(ideal: 580, visible: 1400), 580, "and keeps its own width when the screen has room")
     check(SessionAskPlacement.sideBySide(width: 600, wordsAtLeast: 200, buttons: 150, gap: 12) && !SessionAskPlacement.sideBySide(width: 300, wordsAtLeast: 200, buttons: 150, gap: 12), "buttons sit beside the words only when both fit")

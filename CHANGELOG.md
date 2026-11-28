@@ -19,6 +19,7 @@
   - Headings that show your own data (world, pack, config section and service names) are shown as written, never in capitals. Capital headings give VoiceOver the words as written. The quit-during-backup question is a sentence and wraps.
   - The Pixel font hint has its last sentence back: it starts off when text is larger than the default, Bold Text is on, or the Mac has no Retina screen.
   - Disclosure rows say Expanded or Collapsed to VoiceOver, are at least 24 pt tall to press, and the Lab's Upgrade field shows a focus ring. The Restart log label is in the label face.
+  - The Allow window is sized again whenever what's in it changes size, such as the line the last Need More Time adds. It keeps its screen and top edge and takes no focus, and clicks wait 0.8 seconds after its layout changes. That line wraps within the buttons' width. The line between Allow and Allow for Today is gone, since it drew as a dash when the buttons wrapped; the space stays. On a screen too short for the whole prompt, or with the window dragged near the bottom, the bottom is cut off and the window doesn't scroll. The name stays at the top, and Escape still denies.
   - Known limits: Settings is a system form and the welcome screen is a whole window, so the dialog check can't judge them and the report names them as skipped. The edge check sees content running off the side, not text that is cut inside a box. Bold Text, larger text and screen scale are stood in for in the snapshot; none was set in System Settings, and nothing was heard through VoiceOver.
 
 ## 0.6.4 (2026-11-27)

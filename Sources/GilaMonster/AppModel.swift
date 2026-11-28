@@ -390,6 +390,50 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
         return rep
     }
 
+    /// Opens the real ask window on a made-up screen, uses all three "Need More Time" presses, and says what went wrong:
+    /// content taller than the window, a top edge or middle that moved, a window that widened, grew past the screen or
+    /// became key, or a click guard that wasn't reset. The "short" screen can't hold it all, so it is only held to
+    /// staying on that screen, and how much is cut off is noted.
+    @MainActor private static func driveAskWindow(_ label: String, screen: CGRect, folder: String, look: (NSView) -> Void) async -> [String] {
+        let service = SessionAccessService.preview(caller: "helper", action: .stop, server: "Made-up Survival World - Season Two Creative", wait: 107)
+        let asking = SessionAskWindow(service: service)
+        asking.previewScreen = screen
+        asking.show()
+        guard let panel = asking.previewPanel, let content = panel.contentView else { return ["MISSING \(label): no ask window"] }
+        look(content)
+        try? await Task.sleep(for: .seconds(2))
+        let before = panel.frame
+        var lines: [String] = []
+        let pressed = Date()
+        for _ in 0..<SessionAccessService.maxExtensions {
+            service.previewExtend()
+            try? await Task.sleep(for: .seconds(1))
+        }
+        let after = panel.frame
+        let needed = asking.previewNeededHeight(width: content.bounds.width)
+        let short = label == "short"
+        if needed > content.bounds.height + 0.5 {
+            lines.append("\(short ? "NOTE" : "CLIPPED") \(label): the content needs \(Int(needed.rounded())) pt and the window gives it \(Int(content.bounds.height.rounded()))")
+        }
+        // On every screen, the short one too, the top of the prompt with the server's name stays in view.
+        if asking.previewContentTop < -0.5 { lines.append("TOPCUT \(label): the top \(Int((-asking.previewContentTop).rounded())) pt of the prompt is above the window") }
+        if abs(after.maxY - before.maxY) > 0.5 { lines.append("MOVED \(label): the top edge went from \(Int(before.maxY)) to \(Int(after.maxY))") }
+        if abs(after.midX - before.midX) > 0.5 || abs(after.width - before.width) > 0.5 { lines.append("WIDENED \(label): \(Int(before.width)) pt wide became \(Int(after.width))") }
+        if after.minY < screen.minY - 0.5 { lines.append("OFFSCREEN \(label): the bottom is below the screen") }
+        // Left alone, with the countdown running, the guard has to stay as it is, or no click would ever get through.
+        let settled = AskPanelSize.shared.moved
+        try? await Task.sleep(for: .seconds(2.5))
+        if AskPanelSize.shared.moved != settled { lines.append("STUCK \(label): the click guard keeps being reset while nothing changes") }
+        if panel.isKeyWindow { lines.append("FOCUS \(label): the window became key") }
+        if AskPanelSize.shared.moved < pressed { lines.append("GUARD \(label): the click guard wasn't reset") }
+        if let rep = snapshotRep(content) {
+            content.cacheDisplay(in: content.bounds, to: rep)
+            try? rep.representation(using: .png, properties: [:])?.write(to: URL(fileURLWithPath: folder).appendingPathComponent("ask-window-after-third-\(label).png"))
+        }
+        asking.hide()
+        return lines
+    }
+
     /// Which side edges of a sheet's picture have content on them, below its top band (the Allow window's bead band
     /// runs edge to edge). The rule is `Overflow.edgeHasContent`.
     @MainActor private static func edgesWithContent(_ rep: NSBitmapImageRep, cut: Int = 0) -> [String] {
@@ -531,6 +575,16 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
             quitDialogs.append(("allow-prompt-longest-name", AnyView(AskPanelLook(widest: 1280) { SessionAskList(service: longestName, focusFirst: true) })))
             // On a small screen the buttons go under the words, and Deny and Allow stay fully in view.
             quitDialogs.append(("allow-prompt-narrow-screen", AnyView(AskPanelLook(widest: 440) { SessionAskList(service: longName, focusFirst: true) })))
+            // The last "Need More Time" takes the button's room and adds a line (K820 recheck).
+            let noTime = SessionAccessService.preview(caller: "helper", action: .stop, server: "Made-up Survival World - Season Two Creative", wait: 107, extensions: SessionAccessService.maxExtensions)
+            quitDialogs.append(("allow-prompt-no-time", AnyView(AskPanelLook(widest: 1280) { SessionAskList(service: noTime, focusFirst: true) })))
+            quitDialogs.append(("allow-prompt-no-time-narrow-screen", AnyView(AskPanelLook(widest: 440) { SessionAskList(service: noTime, focusFirst: true) })))
+            var askLines: [String] = []
+            for (label, width) in [("wide", 1280.0), ("narrow", 440.0)] {
+                askLines += await Self.driveAskWindow(label, screen: CGRect(x: -9000, y: -9000, width: width, height: 1200), folder: folder, look: look)
+            }
+            askLines += await Self.driveAskWindow("short", screen: CGRect(x: -9000, y: -9000, width: 440, height: 260), folder: folder, look: look)
+            try? (["checked 3 ask windows"] + askLines).joined(separator: "\n").appending("\n").write(to: URL(fileURLWithPath: folder).appendingPathComponent("ask-window-report.txt"), atomically: true, encoding: .utf8)
             var serverDialogs: [(String, AnyView)] = []
             if let server = model.servers.first(where: { !$0.isLab }) {
                 let build = PackVersion(file: "new.zip", version: "2.0", sha1: "abc", added: Date(), size: 1000, format: 75, description: "", fileCount: 3, imageCount: 1)

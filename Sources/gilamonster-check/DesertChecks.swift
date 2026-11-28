@@ -142,7 +142,13 @@ import GilaMonsterCore
         // and the divider grows with the text.
         let layout = [".fixedSize()", ".frame(idealWidth: AskSentence.column, alignment: .leading)"]
         let k820 = [("AskSentence(sentence: ask.sentence, server: ask.server)", "Text(ask.sentence).foregroundStyle(Theme.ink).fixedSize(horizontal: false, vertical: true)"),
-                    ("Divider().frame(height: 18 * Theme.grow)", "Divider().frame(height: 18)"),
+                    ("Button(\"Allow for Today\")", "Divider().frame(height: 18).padding(.horizontal, 6)\n                                Button(\"Allow for Today\")"),
+                    ("\n                                    .padding(.leading, 20 * Theme.grow)   // kept apart from Allow", ""),
+                    // The K820 recheck: the guard also covers the window's own layout, a row running out of time resets
+                    // it, and the last line wraps within the buttons' width.
+                    ("max(changed, AskPanelSize.shared.moved)", "changed"),
+                    ("\n        // A row that runs out of extra time gains a line, which moves what is under it. Focus is left alone.\n        .onChange(of: service.waiting.map { $0.extensions >= SessionAccessService.maxExtensions }) { AskPanelSize.shared.moved = Date() }", ""),
+                    ("\n                                .fixedSize(horizontal: false, vertical: true).multilineTextAlignment(.trailing)\n                                .frame(idealWidth: 180 * Theme.grow, alignment: .trailing)", ""),
                     ("AskRow {", "HStack(alignment: .firstTextBaseline) {"), ("WrapRow(trailing: true) {", "HStack {")]
         let stripped = layout.reduce(fonts.stringByReplacingMatches(in: list, range: NSRange(list.startIndex..., in: list), withTemplate: "")) { $0.replacingOccurrences(of: $1, with: "") }
         let bare = k820.reduce(stripped) { $0.replacingOccurrences(of: $1.0, with: $1.1) }
@@ -176,11 +182,11 @@ import GilaMonsterCore
         check(!between.contains("keyboardShortcut") && !between.contains(".focused("), "Allow is never the default and never takes focus")
     }
     check(prompts.contains("No answer in \\(left / 60):\\(String(format: \"%02d\", left % 60)) means no."), "the countdown reads as before")
-    check(prompts.contains("SessionAskPlacement.accepts(pointer: pointer, sinceChange: Date().timeIntervalSince(changed))"), "the click guard is still there")
+    check(prompts.contains("SessionAskPlacement.accepts(pointer: pointer, sinceChange: Date().timeIntervalSince(max(changed, AskPanelSize.shared.moved)))"), "the click guard is still there")
     check(prompts.contains("override func cancelOperation(_ sender: Any?) {\n            if let first = SessionAccessService.shared.waiting.first { SessionAccessService.shared.resolve(first.id, allow: false) }"), "Escape still denies")
-    check(prompts.contains("AskPanelLook { SessionAskList(service: .shared, focusFirst: true) }") && prompts.contains("BeadBandView(height: 6)"), "the ask window wears the bead band and sand surface")
+    check(prompts.contains("AskPanelLook { SessionAskList(service: service, focusFirst: true) }") && prompts.contains("static let shared = SessionAskWindow(service: .shared)") && prompts.contains("BeadBandView(height: 6)"), "the ask window wears the bead band and sand surface")
     check(prompts.contains("min(AskPanelLook.minWidth, widest ?? AskPanelSize.shared.widest)") && prompts.contains("static var minWidth: CGFloat { 580 * Theme.grow }") && !prompts.contains(".frame(width: 580)"), "the ask window is 580 pt at least and grows when the buttons need more")
-    check(prompts.contains("hosting?.view.fittingSize"), "and it is sized from what its content asks for, every time it opens")
+    check(prompts.contains("fresh.view.fittingSize") && prompts.contains("let size = neededSize(visible: visible)"), "and it is sized from what its content asks for, every time it opens")
     let style = source("Theme.swift")
     check(style.contains("configuration.label\n                .lineLimit(1)\n                .fixedSize(horizontal: true, vertical: false)"), "a themed button's label is one line at its full width")
     // Fails closed: the fingerprint catches a one-word change.

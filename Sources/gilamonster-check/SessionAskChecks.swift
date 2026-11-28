@@ -22,6 +22,28 @@ import Foundation
     check(squeezed.map { tiny.visible.contains($0) } == true, "a screen smaller than the window: it shrinks to fit, all of it visible")
     check(SessionAskPlacement.frame(size: size, pointer: .zero, screens: []) == nil, "no screens: no frame (nothing to place)")
 
+    section("Session asks: an open window that grows (K820 recheck)")
+    let open = CGRect(x: 4000, y: 900, width: 580, height: 200)   // on the right screen
+    let screens = [left, right]
+    let grown = SessionAskPlacement.resized(open, to: CGSize(width: 580, height: 260), screens: screens)
+    equal(grown, CGRect(x: 4000, y: 840, width: 580, height: 260), "it grows downward: same screen, top edge, left edge and width")
+    // The pointer has since gone to the other screen. Nothing here asks where it is.
+    equal(grown.flatMap { SessionAskPlacement.area(of: $0, screens: screens) }, right.visible, "and stays on the window's own screen")
+    equal(SessionAskPlacement.resized(open, to: CGSize(width: 580, height: 160), screens: screens)?.maxY, open.maxY, "shrinking keeps the top edge too")
+    equal(SessionAskPlacement.resized(open, to: CGSize(width: 580, height: 5000), screens: screens), CGRect(x: 4000, y: 0, width: 580, height: 1100), "taller than the room below: it stops at the screen's usable bottom, top edge unmoved")
+    let low = CGRect(x: 100, y: -50, width: 580, height: 200)
+    equal(SessionAskPlacement.resized(low, to: CGSize(width: 580, height: 260), screens: screens), low, "dragged below the screen: it isn't made shorter, and the top edge stays")
+    let wider = SessionAskPlacement.resized(CGRect(x: 6200, y: 900, width: 580, height: 200), to: CGSize(width: 700, height: 200), screens: screens)
+    check(wider.map { right.visible.contains($0) } == true, "a new width keeps it inside the screen")
+    check(SessionAskPlacement.resized(open, to: open.size, screens: []) == nil, "no screens: no new frame")
+    let prompts = (try? String(contentsOf: URL(fileURLWithPath: #filePath).deletingLastPathComponent().deletingLastPathComponent().appendingPathComponent("GilaMonster/SessionPrompts.swift"), encoding: .utf8)) ?? ""
+    let resize = prompts.range(of: "    private func resize() {").flatMap { from in prompts.range(of: "\n    }\n", range: from.upperBound..<prompts.endIndex).map { String(prompts[from.lowerBound..<$0.upperBound]) } } ?? ""
+    check(resize.contains("SessionAskPlacement.resized(panel.frame") && resize.contains("panel.setFrame(frame, display: true)") && resize.contains("AskPanelSize.shared.moved = Date()"), "the window is sized again, and the click guard reset, when its content changes")
+    check(!resize.isEmpty && !["makeKey", "activate", "orderFront", "askPanelFocus", "makeFirstResponder", "mouseLocation", "defaultButtonCell"].contains(where: resize.contains), "sizing it again takes no focus, brings nothing forward and doesn't look for the pointer")
+    check(prompts.contains(".onGeometryChange(for: CGRect.self, of: { $0.frame(in: .global) }) { [weak self] frame in self?.contentChanged(frame) }"), "the content says when its size changes")
+    check(prompts.contains(".frame(minHeight: 0, maxHeight: .infinity, alignment: .top)"), "on a screen too short for it all, the top of the prompt and the name stay in view")
+    check(prompts.contains(".onChange(of: service.waiting.map { $0.extensions >= SessionAccessService.maxExtensions }) { AskPanelSize.shared.moved = Date() }"), "a row running out of time resets the guard without moving focus")
+
     section("Session asks: the reminder sound")
     let asked = Date(timeIntervalSince1970: 1_000_000)
     equal(SessionAskPlacement.reminder(asked: asked, deadline: asked.addingTimeInterval(120)), asked.addingTimeInterval(60), "2-minute wait: the reminder plays with a minute left")

@@ -103,6 +103,12 @@ import Foundation
     let read = Overflow.readDialogReport((try? String(contentsOf: report, encoding: .utf8)) ?? "")
     check(read.expected > 0 && read.checked == read.expected, "\(label): every dialog was checked (\(read.checked) of \(read.expected))")
     check(read.clipped.isEmpty, "\(label): no dialog is clipped. \(read.clipped.joined(separator: "; "))")
+    // The real ask window, driven off screen through all three "Need More Time" presses (K820 recheck): wide, narrow,
+    // and on a screen too short to hold it, which is only held to staying on that screen.
+    let ask = ((try? String(contentsOf: report.deletingLastPathComponent().appendingPathComponent("ask-window-report.txt"), encoding: .utf8)) ?? "").split(separator: "\n").map(String.init)
+    check(ask.first == "checked 3 ask windows", "\(label): the ask window was driven three times (\(ask.first ?? "no report"))")
+    let faults = ask.dropFirst().filter { !$0.hasPrefix("NOTE ") }
+    check(faults.isEmpty, "\(label): after the last extra minute the ask window fits, keeps its place and guards clicks. \(faults.joined(separator: "; "))")
 }
 
 @MainActor private func runScript(_ script: URL, _ arguments: [String], root: URL, environment: [String: String]) -> Int32 {
